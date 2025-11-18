@@ -3,12 +3,16 @@ import { SPECTRUM_COLORS, type Sprite, type SpectrumColor, type SpriteSize } fro
 import { ColorPalette } from "./ColorPalette";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Eraser, Grid3x3, ZoomIn, ZoomOut } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Eraser, Grid3x3, ZoomIn, ZoomOut, Plus, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 interface SpriteEditorProps {
-  sprite: Sprite;
-  onSpriteChange: (sprite: Sprite) => void;
+  sprites: Sprite[];
+  onSpritesChange: (sprites: Sprite[]) => void;
 }
 
 const SPRITE_SIZES: { value: SpriteSize; label: string }[] = [
@@ -18,15 +22,19 @@ const SPRITE_SIZES: { value: SpriteSize; label: string }[] = [
   { value: "32x16", label: "32×16" },
 ];
 
-export const SpriteEditor = ({ sprite, onSpriteChange }: SpriteEditorProps) => {
+export const SpriteEditor = ({ sprites, onSpritesChange }: SpriteEditorProps) => {
+  const [selectedSpriteId, setSelectedSpriteId] = useState(sprites[0]?.id);
   const [selectedColor, setSelectedColor] = useState<SpectrumColor>(SPECTRUM_COLORS[7]); // White
   const [isErasing, setIsErasing] = useState(false);
   const [zoom, setZoom] = useState(16);
   const [showGrid, setShowGrid] = useState(true);
   const [isDrawing, setIsDrawing] = useState(false);
+  const [newSpriteName, setNewSpriteName] = useState("");
+  const [newSpriteSize, setNewSpriteSize] = useState<SpriteSize>("8x8");
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  const [width, height] = sprite.size.split("x").map(Number);
+  const sprite = sprites.find(s => s.id === selectedSpriteId) || sprites[0];
+  const [width, height] = sprite ? sprite.size.split("x").map(Number) : [8, 8];
 
   useEffect(() => {
     drawSprite();
@@ -34,7 +42,7 @@ export const SpriteEditor = ({ sprite, onSpriteChange }: SpriteEditorProps) => {
 
   const drawSprite = () => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!canvas || !sprite) return;
 
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
@@ -73,7 +81,7 @@ export const SpriteEditor = ({ sprite, onSpriteChange }: SpriteEditorProps) => {
 
   const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!canvas || !sprite) return;
 
     const rect = canvas.getBoundingClientRect();
     const x = Math.floor((e.clientX - rect.left) / zoom);
@@ -88,7 +96,10 @@ export const SpriteEditor = ({ sprite, onSpriteChange }: SpriteEditorProps) => {
       );
       newPixels[y][x] = colorIndex;
 
-      onSpriteChange({ ...sprite, pixels: newPixels });
+      const updatedSprites = sprites.map(s => 
+        s.id === sprite.id ? { ...sprite, pixels: newPixels } : s
+      );
+      onSpritesChange(updatedSprites);
     }
   };
 
@@ -108,89 +119,218 @@ export const SpriteEditor = ({ sprite, onSpriteChange }: SpriteEditorProps) => {
   };
 
   const clearSprite = () => {
+    if (!sprite) return;
     const newPixels = Array(height).fill(null).map(() => Array(width).fill(0));
-    onSpriteChange({ ...sprite, pixels: newPixels });
+    const updatedSprites = sprites.map(s => 
+      s.id === sprite.id ? { ...sprite, pixels: newPixels } : s
+    );
+    onSpritesChange(updatedSprites);
   };
 
   const changeSpriteSize = (size: SpriteSize) => {
+    if (!sprite) return;
     const [newWidth, newHeight] = size.split("x").map(Number);
     const newPixels = Array(newHeight).fill(null).map(() => Array(newWidth).fill(0));
-    onSpriteChange({ ...sprite, size, pixels: newPixels });
+    const updatedSprites = sprites.map(s => 
+      s.id === sprite.id ? { ...sprite, size, pixels: newPixels } : s
+    );
+    onSpritesChange(updatedSprites);
   };
 
+  const handleAddSprite = () => {
+    if (!newSpriteName.trim()) {
+      toast.error("Please enter a sprite name");
+      return;
+    }
+
+    const [w, h] = newSpriteSize.split("x").map(Number);
+    const newSprite: Sprite = {
+      id: `sprite-${Date.now()}`,
+      name: newSpriteName,
+      size: newSpriteSize,
+      pixels: Array(h).fill(null).map(() => Array(w).fill(0)),
+    };
+
+    onSpritesChange([...sprites, newSprite]);
+    setSelectedSpriteId(newSprite.id);
+    setNewSpriteName("");
+    toast.success(`Sprite "${newSprite.name}" added to library!`);
+  };
+
+  const handleDeleteSprite = (spriteId: string) => {
+    if (sprites.length === 1) {
+      toast.error("Cannot delete the last sprite");
+      return;
+    }
+    
+    const filtered = sprites.filter(s => s.id !== spriteId);
+    onSpritesChange(filtered);
+    
+    if (selectedSpriteId === spriteId) {
+      setSelectedSpriteId(filtered[0]?.id);
+    }
+    
+    toast.success("Sprite deleted");
+  };
+
+  const handleSpriteNameChange = (name: string) => {
+    if (!sprite) return;
+    const updatedSprites = sprites.map(s =>
+      s.id === sprite.id ? { ...s, name } : s
+    );
+    onSpritesChange(updatedSprites);
+  };
+
+  if (!sprite) return null;
+
   return (
-    <div className="flex gap-4">
-      <Card className="p-4 flex-1 space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-bold text-primary">Sprite Editor</h2>
-          <div className="flex gap-2">
-            {SPRITE_SIZES.map(({ value, label }) => (
-              <Button
-                key={value}
-                size="sm"
-                variant={sprite.size === value ? "default" : "outline"}
-                onClick={() => changeSpriteSize(value)}
-              >
-                {label}
-              </Button>
-            ))}
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      {/* Sprite Library */}
+      <Card className="p-4">
+        <h2 className="text-lg font-bold text-primary mb-4">Sprite Library</h2>
+        
+        <div className="space-y-2 mb-4 max-h-64 overflow-y-auto">
+          {sprites.map((s) => (
+            <div
+              key={s.id}
+              className={`flex items-center gap-2 p-2 rounded cursor-pointer transition-colors ${
+                s.id === selectedSpriteId ? "bg-primary/20 border border-primary" : "hover:bg-muted"
+              }`}
+              onClick={() => setSelectedSpriteId(s.id)}
+            >
+              <div className="flex-1">
+                <div className="font-semibold text-sm">{s.name}</div>
+                <div className="text-xs text-muted-foreground">{s.size}</div>
+              </div>
+              {sprites.length > 1 && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDeleteSprite(s.id);
+                  }}
+                >
+                  <Trash2 className="w-3 h-3" />
+                </Button>
+              )}
+            </div>
+          ))}
+        </div>
+
+        <div className="space-y-3 pt-3 border-t">
+          <div>
+            <Label htmlFor="new-sprite-name">New Sprite Name</Label>
+            <Input
+              id="new-sprite-name"
+              value={newSpriteName}
+              onChange={(e) => setNewSpriteName(e.target.value)}
+              placeholder="e.g., Wall, Player, Enemy"
+            />
           </div>
-        </div>
 
-        <div className="flex gap-2">
-          <Button
-            size="sm"
-            variant={isErasing ? "default" : "outline"}
-            onClick={() => setIsErasing(!isErasing)}
-          >
-            <Eraser className="w-4 h-4 mr-2" />
-            Erase
-          </Button>
-          <Button
-            size="sm"
-            variant={showGrid ? "default" : "outline"}
-            onClick={() => setShowGrid(!showGrid)}
-          >
-            <Grid3x3 className="w-4 h-4 mr-2" />
-            Grid
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => setZoom(Math.max(8, zoom - 4))}
-          >
-            <ZoomOut className="w-4 h-4" />
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => setZoom(Math.min(32, zoom + 4))}
-          >
-            <ZoomIn className="w-4 h-4" />
-          </Button>
-          <Button
-            size="sm"
-            variant="destructive"
-            onClick={clearSprite}
-          >
-            Clear
-          </Button>
-        </div>
+          <div>
+            <Label htmlFor="new-sprite-size">Size</Label>
+            <Select value={newSpriteSize} onValueChange={(v) => setNewSpriteSize(v as SpriteSize)}>
+              <SelectTrigger id="new-sprite-size">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="8x8">8x8 (Block)</SelectItem>
+                <SelectItem value="16x16">16x16 (Standard)</SelectItem>
+                <SelectItem value="24x12">24x12 (JetPac style)</SelectItem>
+                <SelectItem value="32x16">32x16 (Large)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
 
-        <div className="flex justify-center p-4 bg-muted rounded border border-border">
-          <canvas
-            ref={canvasRef}
-            className={cn("cursor-crosshair", isErasing && "cursor-cell")}
-            onMouseDown={handleMouseDown}
-            onMouseMove={handleMouseMove}
-            onMouseUp={handleMouseUp}
-            onMouseLeave={handleMouseUp}
-            style={{ imageRendering: "pixelated" }}
-          />
+          <Button onClick={handleAddSprite} className="w-full">
+            <Plus className="w-4 h-4 mr-2" />
+            Add to Library
+          </Button>
         </div>
       </Card>
 
-      <Card className="p-4 w-64">
+      {/* Main Canvas */}
+      <Card className="p-4 lg:col-span-2">
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="space-y-1">
+              <Label htmlFor="sprite-name">Sprite Name</Label>
+              <Input
+                id="sprite-name"
+                value={sprite.name}
+                onChange={(e) => handleSpriteNameChange(e.target.value)}
+                className="max-w-xs"
+              />
+            </div>
+            
+            <div className="flex gap-2">
+              <Select value={sprite.size} onValueChange={changeSpriteSize}>
+                <SelectTrigger className="w-32">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {SPRITE_SIZES.map(size => (
+                    <SelectItem key={size.value} value={size.value}>
+                      {size.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <div className="flex gap-2">
+            <Button
+              variant={!isErasing ? "default" : "outline"}
+              size="sm"
+              onClick={() => setIsErasing(false)}
+            >
+              Draw
+            </Button>
+            <Button
+              variant={isErasing ? "default" : "outline"}
+              size="sm"
+              onClick={() => setIsErasing(true)}
+            >
+              <Eraser className="w-4 h-4 mr-2" />
+              Erase
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => setShowGrid(!showGrid)}>
+              <Grid3x3 className="w-4 h-4" />
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => setZoom(Math.max(8, zoom - 4))}>
+              <ZoomOut className="w-4 h-4" />
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => setZoom(Math.min(32, zoom + 4))}>
+              <ZoomIn className="w-4 h-4" />
+            </Button>
+            <Button variant="destructive" size="sm" onClick={clearSprite}>
+              Clear
+            </Button>
+          </div>
+
+          <div className="border-2 border-border rounded-lg p-4 bg-muted/50 flex items-center justify-center">
+            <canvas
+              ref={canvasRef}
+              className={cn(
+                "border border-border cursor-crosshair pixelated",
+                "shadow-lg"
+              )}
+              onMouseDown={handleMouseDown}
+              onMouseMove={handleMouseMove}
+              onMouseUp={handleMouseUp}
+              onMouseLeave={handleMouseUp}
+              style={{ imageRendering: "pixelated" }}
+            />
+          </div>
+        </div>
+      </Card>
+
+      {/* Color Palette */}
+      <Card className="p-4 lg:col-span-3">
+        <h3 className="text-sm font-semibold mb-3 text-foreground">ZX Spectrum Colors</h3>
         <ColorPalette
           selectedColor={selectedColor}
           onColorSelect={setSelectedColor}
