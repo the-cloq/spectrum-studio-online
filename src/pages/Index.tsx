@@ -120,12 +120,8 @@ const Index = () => {
         {activeTab === "sprites" && (
           <div className="space-y-4">
             <SpriteEditor
-              sprite={project.sprites[0]}
-              onSpriteChange={(sprite) => {
-                const newSprites = [...project.sprites];
-                newSprites[0] = sprite;
-                handleSpritesChange(newSprites);
-              }}
+              sprites={project.sprites}
+              onSpritesChange={handleSpritesChange}
             />
           </div>
         )}
