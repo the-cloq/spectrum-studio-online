@@ -58,14 +58,13 @@ export class TAPGenerator {
   }
 
   // Generate the final TAP file as Uint8Array
-  generate(): Uint8Array {
-    return new Uint8Array(this.data);
+  generate(): number[] {
+    return this.data;
   }
 
   // Create a downloadable blob
   toBlob(): Blob {
-    const array = this.generate();
-    return new Blob([array.buffer], { type: "application/octet-stream" });
+    return new Blob([new Uint8Array(this.data)], { type: "application/octet-stream" });
   }
 }
 
