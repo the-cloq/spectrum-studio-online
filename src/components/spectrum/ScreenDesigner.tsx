@@ -78,18 +78,30 @@ export const ScreenDesigner = ({ blocks, screens, onScreensChange }: ScreenDesig
   const drawBlockOnCanvas = (ctx: CanvasRenderingContext2D, block: Block, x: number, y: number) => {
     const sprite = block.sprite;
     const [width, height] = sprite.size.split("x").map(Number);
-    const scaleX = TILE_SIZE / width;
-    const scaleY = TILE_SIZE / height;
+    
+    // Use actual sprite dimensions for multi-tile blocks
+    const pixelScale = TILE_SIZE / 8; // 8x8 is the base tile size
 
     sprite.pixels.forEach((row, py) => {
       row.forEach((colorIndex, px) => {
         if (colorIndex !== 0) {
-          ctx.fillStyle = colorIndex === 0 ? "#000000" : "#FFFFFF";
+          // Use actual Spectrum colors
+          let color = "#000000";
+          if (colorIndex > 0 && colorIndex <= 15) {
+            const spectrumColors = [
+              "#000000", "#0000D7", "#D70000", "#D700D7",
+              "#00D700", "#00D7D7", "#D7D700", "#D7D7D7",
+              "#000000", "#0000FF", "#FF0000", "#FF00FF",
+              "#00FF00", "#00FFFF", "#FFFF00", "#FFFFFF"
+            ];
+            color = spectrumColors[colorIndex];
+          }
+          ctx.fillStyle = color;
           ctx.fillRect(
-            x + px * scaleX,
-            y + py * scaleY,
-            scaleX,
-            scaleY
+            x + px * pixelScale,
+            y + py * pixelScale,
+            pixelScale,
+            pixelScale
           );
         }
       });
@@ -113,7 +125,18 @@ export const ScreenDesigner = ({ blocks, screens, onScreensChange }: ScreenDesig
       if (isErasing) {
         newTiles[y][x] = "";
       } else if (selectedBlock) {
-        newTiles[y][x] = selectedBlock.id;
+        // Calculate how many tiles this block occupies
+        const [spriteWidth, spriteHeight] = selectedBlock.sprite.size.split("x").map(Number);
+        const tilesWide = Math.ceil(spriteWidth / 8);
+        const tilesHigh = Math.ceil(spriteHeight / 8);
+        
+        // Place the block ID in all tiles it occupies
+        for (let dy = 0; dy < tilesHigh && (y + dy) < SCREEN_HEIGHT; dy++) {
+          for (let dx = 0; dx < tilesWide && (x + dx) < SCREEN_WIDTH; dx++) {
+            if (!newTiles[y + dy]) newTiles[y + dy] = new Array(SCREEN_WIDTH).fill("");
+            newTiles[y + dy][x + dx] = selectedBlock.id;
+          }
+        }
       }
 
       const updatedScreen = { ...selectedScreen, tiles: newTiles };
