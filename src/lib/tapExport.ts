@@ -18,10 +18,13 @@ export function exportGameToTAP(project: GameProject): Blob {
   const gameEngine = createGameEngine(project);
   gameData.push(...gameEngine);
 
-  // Create header block
+  // Add BASIC loader first (auto-runs the machine code)
+  tap.addBasicLoader(gameData.length, 32768);
+
+  // Create CODE header block
   tap.addHeader(project.name.substring(0, 10), gameData.length);
 
-  // Add data block
+  // Add CODE data block
   tap.addDataBlock(gameData);
 
   return tap.toBlob();

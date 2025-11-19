@@ -4,7 +4,88 @@
 export class TAPGenerator {
   private data: number[] = [];
 
-  // Add a header block (type 0x00)
+  // Add a BASIC program header and loader
+  addBasicLoader(codeLength: number, codeStart: number = 32768) {
+    // Create tokenized BASIC program
+    const basicProgram: number[] = [];
+    
+    // Line 10: CLEAR 32767
+    basicProgram.push(0x00, 0x0a); // Line number 10 (big-endian)
+    const line10Start = basicProgram.length;
+    basicProgram.push(0x00, 0x00); // Length placeholder
+    basicProgram.push(0xfd); // CLEAR token
+    basicProgram.push(0x20); // Space
+    // "32767" as ASCII
+    basicProgram.push(0x33, 0x32, 0x37, 0x36, 0x37);
+    // Encoded number (0x0E + 5-byte float: 32767 = 0x7FFF)
+    basicProgram.push(0x0e, 0x00, 0x00, 0xff, 0x7f, 0x00);
+    basicProgram.push(0x0d); // ENTER
+    const line10Length = basicProgram.length - line10Start - 2;
+    basicProgram[line10Start] = line10Length & 0xff;
+    basicProgram[line10Start + 1] = (line10Length >> 8) & 0xff;
+    
+    // Line 20: LOAD "" CODE
+    basicProgram.push(0x00, 0x14); // Line number 20
+    const line20Start = basicProgram.length;
+    basicProgram.push(0x00, 0x00); // Length placeholder
+    basicProgram.push(0xef); // LOAD token
+    basicProgram.push(0x20); // Space
+    basicProgram.push(0x22, 0x22); // Empty string ""
+    basicProgram.push(0x20); // Space
+    basicProgram.push(0xaf); // CODE token
+    basicProgram.push(0x0d); // ENTER
+    const line20Length = basicProgram.length - line20Start - 2;
+    basicProgram[line20Start] = line20Length & 0xff;
+    basicProgram[line20Start + 1] = (line20Length >> 8) & 0xff;
+    
+    // Line 30: RANDOMIZE USR 32768
+    basicProgram.push(0x00, 0x1e); // Line number 30
+    const line30Start = basicProgram.length;
+    basicProgram.push(0x00, 0x00); // Length placeholder
+    basicProgram.push(0xf9); // RANDOMIZE token
+    basicProgram.push(0x20); // Space
+    basicProgram.push(0xc0); // USR token
+    basicProgram.push(0x20); // Space
+    // "32768" as ASCII
+    basicProgram.push(0x33, 0x32, 0x37, 0x36, 0x38);
+    // Encoded number (0x0E + 5-byte float: 32768 = 0x8000)
+    basicProgram.push(0x0e, 0x00, 0x00, 0x00, 0x80, 0x00);
+    basicProgram.push(0x0d); // ENTER
+    const line30Length = basicProgram.length - line30Start - 2;
+    basicProgram[line30Start] = line30Length & 0xff;
+    basicProgram[line30Start + 1] = (line30Length >> 8) & 0xff;
+    
+    // BASIC program header
+    const headerData: number[] = [
+      0x00, // Header block flag
+      0x00, // BASIC program type
+    ];
+    
+    // Filename (10 bytes, padded with spaces)
+    const filename = "Loader    ";
+    for (let i = 0; i < 10; i++) {
+      headerData.push(filename.charCodeAt(i));
+    }
+    
+    // Program length
+    headerData.push(basicProgram.length & 0xff);
+    headerData.push((basicProgram.length >> 8) & 0xff);
+    
+    // Autostart line (line 10)
+    headerData.push(0x0a, 0x00);
+    
+    // Program length again
+    headerData.push(basicProgram.length & 0xff);
+    headerData.push((basicProgram.length >> 8) & 0xff);
+    
+    this.addBlock(headerData);
+    
+    // Add BASIC program data block
+    const basicData = [0xff, ...basicProgram]; // 0xFF flag for data blocks
+    this.addBlock(basicData);
+  }
+
+  // Add a CODE header block (type 0x00)
   addHeader(filename: string, dataLength: number, autoStart: number = 32768) {
     const headerData: number[] = [
       0x00, // Header block flag
