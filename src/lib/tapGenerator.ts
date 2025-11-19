@@ -40,16 +40,17 @@ export class TAPGenerator {
 
   // Add a block with length header and checksum
   private addBlock(blockData: number[]) {
-    const length = blockData.length;
-    
+    // TAP block length must include the checksum byte
+    const length = blockData.length + 1; // flag + data + checksum
+
     // Add 2-byte length (little-endian)
     this.data.push(length & 0xff);
     this.data.push((length >> 8) & 0xff);
 
-    // Add block data
+    // Add block data (flag + payload)
     this.data.push(...blockData);
 
-    // Calculate and add XOR checksum
+    // Calculate and add XOR checksum (over flag + payload only)
     let checksum = 0;
     for (const byte of blockData) {
       checksum ^= byte;
