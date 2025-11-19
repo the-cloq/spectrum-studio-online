@@ -8,24 +8,24 @@ export class TAPGenerator {
   addHeader(filename: string, dataLength: number, autoStart: number = 32768) {
     const headerData: number[] = [
       0x00, // Header block flag
-      0x03, // Program file type
+      0x03, // Program file type (CODE)
     ];
 
     // Filename (10 bytes, padded with spaces)
-    const nameBytes = filename.slice(0, 10).padStart(10, " ");
+    const paddedName = filename.substring(0, 10).padStart(10, " ");
     for (let i = 0; i < 10; i++) {
-      headerData.push(nameBytes.charCodeAt(i));
+      headerData.push(paddedName.charCodeAt(i));
     }
 
     // Data length (2 bytes, little-endian)
     headerData.push(dataLength & 0xff);
     headerData.push((dataLength >> 8) & 0xff);
 
-    // Auto-start line number (2 bytes)
+    // Start address (2 bytes, little-endian)
     headerData.push(autoStart & 0xff);
     headerData.push((autoStart >> 8) & 0xff);
 
-    // Program length (2 bytes)
+    // Unused/reserved (2 bytes) - should match data length for CODE blocks
     headerData.push(dataLength & 0xff);
     headerData.push((dataLength >> 8) & 0xff);
 

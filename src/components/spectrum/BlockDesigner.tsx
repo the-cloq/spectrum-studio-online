@@ -84,7 +84,17 @@ export const BlockDesigner = ({ sprites, blocks, onBlocksChange }: BlockDesigner
     if (ctx) {
       sprite.pixels.forEach((row, y) => {
         row.forEach((colorIndex, x) => {
-          const color = colorIndex === 0 ? "#000000" : "#FFFFFF";
+          // Use actual Spectrum colors from the palette
+          let color = "#000000";
+          if (colorIndex > 0 && colorIndex <= 15) {
+            const spectrumColors = [
+              "#000000", "#0000D7", "#D70000", "#D700D7",
+              "#00D700", "#00D7D7", "#D7D700", "#D7D7D7",
+              "#000000", "#0000FF", "#FF0000", "#FF00FF",
+              "#00FF00", "#00FFFF", "#FFFF00", "#FFFFFF"
+            ];
+            color = spectrumColors[colorIndex];
+          }
           ctx.fillStyle = color;
           ctx.fillRect(x * 2, y * 2, 2, 2);
         });

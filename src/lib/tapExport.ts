@@ -49,23 +49,38 @@ function encodeScreen(screen: Screen, blocks: Block[]): number[] {
 
 // Create a minimal game engine in Z80 machine code
 function createGameEngine(project: GameProject): number[] {
-  // This is a placeholder for a real Z80 game engine
-  // A full engine would be several KB of assembly code
+  // This creates a basic Z80 program that displays a screen pattern
+  // and waits for a key press before returning to BASIC
   
   const engine: number[] = [
-    // Basic ROM calls
-    0x3e, 0x02,       // LD A, 2 (channel 2 - screen)
-    0xcd, 0x01, 0x16, // CALL 5633 (CHAN_OPEN)
+    // Set border color to black
+    0x3E, 0x00,       // LD A, 0
+    0xD3, 0xFE,       // OUT (254), A
+    
+    // Open channel 2 (screen)
+    0x3E, 0x02,       // LD A, 2
+    0xCD, 0x01, 0x16, // CALL 5633 (CHAN_OPEN)
     
     // Clear screen
-    0xcd, 0xd6, 0x0d, // CALL 3542 (CLS)
+    0xCD, 0xD6, 0x0D, // CALL 3542 (CLS)
     
-    // Main game loop placeholder
-    0x3e, 0x00,       // LD A, 0
-    0xcd, 0x00, 0x10, // CALL 4096 (our game code would go here)
+    // Print a simple message to screen memory
+    0x21, 0x00, 0x40, // LD HL, 16384 (start of screen memory)
+    0x36, 0xFF,       // LD (HL), 255 (fill with pixels)
+    0x23,             // INC HL
+    0x36, 0xAA,       // LD (HL), 170
+    0x23,             // INC HL
+    0x36, 0x55,       // LD (HL), 85
     
-    // Return
-    0xc9,             // RET
+    // Set some attribute colors (22528 onwards)
+    0x21, 0x00, 0x58, // LD HL, 22528 (start of attributes)
+    0x36, 0x47,       // LD (HL), 71 (white on black, bright)
+    
+    // Wait for key press
+    0xCD, 0xBB, 0x15, // CALL 5563 (WAIT_KEY)
+    
+    // Return to BASIC
+    0xC9              // RET
   ];
 
   return engine;
