@@ -20,30 +20,22 @@ export const LevelDesigner = ({ levels, screens, onLevelsChange }: LevelDesigner
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const [screenIndices, setScreenIndices] = useState<Record<string, number>>({});
 
-  // Drag & Drop handlers
+  // Drag & Drop
   const handleDragStart = (index: number) => setDraggingIndex(index);
-
   const handleDragOver = (e: React.DragEvent<HTMLDivElement>, index: number) => {
     e.preventDefault();
     setHoveredIndex(index);
   };
-
   const handleDragEnd = () => {
-    if (
-      draggingIndex === null ||
-      hoveredIndex === null ||
-      draggingIndex === hoveredIndex
-    ) {
+    if (draggingIndex === null || hoveredIndex === null || draggingIndex === hoveredIndex) {
       setDraggingIndex(null);
       setHoveredIndex(null);
       return;
     }
-
     const reordered = [...levels];
     const [moved] = reordered.splice(draggingIndex, 1);
     reordered.splice(hoveredIndex, 0, moved);
     onLevelsChange(reordered);
-
     setDraggingIndex(null);
     setHoveredIndex(null);
   };
@@ -59,9 +51,7 @@ export const LevelDesigner = ({ levels, screens, onLevelsChange }: LevelDesigner
   const prevScreen = (levelId: string, screensForLevel: Screen[]) => {
     setScreenIndices(prev => ({
       ...prev,
-      [levelId]:
-        ((prev[levelId] ?? 0) - 1 + screensForLevel.length) %
-        screensForLevel.length
+      [levelId]: ((prev[levelId] ?? 0) - 1 + screensForLevel.length) % screensForLevel.length
     }));
   };
 
@@ -77,7 +67,6 @@ export const LevelDesigner = ({ levels, screens, onLevelsChange }: LevelDesigner
       name: newLevelName,
       screenIds: selectedScreenIds
     };
-
     onLevelsChange([...levels, newLevel]);
     setNewLevelName("");
     setSelectedScreenIds([]);
@@ -86,30 +75,26 @@ export const LevelDesigner = ({ levels, screens, onLevelsChange }: LevelDesigner
   return (
     <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 p-4">
       {/* Left/Main Panel: Level Cards */}
-      <div className="lg:col-span-3 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 gap-4">
-        {levels.map((level, index) => {
-          const screensForLevel = level.screenIds
-            .map(id => screens.find(s => s.id === id))
-            .filter(Boolean) as Screen[];
-          const currentScreenIndex = screenIndices[level.id] ?? 0;
+      <Card className="rounded-lg border bg-card text-card-foreground shadow-sm p-4 lg:col-span-3">
+        <h2 className="text-lg font-bold text-primary mb-4">Levels</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 gap-4">
+          {levels.map((level, index) => {
+            const screensForLevel = level.screenIds
+              .map(id => screens.find(s => s.id === id))
+              .filter(Boolean) as Screen[];
 
-          const showPlaceholder =
-            draggingIndex !== null && hoveredIndex === index;
+            const currentScreenIndex = screenIndices[level.id] ?? 0;
 
-          return (
-            <React.Fragment key={level.id}>
-              {showPlaceholder && (
-                <div className="border-2 border-dashed border-primary rounded p-4 h-40" />
-              )}
-
+            return (
               <Card
+                key={level.id}
                 draggable
                 onDragStart={() => handleDragStart(index)}
                 onDragOver={e => handleDragOver(e, index)}
                 onDragEnd={handleDragEnd}
                 className={`relative p-4 border rounded flex flex-col gap-2 cursor-move group ${
-                draggingIndex === index ? "opacity-50" : ""
-              }`}
+                  draggingIndex === index ? "opacity-50" : ""
+                }`}
               >
                 {/* Top Row */}
                 <div className="flex justify-between items-center">
@@ -179,57 +164,47 @@ export const LevelDesigner = ({ levels, screens, onLevelsChange }: LevelDesigner
                   <Trash2 className="w-3 h-3" />
                 </Button>
               </Card>
-            </React.Fragment>
-          );
-        })}
-
-        {/* Placeholder at end if dragging below all cards */}
-        {draggingIndex !== null && hoveredIndex === levels.length && (
-          <div className="border-2 border-dashed border-primary rounded p-4 h-40" />
-        )}
-      </div>
+            );
+          })}
+        </div>
+      </Card>
 
       {/* Right Panel: Add Level */}
-      <div className="space-y-4">
-        <Card className="p-4">
-          <h3 className="text-sm font-bold text-primary mb-2">Add Level</h3>
-          <Input
-            value={newLevelName}
-            onChange={e => setNewLevelName(e.target.value)}
-            placeholder="Level name"
-            className="mb-4"
-          />
-          <div className="space-y-1 max-h-64 overflow-auto mb-4">
-            {screens.map(screen => (
-              <label
-                key={screen.id}
-                className="flex items-center justify-between p-2 rounded border cursor-pointer transition-all border-border hover:border-primary/50"
-              >
-                <span className="flex-1 text-sm">{screen.name}</span>
-                <Checkbox
-                  checked={selectedScreenIds.includes(screen.id)}
-                  onCheckedChange={(checked) => {
-                    if (checked) {
-                      setSelectedScreenIds([...selectedScreenIds, screen.id]);
-                    } else {
-                      setSelectedScreenIds(
-                        selectedScreenIds.filter(id => id !== screen.id)
-                      );
-                    }
-                  }}
-                />
-              </label>
-            ))}
-          </div>
-          <Button
-            onClick={handleCreateLevel}
-            disabled={!newLevelName.trim() || selectedScreenIds.length === 0}
-            className="w-full"
-          >
-            Add Level
-          </Button>
-        </Card>
-      </div>
+      <Card className="rounded-lg border bg-card text-card-foreground shadow-sm p-4 space-y-4">
+        <h3 className="text-sm font-bold text-primary mb-2">Add Level</h3>
+        <Input
+          value={newLevelName}
+          onChange={e => setNewLevelName(e.target.value)}
+          placeholder="Level name"
+        />
+        <div className="space-y-1 max-h-64 overflow-auto">
+          {screens.map(screen => (
+            <label
+              key={screen.id}
+              className="flex items-center justify-between p-2 rounded border cursor-pointer transition-all border-border hover:border-primary/50"
+            >
+              <span className="text-sm truncate">{screen.name}</span>
+              <Checkbox
+                checked={selectedScreenIds.includes(screen.id)}
+                onCheckedChange={checked => {
+                  if (checked) {
+                    setSelectedScreenIds([...selectedScreenIds, screen.id]);
+                  } else {
+                    setSelectedScreenIds(selectedScreenIds.filter(id => id !== screen.id));
+                  }
+                }}
+              />
+            </label>
+          ))}
+        </div>
+        <Button
+          onClick={handleCreateLevel}
+          disabled={!newLevelName.trim() || selectedScreenIds.length === 0}
+          className="w-full"
+        >
+          Add Level
+        </Button>
+      </Card>
     </div>
   );
 };
