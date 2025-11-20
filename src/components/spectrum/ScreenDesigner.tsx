@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { type Screen, type Block } from "@/types/spectrum";
 import { Plus, Trash2, Eraser } from "lucide-react";
 import { toast } from "sonner";
-import { ColorPalette } from "@/components/ColorPalette";
+import { ColorPalette } from "@/components/spectrum/ColorPalette";
 import { SPECTRUM_COLORS, type SpectrumColor } from "@/types/spectrum";
 
 interface ScreenDesignerProps {
