@@ -13,31 +13,12 @@ interface LevelDesignerProps {
   onLevelsChange: (levels: Level[]) => void;
 }
 
-// Helper to filter out missing screens from levels
-const sanitizeLevels = (levels: Level[], screens: Screen[]): Level[] => {
-  const validScreenIds = new Set(screens.map(s => s.id));
-  return levels.map(level => ({
-    ...level,
-    screenIds: level.screenIds.filter(id => validScreenIds.has(id))
-  }));
-};
-
 export const LevelDesigner = ({ levels, screens, onLevelsChange }: LevelDesignerProps) => {
   const [newLevelName, setNewLevelName] = useState("");
   const [selectedScreenIds, setSelectedScreenIds] = useState<string[]>([]);
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const [screenIndices, setScreenIndices] = useState<Record<string, number>>({});
-
-  // Sanitize initial levels
-  const [sanitizedLevels, setSanitizedLevels] = useState<Level[]>(() => sanitizeLevels(levels, screens));
-
-  // Centralized level update
-  const handleLevelsChange = (updatedLevels: Level[]) => {
-    const cleaned = sanitizeLevels(updatedLevels, screens);
-    setSanitizedLevels(cleaned);
-    onLevelsChange(cleaned);
-  };
 
   // Drag & Drop
   const handleDragStart = (index: number) => setDraggingIndex(index);
@@ -51,10 +32,10 @@ export const LevelDesigner = ({ levels, screens, onLevelsChange }: LevelDesigner
       setHoveredIndex(null);
       return;
     }
-    const reordered = [...sanitizedLevels];
+    const reordered = [...levels];
     const [moved] = reordered.splice(draggingIndex, 1);
     reordered.splice(hoveredIndex, 0, moved);
-    handleLevelsChange(reordered);
+    onLevelsChange(reordered);
     setDraggingIndex(null);
     setHoveredIndex(null);
   };
@@ -74,9 +55,8 @@ export const LevelDesigner = ({ levels, screens, onLevelsChange }: LevelDesigner
     }));
   };
 
-  // Add / Delete Levels
   const handleDeleteLevel = (id: string) => {
-    handleLevelsChange(sanitizedLevels.filter(l => l.id !== id));
+    onLevelsChange(levels.filter(l => l.id !== id));
   };
 
   const handleCreateLevel = () => {
@@ -87,7 +67,7 @@ export const LevelDesigner = ({ levels, screens, onLevelsChange }: LevelDesigner
       name: newLevelName,
       screenIds: selectedScreenIds
     };
-    handleLevelsChange([...sanitizedLevels, newLevel]);
+    onLevelsChange([...levels, newLevel]);
     setNewLevelName("");
     setSelectedScreenIds([]);
   };
@@ -98,12 +78,14 @@ export const LevelDesigner = ({ levels, screens, onLevelsChange }: LevelDesigner
       <Card className="rounded-lg border bg-card text-card-foreground shadow-sm p-4 lg:col-span-3">
         <h2 className="text-lg font-bold text-primary mb-4">Levels</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 gap-4">
-          {sanitizedLevels.map((level, index) => {
+          {levels.map((level, index) => {
+            // Only include screens that still exist
             const screensForLevel = level.screenIds
               .map(id => screens.find(s => s.id === id))
               .filter(Boolean) as Screen[];
 
             const currentScreenIndex = screenIndices[level.id] ?? 0;
+            const currentScreen = screensForLevel[currentScreenIndex];
 
             return (
               <Card
@@ -125,8 +107,8 @@ export const LevelDesigner = ({ levels, screens, onLevelsChange }: LevelDesigner
                   <Badge>{index + 1}</Badge>
                 </div>
 
-                {/* Screen Carousel / Canvas */}
-                {screensForLevel.length > 0 ? (
+                {/* Screen Thumbnail */}
+                {currentScreen ? (
                   <div className="relative w-full pt-[75%] bg-muted rounded overflow-hidden">
                     <div className="absolute inset-0 flex items-center justify-center">
                       <canvas
@@ -134,16 +116,19 @@ export const LevelDesigner = ({ levels, screens, onLevelsChange }: LevelDesigner
                         height={192}
                         className="w-full h-full bg-gray-900"
                         ref={canvas => {
-                          if (!canvas) return;
-                          const ctx = canvas.getContext("2d");
-                          if (!ctx) return;
-                          const screen = screensForLevel[currentScreenIndex];
-                          ctx.fillStyle = "#000";
-                          ctx.fillRect(0, 0, canvas.width, canvas.height);
-                          ctx.fillStyle = "#fff";
-                          ctx.font = "16px monospace";
-                          ctx.textAlign = "center";
-                          ctx.fillText(screen.name, canvas.width / 2, canvas.height / 2);
+                          try {
+                            if (!canvas) return;
+                            const ctx = canvas.getContext("2d");
+                            if (!ctx || !currentScreen) return;
+                            ctx.fillStyle = "#000";
+                            ctx.fillRect(0, 0, canvas.width, canvas.height);
+                            ctx.fillStyle = "#fff";
+                            ctx.font = "16px monospace";
+                            ctx.textAlign = "center";
+                            ctx.fillText(currentScreen.name, canvas.width / 2, canvas.height / 2);
+                          } catch (err) {
+                            console.error("Canvas render error:", err);
+                          }
                         }}
                       />
                       {screensForLevel.length > 1 && (
@@ -163,8 +148,7 @@ export const LevelDesigner = ({ levels, screens, onLevelsChange }: LevelDesigner
                         </>
                       )}
                       <div className="absolute bottom-2 left-2 bg-primary text-white text-xs px-2 py-1 rounded">
-                        {screensForLevel[currentScreenIndex].name} (
-                        {screensForLevel[currentScreenIndex].type})
+                        {currentScreen.name} ({currentScreen.type})
                       </div>
                     </div>
                   </div>
