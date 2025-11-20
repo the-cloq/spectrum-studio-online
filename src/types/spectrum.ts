@@ -56,7 +56,6 @@ export type Screen = {
   tiles: string[][]; // 2D array of block IDs
   width: number;
   height: number;
-  thumbnail?: string; // optional base64 thumbnail for level cards
 };
 
 export type Level = {
