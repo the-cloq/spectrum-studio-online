@@ -47,6 +47,7 @@ export const ScreenDesigner = ({ blocks, screens, onScreensChange }: ScreenDesig
 
     canvas.width = 512;
     canvas.height = 384;
+    cursor: "crosshair";
 
     ctx.fillStyle = "#000";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
