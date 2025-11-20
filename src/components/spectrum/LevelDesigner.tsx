@@ -108,8 +108,8 @@ export const LevelDesigner = ({ levels, screens, onLevelsChange }: LevelDesigner
                 onDragOver={e => handleDragOver(e, index)}
                 onDragEnd={handleDragEnd}
                 className={`relative p-4 border rounded flex flex-col gap-2 cursor-move group ${
-                  draggingIndex === index ? "hidden" : ""
-                }`}
+                draggingIndex === index ? "opacity-50" : ""
+              }`}
               >
                 {/* Top Row */}
                 <div className="flex justify-between items-center">
