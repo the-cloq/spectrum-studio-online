@@ -21,7 +21,7 @@ const MOCK_SCREENS: Screen[] = [
   { id: "s3", name: "Screen 3" },
 ];
 
-export default function LevelDesigner() {
+export function LevelDesigner() {
   const [screens] = useState<Screen[]>(MOCK_SCREENS);
   const [levels, setLevels] = useState<Level[]>([]);
   const [activeLevel, setActiveLevel] = useState<Level | null>(null);
