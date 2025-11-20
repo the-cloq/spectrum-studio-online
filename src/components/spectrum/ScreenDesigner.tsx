@@ -11,7 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Trash2, Grid3x3, Eraser } from "lucide-react";
+import { Plus, Trash2, Eraser } from "lucide-react";
 import { toast } from "sonner";
 
 interface ScreenDesignerProps {
@@ -23,7 +23,7 @@ interface ScreenDesignerProps {
 // Standard ZX Spectrum screen is 32x24 characters (256x192 pixels)
 const SCREEN_WIDTH = 32;
 const SCREEN_HEIGHT = 24;
-const TILE_SIZE = 16; // Display size in pixels
+const TILE_SIZE = 16; // display size in pixels
 
 export const ScreenDesigner = ({ blocks, screens, onScreensChange }: ScreenDesignerProps) => {
   const [selectedScreen, setSelectedScreen] = useState<Screen | null>(screens[0] || null);
@@ -32,129 +32,116 @@ export const ScreenDesigner = ({ blocks, screens, onScreensChange }: ScreenDesig
   const [isDrawing, setIsDrawing] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  // Sync selectedScreen if screens prop changes (keeps selection valid)
+  // Draw screen whenever selection or blocks change
   useEffect(() => {
-    if (!selectedScreen && screens.length > 0) {
-      setSelectedScreen(screens[0]);
-      return;
-    }
-    if (selectedScreen) {
-      const found = screens.find(s => s.id === selectedScreen.id);
-      if (found) {
-        setSelectedScreen(found);
-      } else {
-        setSelectedScreen(screens[0] || null);
-      }
-    }
-  }, [screens]);
-
-  // Draw whenever selectedScreen or blocks change
-  useEffect(() => {
-    drawScreen();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (selectedScreen) drawScreen();
   }, [selectedScreen, blocks]);
 
   const drawScreen = () => {
-    try {
-      const canvas = canvasRef.current;
-      if (!canvas || !selectedScreen) return;
+    const canvas = canvasRef.current;
+    if (!canvas || !selectedScreen) return;
 
-      const ctx = canvas.getContext("2d");
-      if (!ctx) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
 
-      // set size (ensures pixel-perfect rendering)
-      canvas.width = SCREEN_WIDTH * TILE_SIZE;
-      canvas.height = SCREEN_HEIGHT * TILE_SIZE;
+    canvas.width = SCREEN_WIDTH * TILE_SIZE;
+    canvas.height = SCREEN_HEIGHT * TILE_SIZE;
 
-      ctx.imageSmoothingEnabled = false;
+    // Draw background
+    ctx.fillStyle = "#000000";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      // Draw background
-      ctx.fillStyle = "#000000";
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    // Draw grid
+    ctx.strokeStyle = "rgba(100,100,100,0.2)";
+    ctx.lineWidth = 1;
+    for (let x = 0; x <= SCREEN_WIDTH; x++) {
+      ctx.beginPath();
+      ctx.moveTo(x * TILE_SIZE, 0);
+      ctx.lineTo(x * TILE_SIZE, canvas.height);
+      ctx.stroke();
+    }
+    for (let y = 0; y <= SCREEN_HEIGHT; y++) {
+      ctx.beginPath();
+      ctx.moveTo(0, y * TILE_SIZE);
+      ctx.lineTo(canvas.width, y * TILE_SIZE);
+      ctx.stroke();
+    }
 
-      // Draw grid lines (lighter for readability)
-      ctx.strokeStyle = "rgba(100, 100, 100, 0.15)";
-      ctx.lineWidth = 1;
-      for (let x = 0; x <= SCREEN_WIDTH; x++) {
-        ctx.beginPath();
-        ctx.moveTo(x * TILE_SIZE, 0);
-        ctx.lineTo(x * TILE_SIZE, canvas.height);
-        ctx.stroke();
-      }
-      for (let y = 0; y <= SCREEN_HEIGHT; y++) {
-        ctx.beginPath();
-        ctx.moveTo(0, y * TILE_SIZE);
-        ctx.lineTo(canvas.width, y * TILE_SIZE);
-        ctx.stroke();
-      }
-
-      // Draw tiles safely
-      for (let y = 0; y < SCREEN_HEIGHT; y++) {
-        for (let x = 0; x < SCREEN_WIDTH; x++) {
-          const row = selectedScreen.tiles?.[y];
-          if (!row) continue;
-          const blockId = row[x];
-          if (!blockId) continue; // treat "", null, undefined as empty
+    // Draw tiles
+    for (let y = 0; y < SCREEN_HEIGHT; y++) {
+      for (let x = 0; x < SCREEN_WIDTH; x++) {
+        const blockId = selectedScreen.tiles[y]?.[x];
+        if (blockId) {
           const block = blocks.find(b => b.id === blockId);
-          if (block?.sprite) {
-            try {
-              drawBlockOnCanvas(ctx, block, x * TILE_SIZE, y * TILE_SIZE);
-            } catch (err) {
-              // keep drawing even if one block has bad data
-              // eslint-disable-next-line no-console
-              console.warn("Failed drawing block:", blockId, err);
-            }
-          }
+          if (block?.sprite) drawBlockOnCanvas(ctx, block, x * TILE_SIZE, y * TILE_SIZE);
         }
       }
-    } catch (err) {
-      // defensive: don't allow a canvas error to crash the whole UI
-      // eslint-disable-next-line no-console
-      console.error("drawScreen error", err);
-      toast.error("Error drawing screen (see console)");
     }
   };
 
   const drawBlockOnCanvas = (ctx: CanvasRenderingContext2D, block: Block, x: number, y: number) => {
     const sprite = block.sprite;
-    if (!sprite) return;
-    if (!sprite.size || !sprite.pixels) return;
-
     const [width, height] = sprite.size.split("x").map(Number);
-    if (!Number.isFinite(width) || !Number.isFinite(height)) return;
+    const pixelScale = TILE_SIZE / 8;
 
-    // sprite.pixels expected as array of rows -> array of color indices
-    const baseSize = 8; // pixels per base cell (we assume sprite.pixels is width x height)
-    const pixelScale = TILE_SIZE / baseSize;
+    sprite.pixels.forEach((row, py) => {
+      row.forEach((colorIndex, px) => {
+        if (colorIndex !== 0) {
+          const spectrumColors = [
+            "#000000","#0000D7","#D70000","#D700D7","#00D700","#00D7D7","#D7D700","#D7D7D7",
+            "#000000","#0000FF","#FF0000","#FF00FF","#00FF00","#00FFFF","#FFFF00","#FFFFFF"
+          ];
+          const color = spectrumColors[colorIndex] || "#000000";
+          ctx.fillStyle = color;
+          ctx.fillRect(x + px * pixelScale, y + py * pixelScale, pixelScale, pixelScale);
+        }
+      });
+    });
+  };
 
-    const spectrumColors = [
-      "#000000", "#0000D7", "#D70000", "#D700D7",
-      "#00D700", "#00D7D7", "#D7D700", "#D7D7D7",
-      "#000000", "#0000FF", "#FF0000", "#FF00FF",
-      "#00FF00", "#00FFFF", "#FFFF00", "#FFFFFF"
-    ];
+  // Generate thumbnail for level card
+  const generateThumbnail = (screen: Screen) => {
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return "";
 
-    // Defensive loop - ensure dimensions match pixel matrix
-    for (let py = 0; py < sprite.pixels.length; py++) {
-      const row = sprite.pixels[py];
-      if (!row) continue;
-      for (let px = 0; px < row.length; px++) {
-        const colorIndex = row[px];
-        if (colorIndex === 0 || colorIndex == null) continue;
-        const color = (colorIndex > 0 && colorIndex <= 15) ? spectrumColors[colorIndex] : "#FFFFFF";
-        ctx.fillStyle = color;
-        ctx.fillRect(
-          Math.round(x + px * pixelScale),
-          Math.round(y + py * pixelScale),
-          Math.max(1, Math.round(pixelScale)),
-          Math.max(1, Math.round(pixelScale))
-        );
-      }
-    }
+    const scale = 4; // scale up for visibility
+    canvas.width = SCREEN_WIDTH * scale;
+    canvas.height = SCREEN_HEIGHT * scale;
+
+    screen.tiles.forEach((row, y) => {
+      row.forEach((blockId, x) => {
+        const block = blocks.find(b => b.id === blockId);
+        if (block?.sprite) {
+          const pixelScale = scale;
+          block.sprite.pixels.forEach((r, py) => {
+            r.forEach((colorIndex, px) => {
+              if (colorIndex !== 0) {
+                const spectrumColors = [
+                  "#000000","#0000D7","#D70000","#D700D7","#00D700","#00D7D7","#D7D700","#D7D7D7",
+                  "#000000","#0000FF","#FF0000","#FF00FF","#00FF00","#00FFFF","#FFFF00","#FFFFFF"
+                ];
+                const color = spectrumColors[colorIndex] || "#000000";
+                ctx.fillStyle = color;
+                ctx.fillRect(
+                  (x * 8 + px) * pixelScale,
+                  (y * 8 + py) * pixelScale,
+                  pixelScale,
+                  pixelScale
+                );
+              }
+            });
+          });
+        }
+      });
+    });
+
+    return canvas.toDataURL();
   };
 
   const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (!selectedScreen) return;
+
     const canvas = canvasRef.current;
     if (!canvas) return;
 
@@ -162,48 +149,39 @@ export const ScreenDesigner = ({ blocks, screens, onScreensChange }: ScreenDesig
     const x = Math.floor((e.clientX - rect.left) / TILE_SIZE);
     const y = Math.floor((e.clientY - rect.top) / TILE_SIZE);
 
-    if (x < 0 || x >= SCREEN_WIDTH || y < 0 || y >= SCREEN_HEIGHT) return;
+    if (x >= 0 && x < SCREEN_WIDTH && y >= 0 && y < SCREEN_HEIGHT) {
+      const newTiles = selectedScreen.tiles.map(row => [...row]);
+      if (!newTiles[y]) newTiles[y] = Array(SCREEN_WIDTH).fill("");
 
-    // clone tiles safely and ensure row exists
-    const newTiles = selectedScreen.tiles.map(row => (row ? [...row] : new Array(SCREEN_WIDTH).fill("")));
+      if (isErasing) {
+        newTiles[y][x] = "";
+      } else if (selectedBlock) {
+        const [spriteWidth, spriteHeight] = selectedBlock.sprite.size.split("x").map(Number);
+        const tilesWide = Math.ceil(spriteWidth / 8);
+        const tilesHigh = Math.ceil(spriteHeight / 8);
 
-    if (!newTiles[y]) newTiles[y] = new Array(SCREEN_WIDTH).fill("");
-
-    if (isErasing) {
-      newTiles[y][x] = "";
-    } else if (selectedBlock) {
-      // Calculate how many tiles this block occupies
-      const [spriteWidth, spriteHeight] = selectedBlock.sprite?.size.split("x").map(Number) ?? [8, 8];
-      const tilesWide = Math.max(1, Math.ceil(spriteWidth / 8));
-      const tilesHigh = Math.max(1, Math.ceil(spriteHeight / 8));
-
-      // Place the block ID in all tiles it occupies (guard boundaries)
-      for (let dy = 0; dy < tilesHigh && (y + dy) < SCREEN_HEIGHT; dy++) {
-        if (!newTiles[y + dy]) newTiles[y + dy] = new Array(SCREEN_WIDTH).fill("");
-        for (let dx = 0; dx < tilesWide && (x + dx) < SCREEN_WIDTH; dx++) {
-          newTiles[y + dy][x + dx] = selectedBlock.id;
+        for (let dy = 0; dy < tilesHigh && (y + dy) < SCREEN_HEIGHT; dy++) {
+          for (let dx = 0; dx < tilesWide && (x + dx) < SCREEN_WIDTH; dx++) {
+            if (!newTiles[y + dy]) newTiles[y + dy] = Array(SCREEN_WIDTH).fill("");
+            newTiles[y + dy][x + dx] = selectedBlock.id;
+          }
         }
       }
+
+      const updatedScreen = { 
+        ...selectedScreen, 
+        tiles: newTiles, 
+        thumbnail: generateThumbnail({ ...selectedScreen, tiles: newTiles })
+      };
+      const updatedScreens = screens.map(s => s.id === selectedScreen.id ? updatedScreen : s);
+      onScreensChange(updatedScreens);
+      setSelectedScreen(updatedScreen);
     }
-
-    const updatedScreen = { ...selectedScreen, tiles: newTiles };
-    const updatedScreens = screens.map(s => s.id === selectedScreen.id ? updatedScreen : s);
-    onScreensChange(updatedScreens);
-    setSelectedScreen(updatedScreen);
   };
 
-  const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    setIsDrawing(true);
-    handleCanvasClick(e);
-  };
-
-  const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (isDrawing) handleCanvasClick(e);
-  };
-
-  const handleMouseUp = () => {
-    setIsDrawing(false);
-  };
+  const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => { setIsDrawing(true); handleCanvasClick(e); };
+  const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => { if (isDrawing) handleCanvasClick(e); };
+  const handleMouseUp = () => setIsDrawing(false);
 
   const handleCreateScreen = () => {
     const newScreen: Screen = {
@@ -212,8 +190,10 @@ export const ScreenDesigner = ({ blocks, screens, onScreensChange }: ScreenDesig
       type: "level",
       width: SCREEN_WIDTH,
       height: SCREEN_HEIGHT,
-      tiles: Array.from({ length: SCREEN_HEIGHT }, () => Array(SCREEN_WIDTH).fill("")),
+      tiles: Array(SCREEN_HEIGHT).fill(null).map(() => Array(SCREEN_WIDTH).fill("")),
+      thumbnail: "" // will be generated on first draw
     };
+    newScreen.thumbnail = generateThumbnail(newScreen);
     onScreensChange([...screens, newScreen]);
     setSelectedScreen(newScreen);
   };
@@ -223,17 +203,13 @@ export const ScreenDesigner = ({ blocks, screens, onScreensChange }: ScreenDesig
       screen.id === screenId ? { ...screen, type: newType } : screen
     );
     onScreensChange(updatedScreens);
-    if (selectedScreen?.id === screenId) {
-      setSelectedScreen({ ...selectedScreen, type: newType });
-    }
+    if (selectedScreen?.id === screenId) setSelectedScreen({ ...selectedScreen, type: newType });
   };
 
   const handleDeleteScreen = (screenId: string) => {
     const updatedScreens = screens.filter(s => s.id !== screenId);
     onScreensChange(updatedScreens);
-    if (selectedScreen?.id === screenId) {
-      setSelectedScreen(updatedScreens[0] || null);
-    }
+    if (selectedScreen?.id === screenId) setSelectedScreen(updatedScreens[0] || null);
     toast.success("Screen deleted");
   };
 
@@ -241,7 +217,8 @@ export const ScreenDesigner = ({ blocks, screens, onScreensChange }: ScreenDesig
     if (!selectedScreen) return;
     const clearedScreen = {
       ...selectedScreen,
-      tiles: Array.from({ length: SCREEN_HEIGHT }, () => Array(SCREEN_WIDTH).fill("")),
+      tiles: Array(SCREEN_HEIGHT).fill(null).map(() => Array(SCREEN_WIDTH).fill("")),
+      thumbnail: generateThumbnail({ ...selectedScreen, tiles: Array(SCREEN_HEIGHT).fill(null).map(() => Array(SCREEN_WIDTH).fill("")) })
     };
     const updatedScreens = screens.map(s => s.id === selectedScreen.id ? clearedScreen : s);
     onScreensChange(updatedScreens);
@@ -270,7 +247,7 @@ export const ScreenDesigner = ({ blocks, screens, onScreensChange }: ScreenDesig
                   className="max-w-xs bg-background"
                 />
                 <Select
-                  value={selectedScreen.type ?? "level"}
+                  value={selectedScreen.type}
                   onValueChange={(value: ScreenType) => handleScreenTypeChange(selectedScreen.id, value)}
                 >
                   <SelectTrigger className="w-40 bg-background">
@@ -380,16 +357,11 @@ export const ScreenDesigner = ({ blocks, screens, onScreensChange }: ScreenDesig
                       ? "border-primary retro-glow"
                       : "border-border"
                   }`}
-                  onClick={() => {
-                    setSelectedBlock(block);
-                    setIsErasing(false);
-                  }}
+                  onClick={() => { setSelectedBlock(block); setIsErasing(false); }}
                   title={block.name}
                 >
                   <div className="w-full h-full flex items-center justify-center">
-                    <div className="text-xs font-bold">
-                      {block.name.substring(0, 1)}
-                    </div>
+                    <div className="text-xs font-bold">{block.name.substring(0, 1)}</div>
                   </div>
                 </button>
               ))}
