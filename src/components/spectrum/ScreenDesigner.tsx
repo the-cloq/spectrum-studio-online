@@ -265,7 +265,7 @@ export const ScreenDesigner = ({ blocks, screens, onScreensChange }: ScreenDesig
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="game" selected>Game</SelectItem>
+              <SelectItem value="game">Game</SelectItem>
               <SelectItem value="title">Title</SelectItem>
               <SelectItem value="gameover">Game Over</SelectItem>
               <SelectItem value="controls">Controls</SelectItem>
