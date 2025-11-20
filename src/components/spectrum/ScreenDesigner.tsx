@@ -3,7 +3,14 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { type Screen, type Block } from "@/types/spectrum";
+import { type Screen, type Block, type ScreenType } from "@/types/spectrum";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Plus, Trash2, Grid3x3, Eraser } from "lucide-react";
 import { toast } from "sonner";
 
@@ -165,14 +172,23 @@ export const ScreenDesigner = ({ blocks, screens, onScreensChange }: ScreenDesig
     const newScreen: Screen = {
       id: `screen-${Date.now()}`,
       name: `Screen ${screens.length + 1}`,
+      type: "level",
       width: SCREEN_WIDTH,
       height: SCREEN_HEIGHT,
       tiles: Array(SCREEN_HEIGHT).fill(null).map(() => Array(SCREEN_WIDTH).fill("")),
     };
-
     onScreensChange([...screens, newScreen]);
     setSelectedScreen(newScreen);
-    toast.success("New screen created!");
+  };
+
+  const handleScreenTypeChange = (screenId: string, newType: ScreenType) => {
+    const updatedScreens = screens.map(screen =>
+      screen.id === screenId ? { ...screen, type: newType } : screen
+    );
+    onScreensChange(updatedScreens);
+    if (selectedScreen?.id === screenId) {
+      setSelectedScreen({ ...selectedScreen, type: newType });
+    }
   };
 
   const handleDeleteScreen = (screenId: string) => {
