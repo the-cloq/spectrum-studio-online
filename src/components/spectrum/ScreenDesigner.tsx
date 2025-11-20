@@ -26,14 +26,12 @@ export const ScreenDesigner = ({ blocks, screens, onScreensChange }: ScreenDesig
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  // Grid size based on screen type
   const getGrid = () => {
     if (!selectedScreen) return { cols: 0, rows: 0, blockSize: 0 };
     if (selectedScreen.type === "title") return { cols: 256, rows: 192, blockSize: 2 };
-    return { cols: 32, rows: 24, blockSize: 16 }; // 8x8 blocks scaled x2
+    return { cols: 32, rows: 24, blockSize: 16 };
   };
 
-  // Draw the canvas
   useEffect(() => {
     drawScreen();
   }, [selectedScreen, selectedBlock, selectedColor, isErasing]);
@@ -53,15 +51,16 @@ export const ScreenDesigner = ({ blocks, screens, onScreensChange }: ScreenDesig
     ctx.fillStyle = "#000";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // Draw grid
     ctx.strokeStyle = "rgba(100,100,100,0.2)";
     ctx.lineWidth = 1;
+
     for (let x = 0; x <= canvas.width; x += blockSize) {
       ctx.beginPath();
       ctx.moveTo(x, 0);
       ctx.lineTo(x, canvas.height);
       ctx.stroke();
     }
+
     for (let y = 0; y <= canvas.height; y += blockSize) {
       ctx.beginPath();
       ctx.moveTo(0, y);
@@ -70,7 +69,6 @@ export const ScreenDesigner = ({ blocks, screens, onScreensChange }: ScreenDesig
     }
 
     if (selectedScreen.type === "title") {
-      // Draw pixels from selectedScreen.pixels
       selectedScreen.pixels?.forEach((row, y) => {
         row.forEach((color, x) => {
           ctx.fillStyle = color?.value || "#000";
@@ -78,26 +76,28 @@ export const ScreenDesigner = ({ blocks, screens, onScreensChange }: ScreenDesig
         });
       });
     } else {
-      // Draw blocks
       for (let y = 0; y < rows; y++) {
         for (let x = 0; x < cols; x++) {
           const blockId = selectedScreen.tiles[y]?.[x];
           if (!blockId) continue;
+
           const block = blocks.find(b => b.id === blockId);
           if (!block?.sprite) continue;
 
           const sprite = block.sprite;
-          const [w, h] = sprite.size.split("x").map(Number);
           const pixelScale = blockSize / 8;
+
           sprite.pixels.forEach((row, py) => {
             row.forEach((colorIndex, px) => {
               if (colorIndex === 0) return;
+
               const spectrumColors = [
                 "#000000", "#0000D7", "#D70000", "#D700D7",
                 "#00D700", "#00D7D7", "#D7D700", "#D7D7D7",
                 "#000000", "#0000FF", "#FF0000", "#FF00FF",
                 "#00FF00", "#00FFFF", "#FFFF00", "#FFFFFF"
               ];
+
               ctx.fillStyle = spectrumColors[colorIndex] || "#000";
               ctx.fillRect(
                 x * blockSize + px * pixelScale,
@@ -112,30 +112,49 @@ export const ScreenDesigner = ({ blocks, screens, onScreensChange }: ScreenDesig
     }
   };
 
+  const handleClearScreen = () => {
+    if (!selectedScreen) return;
+
+    let updatedScreen: Screen;
+
+    if (selectedScreen.type === "title") {
+      const clearedPixels = Array(192)
+        .fill(null)
+        .map(() => Array(256).fill({ name: "Black", value: "#000000" }));
+
+      updatedScreen = { ...selectedScreen, pixels: clearedPixels };
+    } else {
+      const clearedTiles = Array(24)
+        .fill(null)
+        .map(() => Array(32).fill(""));
+
+      updatedScreen = { ...selectedScreen, tiles: clearedTiles };
+    }
+
+    updateScreen(updatedScreen);
+    toast.success("Screen cleared");
+  };
+
   const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (!selectedScreen) return;
-    const canvas = canvasRef.current;
-    if (!canvas) return;
+
+    const canvas = canvasRef.current!;
     const rect = canvas.getBoundingClientRect();
     const { blockSize } = getGrid();
+
     const x = Math.floor((e.clientX - rect.left) / blockSize);
     const y = Math.floor((e.clientY - rect.top) / blockSize);
 
     if (selectedScreen.type === "title") {
-      // Modify pixels
-      const newPixels = selectedScreen.pixels?.map(row => [...row]) || [];
+      const newPixels = selectedScreen.pixels?.map(r => [...r]) || [];
       if (!newPixels[y]) newPixels[y] = [];
       newPixels[y][x] = isErasing ? { name: "Black", value: "#000000" } : selectedColor;
-
-      const updatedScreen = { ...selectedScreen, pixels: newPixels };
-      updateScreen(updatedScreen);
+      updateScreen({ ...selectedScreen, pixels: newPixels });
     } else {
-      // Modify tiles
       if (!selectedBlock) return;
-      const newTiles = selectedScreen.tiles.map(row => [...row]);
+      const newTiles = selectedScreen.tiles.map(r => [...r]);
       newTiles[y][x] = isErasing ? "" : selectedBlock.id;
-      const updatedScreen = { ...selectedScreen, tiles: newTiles };
-      updateScreen(updatedScreen);
+      updateScreen({ ...selectedScreen, tiles: newTiles });
     }
   };
 
@@ -165,7 +184,9 @@ export const ScreenDesigner = ({ blocks, screens, onScreensChange }: ScreenDesig
       width: 512,
       height: 384,
       tiles: newScreenType === "title" ? [] : Array(24).fill(null).map(() => Array(32).fill("")),
-      pixels: newScreenType === "title" ? Array(192).fill(null).map(() => Array(256).fill({ name: "Black", value: "#000000" })) : undefined
+      pixels: newScreenType === "title"
+        ? Array(192).fill(null).map(() => Array(256).fill({ name: "Black", value: "#000000" }))
+        : undefined
     };
 
     onScreensChange([...screens, newScreen]);
@@ -189,16 +210,25 @@ export const ScreenDesigner = ({ blocks, screens, onScreensChange }: ScreenDesig
         <div className="flex items-center justify-between mb-2">
           <div>
             <h2 className="text-lg font-bold text-primary">Screen Designer</h2>
-            {selectedScreen && (
-              <p className="text-sm text-muted-foreground">{selectedScreen.name}</p>
-            )}
+            {selectedScreen && <p className="text-sm text-muted-foreground">{selectedScreen.name}</p>}
           </div>
+
           <div className="flex gap-2">
-            <Button size="sm" variant={isErasing ? "default" : "outline"} onClick={() => setIsErasing(!isErasing)}>
-              <Eraser className="w-4 h-4 mr-2" />Erase
+            <Button
+              size="sm"
+              variant={isErasing ? "default" : "outline"}
+              onClick={() => setIsErasing(!isErasing)}
+            >
+              <Eraser className="w-4 h-4 mr-2" />
+              Erase
+            </Button>
+
+            <Button size="sm" variant="outline" onClick={handleClearScreen}>
+              Clear
             </Button>
           </div>
         </div>
+
         {selectedScreen && (
           <div className="relative flex justify-center p-4 bg-muted rounded border border-border">
             <canvas
@@ -209,11 +239,12 @@ export const ScreenDesigner = ({ blocks, screens, onScreensChange }: ScreenDesig
               onMouseLeave={handleMouseUp}
               style={{ imageRendering: "pixelated", width: 512, height: 384 }}
             />
-            <div className="absolute top-2 right-2 px-2 py-1 bg-primary text-white rounded text-xs uppercase">{selectedScreen.type}</div>
+            <div className="absolute top-2 right-2 px-2 py-1 bg-primary text-white rounded text-xs uppercase">
+              {selectedScreen.type}
+            </div>
           </div>
         )}
 
-        {/* Color Palette for Title Screens */}
         {selectedScreen?.type === "title" && (
           <div className="mt-4">
             <ColorPalette selectedColor={selectedColor} onColorSelect={setSelectedColor} />
@@ -223,10 +254,11 @@ export const ScreenDesigner = ({ blocks, screens, onScreensChange }: ScreenDesig
 
       {/* Right Sidebar */}
       <div className="space-y-4">
-        {/* Add Screen Panel */}
+        {/* Create Screen */}
         <Card className="p-4 space-y-2">
           <Label>Screen Name</Label>
-          <Input value={newScreenName} onChange={e => setNewScreenName(e.target.value)} placeholder="Enter name" />
+          <Input value={newScreenName} onChange={e => setNewScreenName(e.target.value)} />
+
           <Label>Screen Type</Label>
           <Select value={newScreenType} onValueChange={setNewScreenType}>
             <SelectTrigger className="w-40">
@@ -237,8 +269,13 @@ export const ScreenDesigner = ({ blocks, screens, onScreensChange }: ScreenDesig
               <SelectItem value="game">Game</SelectItem>
             </SelectContent>
           </Select>
-          <Button className="w-full mt-2" disabled={!newScreenName || !newScreenType} onClick={handleCreateScreen}>
-            <Plus className="w-4 h-4 mr-2" />Add Screen
+
+          <Button
+            className="w-full mt-2"
+            disabled={!newScreenName || !newScreenType}
+            onClick={handleCreateScreen}
+          >
+            <Plus className="w-4 h-4 mr-2" /> Add Screen
           </Button>
         </Card>
 
@@ -249,13 +286,21 @@ export const ScreenDesigner = ({ blocks, screens, onScreensChange }: ScreenDesig
             {screens.map(screen => (
               <div
                 key={screen.id}
-                className={`flex items-center justify-between p-2 rounded border cursor-pointer transition-all ${
+                className={`flex items-center justify-between p-2 rounded border cursor-pointer ${
                   selectedScreen?.id === screen.id ? "border-primary bg-primary/10" : "border-border hover:border-primary/50"
                 }`}
                 onClick={() => setSelectedScreen(screen)}
               >
-                <span className="truncate">{screen.name}</span>
-                <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={(e) => { e.stopPropagation(); handleDeleteScreen(screen.id); }}>
+                <span>{screen.name}</span>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-6 w-6 p-0"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDeleteScreen(screen.id);
+                  }}
+                >
                   <Trash2 className="w-3 h-3" />
                 </Button>
               </div>
@@ -263,7 +308,7 @@ export const ScreenDesigner = ({ blocks, screens, onScreensChange }: ScreenDesig
           </div>
         </Card>
 
-        {/* Block Palette for Game Screens */}
+        {/* Block Palette */}
         {selectedScreen?.type !== "title" && (
           <Card className="p-4">
             <h3 className="text-sm font-bold text-primary mb-2">Block Palette</h3>
@@ -271,11 +316,19 @@ export const ScreenDesigner = ({ blocks, screens, onScreensChange }: ScreenDesig
               {blocks.map(block => (
                 <button
                   key={block.id}
-                  className={`aspect-square bg-muted rounded border-2 p-1 transition-all hover:border-primary ${selectedBlock?.id === block.id && !isErasing ? "border-primary retro-glow" : "border-border"}`}
-                  onClick={() => { setSelectedBlock(block); setIsErasing(false); }}
-                  title={block.name}
+                  className={`aspect-square bg-muted rounded border-2 p-1 hover:border-primary ${
+                    selectedBlock?.id === block.id && !isErasing
+                      ? "border-primary retro-glow"
+                      : "border-border"
+                  }`}
+                  onClick={() => {
+                    setSelectedBlock(block);
+                    setIsErasing(false);
+                  }}
                 >
-                  <div className="w-full h-full flex items-center justify-center text-xs font-bold">{block.name[0]}</div>
+                  <div className="w-full h-full flex items-center justify-center text-xs font-bold">
+                    {block.name[0]}
+                  </div>
                 </button>
               ))}
             </div>
