@@ -116,25 +116,62 @@ export const LevelDesigner = ({ levels, screens, onLevelsChange }: LevelDesigner
                   {/* Displayed screen */}
                   <div className="absolute inset-0 flex items-center justify-center">
                     {/* Canvas or thumbnail preview */}
+                    // Inside the levels.map() for each card, replace the canvas drawing with this:
                     <canvas
-                      width={256}
+                      width={256} // scale to 256x192 (4:3)
                       height={192}
                       className="w-full h-full bg-gray-900"
                       ref={(canvas) => {
                         if (!canvas) return;
                         const ctx = canvas.getContext("2d");
                         if (!ctx) return;
+                    
                         const screen = screensForLevel[currentScreenIndex];
-                        // Draw placeholder thumbnail
+                    
+                        // Clear canvas
                         ctx.fillStyle = "#000000";
                         ctx.fillRect(0, 0, canvas.width, canvas.height);
-                        ctx.fillStyle = "#fff";
-                        ctx.font = "16px monospace";
-                        ctx.textAlign = "center";
-                        ctx.fillText(screen.name, canvas.width / 2, canvas.height / 2);
+                    
+                        // Scale factor: original SCREEN_WIDTH x SCREEN_HEIGHT -> canvas
+                        const scaleX = canvas.width / screen.width;
+                        const scaleY = canvas.height / screen.height;
+                    
+                        // Draw tiles
+                        screen.tiles.forEach((row, y) => {
+                          row.forEach((blockId, x) => {
+                            if (!blockId) return;
+                            const block = blocks.find((b) => b.id === blockId);
+                            if (!block?.sprite) return;
+                    
+                            const sprite = block.sprite;
+                            const [spriteWidth, spriteHeight] = sprite.size.split("x").map(Number);
+                            const pixelScaleX = scaleX / (spriteWidth / 8); // scale down each pixel
+                            const pixelScaleY = scaleY / (spriteHeight / 8);
+                    
+                            sprite.pixels.forEach((rowPixels, py) => {
+                              rowPixels.forEach((colorIndex, px) => {
+                                if (colorIndex === 0) return;
+                                const spectrumColors = [
+                                  "#000000","#0000D7","#D70000","#D700D7",
+                                  "#00D700","#00D7D7","#D7D700","#D7D7D7",
+                                  "#000000","#0000FF","#FF0000","#FF00FF",
+                                  "#00FF00","#00FFFF","#FFFF00","#FFFFFF"
+                                ];
+                                const color = spectrumColors[colorIndex] || "#000000";
+                                ctx.fillStyle = color;
+                                ctx.fillRect(
+                                  x * scaleX + px * pixelScaleX,
+                                  y * scaleY + py * pixelScaleY,
+                                  pixelScaleX,
+                                  pixelScaleY
+                                );
+                              });
+                            });
+                          });
+                        });
                       }}
                     />
-
+                    
                     {/* Left Arrow */}
                     {screensForLevel.length > 1 && (
                       <button
