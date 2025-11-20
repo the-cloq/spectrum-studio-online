@@ -40,7 +40,7 @@ export const LevelDesigner = ({ levels, screens, onLevelsChange }: LevelDesigner
     setHoveredIndex(null);
   };
 
-  // Carousel handlers
+  // Carousel
   const nextScreen = (levelId: string, screensForLevel: Screen[]) => {
     setScreenIndices(prev => ({
       ...prev,
@@ -115,9 +115,10 @@ export const LevelDesigner = ({ levels, screens, onLevelsChange }: LevelDesigner
                         height={192}
                         className="w-full h-full bg-gray-900"
                         ref={canvas => {
-                          if (!canvas || !currentScreen) return;
+                          if (!canvas) return;
                           const ctx = canvas.getContext("2d");
                           if (!ctx) return;
+                          // Safe draw
                           ctx.fillStyle = "#000";
                           ctx.fillRect(0, 0, canvas.width, canvas.height);
                           ctx.fillStyle = "#fff";
@@ -126,7 +127,6 @@ export const LevelDesigner = ({ levels, screens, onLevelsChange }: LevelDesigner
                           ctx.fillText(currentScreen.name || "Unnamed", canvas.width / 2, canvas.height / 2);
                         }}
                       />
-
                       {screensForLevel.length > 1 && (
                         <>
                           <button
@@ -143,9 +143,8 @@ export const LevelDesigner = ({ levels, screens, onLevelsChange }: LevelDesigner
                           </button>
                         </>
                       )}
-
                       <div className="absolute bottom-2 left-2 bg-primary text-white text-xs px-2 py-1 rounded">
-                        {currentScreen.name || "Unnamed"} ({currentScreen.type})
+                        {currentScreen.name} ({currentScreen.type})
                       </div>
                     </div>
                   </div>
