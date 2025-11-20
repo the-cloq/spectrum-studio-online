@@ -240,7 +240,7 @@ export const ScreenDesigner = ({ blocks, screens, onScreensChange }: ScreenDesig
               onMouseLeave={handleMouseUp}
               style={{ imageRendering: "pixelated", width: 512, height: 384 }}
             />
-            <div className="absolute top-2 right-2 px-2 py-1 bg-primary text-white rounded text-xs uppercase">
+            <div className="absolute top-2 right-2 px-2 py-1 bg-secondary text-white rounded text-xs uppercase">
               {selectedScreen.type}
             </div>
           </div>
