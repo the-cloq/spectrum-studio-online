@@ -13,12 +13,31 @@ interface LevelDesignerProps {
   onLevelsChange: (levels: Level[]) => void;
 }
 
+// Helper to filter out missing screens from levels
+const sanitizeLevels = (levels: Level[], screens: Screen[]): Level[] => {
+  const validScreenIds = new Set(screens.map(s => s.id));
+  return levels.map(level => ({
+    ...level,
+    screenIds: level.screenIds.filter(id => validScreenIds.has(id))
+  }));
+};
+
 export const LevelDesigner = ({ levels, screens, onLevelsChange }: LevelDesignerProps) => {
   const [newLevelName, setNewLevelName] = useState("");
   const [selectedScreenIds, setSelectedScreenIds] = useState<string[]>([]);
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const [screenIndices, setScreenIndices] = useState<Record<string, number>>({});
+
+  // Sanitize initial levels
+  const [sanitizedLevels, setSanitizedLevels] = useState<Level[]>(() => sanitizeLevels(levels, screens));
+
+  // Centralized level update
+  const handleLevelsChange = (updatedLevels: Level[]) => {
+    const cleaned = sanitizeLevels(updatedLevels, screens);
+    setSanitizedLevels(cleaned);
+    onLevelsChange(cleaned);
+  };
 
   // Drag & Drop
   const handleDragStart = (index: number) => setDraggingIndex(index);
@@ -32,10 +51,10 @@ export const LevelDesigner = ({ levels, screens, onLevelsChange }: LevelDesigner
       setHoveredIndex(null);
       return;
     }
-    const reordered = [...levels];
+    const reordered = [...sanitizedLevels];
     const [moved] = reordered.splice(draggingIndex, 1);
     reordered.splice(hoveredIndex, 0, moved);
-    onLevelsChange(reordered);
+    handleLevelsChange(reordered);
     setDraggingIndex(null);
     setHoveredIndex(null);
   };
@@ -55,8 +74,9 @@ export const LevelDesigner = ({ levels, screens, onLevelsChange }: LevelDesigner
     }));
   };
 
+  // Add / Delete Levels
   const handleDeleteLevel = (id: string) => {
-    onLevelsChange(levels.filter(l => l.id !== id));
+    handleLevelsChange(sanitizedLevels.filter(l => l.id !== id));
   };
 
   const handleCreateLevel = () => {
@@ -67,7 +87,7 @@ export const LevelDesigner = ({ levels, screens, onLevelsChange }: LevelDesigner
       name: newLevelName,
       screenIds: selectedScreenIds
     };
-    onLevelsChange([...levels, newLevel]);
+    handleLevelsChange([...sanitizedLevels, newLevel]);
     setNewLevelName("");
     setSelectedScreenIds([]);
   };
@@ -78,7 +98,7 @@ export const LevelDesigner = ({ levels, screens, onLevelsChange }: LevelDesigner
       <Card className="rounded-lg border bg-card text-card-foreground shadow-sm p-4 lg:col-span-3">
         <h2 className="text-lg font-bold text-primary mb-4">Levels</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 gap-4">
-          {levels.map((level, index) => {
+          {sanitizedLevels.map((level, index) => {
             const screensForLevel = level.screenIds
               .map(id => screens.find(s => s.id === id))
               .filter(Boolean) as Screen[];
@@ -105,7 +125,7 @@ export const LevelDesigner = ({ levels, screens, onLevelsChange }: LevelDesigner
                   <Badge>{index + 1}</Badge>
                 </div>
 
-                {/* Screen Carousel */}
+                {/* Screen Carousel / Canvas */}
                 {screensForLevel.length > 0 ? (
                   <div className="relative w-full pt-[75%] bg-muted rounded overflow-hidden">
                     <div className="absolute inset-0 flex items-center justify-center">
