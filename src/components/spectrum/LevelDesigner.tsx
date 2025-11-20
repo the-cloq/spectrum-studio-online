@@ -73,7 +73,7 @@ export const LevelDesigner = ({ levels, screens, onLevelsChange }: LevelDesigner
   };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+    <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 p-4">
       {/* Left/Main Panel: Level Cards */}
       <Card className="rounded-lg border bg-card text-card-foreground shadow-sm p-4 lg:col-span-3">
         <h2 className="text-lg font-bold text-primary mb-4">Levels</h2>
