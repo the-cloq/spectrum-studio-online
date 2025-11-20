@@ -219,10 +219,37 @@ export const ScreenDesigner = ({ blocks, screens, onScreensChange }: ScreenDesig
       {/* Screen Canvas */}
       <Card className="p-4 lg:col-span-3">
         <div className="flex items-center justify-between mb-4">
-          <div>
+          <div className="flex-1 space-y-2">
             <h2 className="text-lg font-bold text-primary">Screen Designer</h2>
             {selectedScreen && (
-              <p className="text-sm text-muted-foreground">{selectedScreen.name}</p>
+              <div className="flex gap-2 items-center">
+                <Input
+                  value={selectedScreen.name}
+                  onChange={(e) => {
+                    const updatedScreens = screens.map(s =>
+                      s.id === selectedScreen.id ? { ...s, name: e.target.value } : s
+                    );
+                    onScreensChange(updatedScreens);
+                    setSelectedScreen({ ...selectedScreen, name: e.target.value });
+                  }}
+                  className="max-w-xs bg-background"
+                />
+                <Select
+                  value={selectedScreen.type}
+                  onValueChange={(value: ScreenType) => handleScreenTypeChange(selectedScreen.id, value)}
+                >
+                  <SelectTrigger className="w-40 bg-background">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="title">Title Screen</SelectItem>
+                    <SelectItem value="game">Game Screen</SelectItem>
+                    <SelectItem value="level">Level Screen</SelectItem>
+                    <SelectItem value="gameover">Game Over</SelectItem>
+                    <SelectItem value="controls">Controls</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             )}
           </div>
           <div className="flex gap-2">
