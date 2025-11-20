@@ -103,9 +103,9 @@ export const LevelDesigner = ({ levels, screens, onLevelsChange }: LevelDesigner
                     <div className="relative w-full h-40 overflow-hidden rounded mt-10 bg-muted flex items-center justify-center">
                       {currentScreen.thumbnail ? (
                         <img
-                          src={currentScreen.thumbnail}
-                          alt={currentScreen.name}
-                          className="object-cover w-full h-full"
+                          src={screen.thumbnail || "/placeholder.png"}
+                          alt={screen.name}
+                          className="w-full h-full object-cover rounded"
                         />
                       ) : (
                         <div className="flex items-center justify-center w-full h-full bg-gray-800 text-white text-xs">
