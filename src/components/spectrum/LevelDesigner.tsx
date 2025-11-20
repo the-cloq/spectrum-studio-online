@@ -1,178 +1,191 @@
 // LevelDesigner.tsx
-// Draft implementation based on your spec: create level -> assign screens -> order screens -> save -> show level grid with draggable cards
+import React, { useState } from "react";
+import { motion, Reorder } from "framer-motion";
+import { Grip, Plus } from "lucide-react";
 
-import { useState } from "react";
-import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { GripVertical } from "lucide-react";
-import { type Screen, type Level } from "@/types/spectrum";
-
-interface LevelDesignerProps {
-  screens: Screen[];
-  levels: Level[];
-  onLevelsChange: (levels: Level[]) => void;
+interface Screen {
+  id: string;
+  name: string;
 }
 
-export const LevelDesigner = ({ screens, levels, onLevelsChange }: LevelDesignerProps) => {
-  const [mode, setMode] = useState<"create" | "editor" | "grid">(levels.length ? "grid" : "create");
-  const [levelName, setLevelName] = useState<string>("");
-  const [selectedScreenIds, setSelectedScreenIds] = useState<string[]>([]);
-  const [editingLevel, setEditingLevel] = useState<Level | null>(null);
+interface Level {
+  id: string;
+  name: string;
+  screenIds: string[];
+}
 
-  // CREATE LEVEL STEP
-  const handleCreateLevel = () => {
-    if (!levelName || selectedScreenIds.length === 0) return;
+// Example screens – replace with your real screens
+const MOCK_SCREENS: Screen[] = [
+  { id: "s1", name: "Screen 1" },
+  { id: "s2", name: "Screen 2" },
+  { id: "s3", name: "Screen 3" },
+];
+
+export default function LevelDesigner() {
+  const [screens] = useState<Screen[]>(MOCK_SCREENS);
+  const [levels, setLevels] = useState<Level[]>([]);
+  const [activeLevel, setActiveLevel] = useState<Level | null>(null);
+  const [selectedScreens, setSelectedScreens] = useState<string[]>([]);
+  const [levelName, setLevelName] = useState("");
+  const [isCreating, setIsCreating] = useState(false);
+
+  const toggleScreen = (id: string) => {
+    setSelectedScreens((prev) =>
+      prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]
+    );
+  };
+
+  // Step 1: create level view
+  const createLevelFromSelection = () => {
+    if (selectedScreens.length === 0) return;
 
     const newLevel: Level = {
-      id: `level-${Date.now()}`,
-      name: levelName,
-      screens: selectedScreenIds,
+      id: `${Date.now()}`,
+      name: levelName || `Level ${levels.length + 1}`,
+      screenIds: [...selectedScreens],
     };
 
-    setEditingLevel(newLevel);
-    setMode("editor");
+    setActiveLevel(newLevel);
+    setIsCreating(false);
+    setSelectedScreens([]);
+    setLevelName("");
   };
 
-  // EDIT LEVEL ORDER STEP
-  const moveScreen = (from: number, to: number) => {
-    if (!editingLevel) return;
-    const newScreens = [...editingLevel.screens];
-    const [moved] = newScreens.splice(from, 1);
-    newScreens.splice(to, 0, moved);
-
-    setEditingLevel({ ...editingLevel, screens: newScreens });
+  // Step 2: save active level to grid
+  const saveActiveLevel = () => {
+    if (!activeLevel) return;
+    setLevels((prev) => [...prev, activeLevel]);
+    setActiveLevel(null);
   };
 
-  const handleSaveLevel = () => {
-    if (!editingLevel) return;
-    const updated = [...levels, editingLevel];
-    onLevelsChange(updated);
-    setMode("grid");
-  };
+  return (
+    <div className="p-6 space-y-6">
+      {!activeLevel && !isCreating && (
+        <>
+          <button
+            onClick={() => setIsCreating(true)}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-black text-white"
+          >
+            <Plus size={16} /> Create Level
+          </button>
 
-  // GRID VIEW DRAG LOGIC
-  const moveLevel = (from: number, to: number) => {
-    const updated = [...levels];
-    const [moved] = updated.splice(from, 1);
-    updated.splice(to, 0, moved);
-    onLevelsChange(updated);
-  };
+          {levels.length > 0 && (
+            <Reorder.Group
+              axis="y"
+              values={levels}
+              onReorder={setLevels}
+              className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-4"
+            >
+              {levels.map((level, idx) => (
+                <Reorder.Item
+                  key={level.id}
+                  value={level}
+                  className="bg-white border rounded-2xl shadow p-4 cursor-grab"
+                >
+                  <div className="flex items-center gap-2 mb-2">
+                    <Grip size={16} />
+                    <h3 className="font-semibold text-sm flex-1">{level.name}</h3>
+                    <span className="text-xs px-2 py-1 rounded-full bg-gray-100">
+                      Level {idx + 1}
+                    </span>
+                  </div>
+                  <div className="flex gap-2">
+                    {level.screenIds.map((sid) => {
+                      const sc = screens.find((s) => s.id === sid);
+                      return (
+                        <div
+                          key={sid}
+                          className="flex-1 text-center text-xs bg-gray-50 border rounded p-2"
+                        >
+                          {sc?.name}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </Reorder.Item>
+              ))}
+            </Reorder.Group>
+          )}
+        </>
+      )}
 
-  // ================= UI ==================
+      {/* Step 1: screen selection */}
+      {isCreating && !activeLevel && (
+        <div className="space-y-4 border rounded-2xl p-4">
+          <h2 className="font-semibold text-lg">Create New Level</h2>
 
-  // STEP 1: CREATE LEVEL
-  if (mode === "create") {
-    return (
-      <Card className="p-6 space-y-4">
-        <h2 className="text-lg font-bold">Create Level</h2>
+          <input
+            value={levelName}
+            onChange={(e) => setLevelName(e.target.value)}
+            placeholder="Level name"
+            className="border rounded w-full p-2"
+          />
 
-        <div className="space-y-2">
-          <Label>Level Name</Label>
-          <Input value={levelName} onChange={(e) => setLevelName(e.target.value)} />
-        </div>
-
-        <div className="space-y-2">
-          <Label>Select Screens</Label>
           <div className="grid grid-cols-2 gap-2">
-            {screens.map(screen => (
+            {screens.map((screen) => (
               <button
                 key={screen.id}
-                className={`p-2 border rounded text-left ${selectedScreenIds.includes(screen.id) ? "border-primary bg-primary/10" : "border-border"}`}
-                onClick={() => {
-                  if (selectedScreenIds.includes(screen.id)) {
-                    setSelectedScreenIds(selectedScreenIds.filter(id => id !== screen.id));
-                  } else {
-                    setSelectedScreenIds([...selectedScreenIds, screen.id]);
-                  }
-                }}
+                onClick={() => toggleScreen(screen.id)}
+                className={`p-3 rounded-xl border text-left ${
+                  selectedScreens.includes(screen.id)
+                    ? "bg-black text-white"
+                    : "bg-white"
+                }`}
               >
                 {screen.name}
               </button>
             ))}
           </div>
+
+          <button
+            onClick={createLevelFromSelection}
+            disabled={selectedScreens.length === 0}
+            className="px-4 py-2 rounded-xl bg-black text-white disabled:opacity-50"
+          >
+            Create Level View
+          </button>
         </div>
+      )}
 
-        <Button onClick={handleCreateLevel}>Create Level</Button>
-      </Card>
-    );
-  }
-
-  // STEP 2: SCREEN ORDER EDITOR
-  if (mode === "editor" && editingLevel) {
-    return (
-      <Card className="p-6 space-y-4">
-        <h2 className="text-lg font-bold">Arrange Screens: {editingLevel.name}</h2>
-
-        <div className="flex gap-4 overflow-x-auto">
-          {editingLevel.screens.map((screenId, index) => {
-            const screen = screens.find(s => s.id === screenId);
-            if (!screen) return null;
-
-            return (
-              <div key={screenId} className="min-w-[200px] border rounded p-3 bg-muted relative">
-                <div className="absolute top-2 left-2 cursor-grab">
-                  <GripVertical className="w-4 h-4" />
-                </div>
-
-                <div className="text-sm font-bold mb-1">{screen.name}</div>
-                <div className="text-xs text-muted-foreground mb-2">Position: {index + 1}</div>
-
-                <div className="flex gap-2">
-                  {index > 0 && (
-                    <Button size="sm" variant="outline" onClick={() => moveScreen(index, index - 1)}>←</Button>
-                  )}
-                  {index < editingLevel.screens.length - 1 && (
-                    <Button size="sm" variant="outline" onClick={() => moveScreen(index, index + 1)}>→</Button>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-
-        <Button onClick={handleSaveLevel} className="mt-4">Save Level</Button>
-      </Card>
-    );
-  }
-
-  // STEP 3: LEVEL GRID OVERVIEW
-  return (
-    <div className="space-y-4">
-      <div className="flex justify-between items-center">
-        <h2 className="text-lg font-bold">Level Map</h2>
-        <Button onClick={() => setMode("create")}>+ New Level</Button>
-      </div>
-
-      <div className="flex flex-wrap gap-4">
-        {levels.map((level, index) => (
-          <div key={level.id} className="w-64 border rounded p-4 bg-background relative">
-            <div className="absolute top-2 left-2 cursor-grab">
-              <GripVertical className="w-4 h-4" />
-            </div>
-
-            <div className="font-bold ml-6">{level.name}</div>
-            <div className="ml-6 text-xs inline-block px-2 py-0.5 rounded-full bg-primary/10 text-primary">
-              Level {index + 1}
-            </div>
-
-            <div className="mt-3 text-sm text-muted-foreground">
-              {level.screens.length} screen(s)
-            </div>
-
-            <div className="flex gap-2 mt-4">
-              {index > 0 && (
-                <Button size="sm" variant="outline" onClick={() => moveLevel(index, index - 1)}>←</Button>
-              )}
-              {index < levels.length - 1 && (
-                <Button size="sm" variant="outline" onClick={() => moveLevel(index, index + 1)}>→</Button>
-              )}
-            </div>
+      {/* Step 2: active level view */}
+      {activeLevel && (
+        <div className="space-y-4 border rounded-2xl p-4">
+          <div className="flex items-center gap-2 mb-4">
+            <Grip size={16} />
+            <h2 className="font-semibold">{activeLevel.name}</h2>
           </div>
-        ))}
-      </div>
+
+          <Reorder.Group
+            axis="x"
+            values={activeLevel.screenIds}
+            onReorder={(newOrder) =>
+              setActiveLevel({ ...activeLevel, screenIds: newOrder })
+            }
+            className="flex gap-4 overflow-x-auto"
+          >
+            {activeLevel.screenIds.map((sid) => {
+              const sc = screens.find((s) => s.id === sid);
+              return (
+                <Reorder.Item
+                  key={sid}
+                  value={sid}
+                  className="min-w-[140px] border rounded-xl p-4 cursor-grab"
+                >
+                  <div className="text-sm font-medium mb-1">{sc?.name}</div>
+                  <div className="text-xs text-gray-500">Drag left/right</div>
+                </Reorder.Item>
+              );
+            })}
+          </Reorder.Group>
+
+          <button
+            onClick={saveActiveLevel}
+            className="px-4 py-2 rounded-xl bg-black text-white"
+          >
+            Save Level
+          </button>
+        </div>
+      )}
     </div>
   );
-};
+}
