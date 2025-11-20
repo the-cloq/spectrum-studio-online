@@ -17,8 +17,8 @@ export const LevelDesigner = ({ levels, screens, onLevelsChange }: LevelDesigner
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 
-  // Track the current screen index per level
-  const [currentScreenIndices, setCurrentScreenIndices] = useState<Record<string, number>>({});
+  // Track current screen per level
+  const [screenIndices, setScreenIndices] = useState<Record<string, number>>({});
 
   const handleCreateLevel = () => {
     if (!newLevelName.trim()) return;
@@ -33,8 +33,8 @@ export const LevelDesigner = ({ levels, screens, onLevelsChange }: LevelDesigner
 
   const handleDeleteLevel = (id: string) => {
     onLevelsChange(levels.filter(l => l.id !== id));
-    // remove carousel state
-    setCurrentScreenIndices(prev => {
+    // remove screen index tracking for deleted level
+    setScreenIndices(prev => {
       const copy = { ...prev };
       delete copy[id];
       return copy;
@@ -67,22 +67,15 @@ export const LevelDesigner = ({ levels, screens, onLevelsChange }: LevelDesigner
     setHoveredIndex(null);
   };
 
-  const nextScreen = (levelId: string, screensForLevel: Screen[], e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (screensForLevel.length === 0) return;
-    setCurrentScreenIndices(prev => {
+  const nextScreen = (levelId: string, screensForLevel: Screen[]) => {
+    setScreenIndices(prev => {
       const current = prev[levelId] ?? 0;
-      return {
-        ...prev,
-        [levelId]: (current + 1) % screensForLevel.length,
-      };
+      return { ...prev, [levelId]: (current + 1) % screensForLevel.length };
     });
   };
 
-  const prevScreen = (levelId: string, screensForLevel: Screen[], e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (screensForLevel.length === 0) return;
-    setCurrentScreenIndices(prev => {
+  const prevScreen = (levelId: string, screensForLevel: Screen[]) => {
+    setScreenIndices(prev => {
       const current = prev[levelId] ?? 0;
       return {
         ...prev,
@@ -97,7 +90,7 @@ export const LevelDesigner = ({ levels, screens, onLevelsChange }: LevelDesigner
       <div className="flex gap-2 mb-4">
         <Input
           value={newLevelName}
-          onChange={(e) => setNewLevelName(e.target.value)}
+          onChange={e => setNewLevelName(e.target.value)}
           placeholder="New level name..."
           className="bg-background border-border text-sm"
         />
@@ -113,14 +106,14 @@ export const LevelDesigner = ({ levels, screens, onLevelsChange }: LevelDesigner
             .map(id => screens.find(s => s.id === id))
             .filter(Boolean) as Screen[];
 
-          const currentIndex = currentScreenIndices[level.id] ?? 0;
+          const currentScreenIndex = screenIndices[level.id] ?? 0;
 
           return (
             <Card
               key={level.id}
               draggable
               onDragStart={() => handleDragStart(index)}
-              onDragOver={(e) => handleDragOver(e, index)}
+              onDragOver={e => handleDragOver(e, index)}
               onDragEnd={handleDragEnd}
               className={`relative p-4 border rounded flex flex-col gap-2 cursor-move group ${
                 draggingIndex === index ? "opacity-50" : ""
@@ -140,17 +133,15 @@ export const LevelDesigner = ({ levels, screens, onLevelsChange }: LevelDesigner
                 <div className="relative w-full pt-[75%] bg-muted rounded overflow-hidden">
                   {/* Displayed screen */}
                   <div className="absolute inset-0 flex items-center justify-center">
-                    {/* Canvas or placeholder thumbnail */}
                     <canvas
                       width={256}
                       height={192}
                       className="w-full h-full bg-gray-900"
-                      ref={(canvas) => {
+                      ref={canvas => {
                         if (!canvas) return;
                         const ctx = canvas.getContext("2d");
                         if (!ctx) return;
-                        const screen = screensForLevel[currentIndex];
-                        // Draw placeholder thumbnail
+                        const screen = screensForLevel[currentScreenIndex];
                         ctx.fillStyle = "#000000";
                         ctx.fillRect(0, 0, canvas.width, canvas.height);
                         ctx.fillStyle = "#fff";
@@ -164,7 +155,10 @@ export const LevelDesigner = ({ levels, screens, onLevelsChange }: LevelDesigner
                     {screensForLevel.length > 1 && (
                       <button
                         className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/50 p-1 rounded opacity-0 group-hover:opacity-100 transition"
-                        onClick={(e) => prevScreen(level.id, screensForLevel, e)}
+                        onClick={e => {
+                          e.stopPropagation();
+                          prevScreen(level.id, screensForLevel);
+                        }}
                       >
                         ◀
                       </button>
@@ -174,7 +168,10 @@ export const LevelDesigner = ({ levels, screens, onLevelsChange }: LevelDesigner
                     {screensForLevel.length > 1 && (
                       <button
                         className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/50 p-1 rounded opacity-0 group-hover:opacity-100 transition"
-                        onClick={(e) => nextScreen(level.id, screensForLevel, e)}
+                        onClick={e => {
+                          e.stopPropagation();
+                          nextScreen(level.id, screensForLevel);
+                        }}
                       >
                         ▶
                       </button>
@@ -182,8 +179,8 @@ export const LevelDesigner = ({ levels, screens, onLevelsChange }: LevelDesigner
 
                     {/* Bottom-left overlay pill */}
                     <div className="absolute bottom-2 left-2 bg-primary text-white text-xs px-2 py-1 rounded">
-                      {screensForLevel[currentIndex].name} (
-                      {screensForLevel[currentIndex].type})
+                      {screensForLevel[currentScreenIndex].name} (
+                      {screensForLevel[currentScreenIndex].type})
                     </div>
                   </div>
                 </div>
