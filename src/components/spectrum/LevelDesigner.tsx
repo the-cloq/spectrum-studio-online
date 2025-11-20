@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,21 +12,20 @@ interface LevelDesignerProps {
   screens: Screen[];
   blocks: Block[];
   onLevelsChange: (levels: Level[]) => void;
-  onScreensChange?: (screens: Screen[]) => void; // optional, for thumbnail updates
 }
 
 export const LevelDesigner = ({
   levels,
   screens,
   blocks,
-  onLevelsChange,
-  onScreensChange
+  onLevelsChange
 }: LevelDesignerProps) => {
   const [newLevelName, setNewLevelName] = useState("");
   const [selectedScreenIds, setSelectedScreenIds] = useState<string[]>([]);
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const [screenIndices, setScreenIndices] = useState<Record<string, number>>({});
+  const [thumbnails, setThumbnails] = useState<Record<string, string>>({});
 
   // Drag & Drop handlers
   const handleDragStart = (index: number) => setDraggingIndex(index);
@@ -35,11 +34,7 @@ export const LevelDesigner = ({
     setHoveredIndex(index);
   };
   const handleDragEnd = () => {
-    if (
-      draggingIndex === null ||
-      hoveredIndex === null ||
-      draggingIndex === hoveredIndex
-    ) {
+    if (draggingIndex === null || hoveredIndex === null || draggingIndex === hoveredIndex) {
       setDraggingIndex(null);
       setHoveredIndex(null);
       return;
@@ -63,9 +58,7 @@ export const LevelDesigner = ({
   const prevScreen = (levelId: string, screensForLevel: Screen[]) => {
     setScreenIndices(prev => ({
       ...prev,
-      [levelId]:
-        ((prev[levelId] ?? 0) - 1 + screensForLevel.length) %
-        screensForLevel.length
+      [levelId]: ((prev[levelId] ?? 0) - 1 + screensForLevel.length) % screensForLevel.length
     }));
   };
 
@@ -86,47 +79,44 @@ export const LevelDesigner = ({
     setSelectedScreenIds([]);
   };
 
-  // Generate thumbnail for a screen if not already stored
-  const generateThumbnail = (screen: Screen) => {
-    if (screen.thumbnail) return; // already exists
-    const canvas = document.createElement("canvas");
-    canvas.width = 128;
-    canvas.height = 96;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    ctx.fillStyle = "#000";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    const tileWidth = canvas.width / screen.width;
-    const tileHeight = canvas.height / screen.height;
-
-    for (let y = 0; y < screen.height; y++) {
-      const row = screen.tiles[y];
-      if (!row) continue;
-      for (let x = 0; x < screen.width; x++) {
-        const blockId = row[x];
-        if (!blockId) continue;
-        const block = blocks.find(b => b.id === blockId);
-        if (!block?.sprite) continue;
-        const colorIndex = block.sprite.pixels?.[0]?.[0] ?? 7; // take first pixel as color
-        const spectrumColors = [
-          "#000000","#0000D7","#D70000","#D700D7","#00D700","#00D7D7","#D7D700","#D7D7D7",
-          "#000000","#0000FF","#FF0000","#FF00FF","#00FF00","#00FFFF","#FFFF00","#FFFFFF"
-        ];
-        ctx.fillStyle = spectrumColors[colorIndex] ?? "#fff";
-        ctx.fillRect(x * tileWidth, y * tileHeight, tileWidth, tileHeight);
-      }
-    }
-
-    screen.thumbnail = canvas.toDataURL();
-    if (onScreensChange) onScreensChange([...screens]); // update parent if needed
-  };
-
+  // Generate thumbnails safely
   useEffect(() => {
-    screens.forEach(screen => generateThumbnail(screen));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [screens, blocks]);
+    const newThumbs: Record<string, string> = {};
+    screens.forEach(screen => {
+      if (!thumbnails[screen.id]) {
+        const canvas = document.createElement("canvas");
+        canvas.width = 128;
+        canvas.height = 96;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return;
+        ctx.fillStyle = "#000";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        const tileWidth = canvas.width / screen.width;
+        const tileHeight = canvas.height / screen.height;
+
+        for (let y = 0; y < screen.height; y++) {
+          const row = screen.tiles[y];
+          if (!row) continue;
+          for (let x = 0; x < screen.width; x++) {
+            const blockId = row[x];
+            if (!blockId) continue;
+            const block = blocks.find(b => b.id === blockId);
+            if (!block?.sprite?.pixels) continue;
+            const colorIndex = block.sprite.pixels?.[0]?.[0] ?? 7;
+            const spectrumColors = [
+              "#000000","#0000D7","#D70000","#D700D7","#00D700","#00D7D7","#D7D700","#D7D7D7",
+              "#000000","#0000FF","#FF0000","#FF00FF","#00FF00","#00FFFF","#FFFF00","#FFFFFF"
+            ];
+            ctx.fillStyle = spectrumColors[colorIndex] ?? "#fff";
+            ctx.fillRect(x * tileWidth, y * tileHeight, tileWidth, tileHeight);
+          }
+        }
+        newThumbs[screen.id] = canvas.toDataURL();
+      }
+    });
+    setThumbnails(prev => ({ ...prev, ...newThumbs }));
+  }, [screens, blocks, thumbnails]);
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 p-4">
@@ -136,7 +126,6 @@ export const LevelDesigner = ({
           const screensForLevel = level.screenIds
             .map(id => screens.find(s => s.id === id))
             .filter(Boolean) as Screen[];
-
           const currentScreenIndex = screenIndices[level.id] ?? 0;
 
           return (
@@ -159,33 +148,34 @@ export const LevelDesigner = ({
                 <Badge>{index + 1}</Badge>
               </div>
 
-              {/* Screen Thumbnail */}
+              {/* Screen Carousel */}
               {screensForLevel.length > 0 ? (
                 <div className="relative w-full pt-[75%] bg-muted rounded overflow-hidden">
-                  <img
-                    src={screensForLevel[currentScreenIndex].thumbnail}
-                    alt={screensForLevel[currentScreenIndex].name}
-                    className="absolute inset-0 w-full h-full object-contain"
-                  />
-                  {screensForLevel.length > 1 && (
-                    <>
-                      <button
-                        className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/50 p-1 rounded opacity-0 group-hover:opacity-100 transition"
-                        onClick={e => { e.stopPropagation(); prevScreen(level.id, screensForLevel); }}
-                      >
-                        ◀
-                      </button>
-                      <button
-                        className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/50 p-1 rounded opacity-0 group-hover:opacity-100 transition"
-                        onClick={e => { e.stopPropagation(); nextScreen(level.id, screensForLevel); }}
-                      >
-                        ▶
-                      </button>
-                    </>
-                  )}
-                  <div className="absolute bottom-2 left-2 bg-primary text-white text-xs px-2 py-1 rounded">
-                    {screensForLevel[currentScreenIndex].name} (
-                    {screensForLevel[currentScreenIndex].type})
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <img
+                      src={thumbnails[screensForLevel[currentScreenIndex].id]}
+                      alt={screensForLevel[currentScreenIndex].name}
+                      className="absolute inset-0 w-full h-full object-contain"
+                    />
+                    {screensForLevel.length > 1 && (
+                      <>
+                        <button
+                          className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/50 p-1 rounded opacity-0 group-hover:opacity-100 transition"
+                          onClick={e => { e.stopPropagation(); prevScreen(level.id, screensForLevel); }}
+                        >
+                          ◀
+                        </button>
+                        <button
+                          className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/50 p-1 rounded opacity-0 group-hover:opacity-100 transition"
+                          onClick={e => { e.stopPropagation(); nextScreen(level.id, screensForLevel); }}
+                        >
+                          ▶
+                        </button>
+                      </>
+                    )}
+                    <div className="absolute bottom-2 left-2 bg-primary text-white text-xs px-2 py-1 rounded">
+                      {screensForLevel[currentScreenIndex].name} ({screensForLevel[currentScreenIndex].type})
+                    </div>
                   </div>
                 </div>
               ) : (
@@ -220,10 +210,14 @@ export const LevelDesigner = ({
           />
           <div className="space-y-1 max-h-64 overflow-auto mb-4">
             {screens.map(screen => (
-              <label key={screen.id} className="flex items-center gap-2 p-2 rounded border cursor-pointer hover:border-primary/50">
+              <label
+                key={screen.id}
+                className="flex items-center justify-between p-2 rounded border cursor-pointer transition-all border-border hover:border-primary/50"
+              >
+                <span className="text-sm truncate flex-1">{screen.name}</span>
                 <Checkbox
                   checked={selectedScreenIds.includes(screen.id)}
-                  onCheckedChange={(checked) => {
+                  onCheckedChange={checked => {
                     if (checked) {
                       setSelectedScreenIds([...selectedScreenIds, screen.id]);
                     } else {
@@ -231,7 +225,6 @@ export const LevelDesigner = ({
                     }
                   }}
                 />
-                <span className="text-sm flex-1 truncate">{screen.name}</span>
               </label>
             ))}
           </div>
