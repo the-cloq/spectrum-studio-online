@@ -1,4 +1,84 @@
-{levels.map((level, index) => {
+import React, { useState } from "react";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
+import { Trash2, Grip } from "lucide-react";
+import { type Level, type Screen } from "@/types/spectrum";
+
+interface LevelDesignerProps {
+  levels: Level[];
+  screens: Screen[];
+  onLevelsChange: (levels: Level[]) => void;
+}
+
+export const LevelDesigner = ({ levels, screens, onLevelsChange }: LevelDesignerProps) => {
+  const [newLevelName, setNewLevelName] = useState("");
+  const [selectedScreenIds, setSelectedScreenIds] = useState<string[]>([]);
+  const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+  const [screenIndices, setScreenIndices] = useState<Record<string, number>>({});
+
+  // Drag & Drop
+  const handleDragStart = (index: number) => setDraggingIndex(index);
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>, index: number) => {
+    e.preventDefault();
+    setHoveredIndex(index);
+  };
+  const handleDragEnd = () => {
+    if (draggingIndex === null || hoveredIndex === null || draggingIndex === hoveredIndex) {
+      setDraggingIndex(null);
+      setHoveredIndex(null);
+      return;
+    }
+    const reordered = [...levels];
+    const [moved] = reordered.splice(draggingIndex, 1);
+    reordered.splice(hoveredIndex, 0, moved);
+    onLevelsChange(reordered);
+    setDraggingIndex(null);
+    setHoveredIndex(null);
+  };
+
+  // Carousel
+  const nextScreen = (levelId: string, screensForLevel: Screen[]) => {
+    setScreenIndices(prev => ({
+      ...prev,
+      [levelId]: ((prev[levelId] ?? 0) + 1) % screensForLevel.length
+    }));
+  };
+
+  const prevScreen = (levelId: string, screensForLevel: Screen[]) => {
+    setScreenIndices(prev => ({
+      ...prev,
+      [levelId]: ((prev[levelId] ?? 0) - 1 + screensForLevel.length) % screensForLevel.length
+    }));
+  };
+
+  const handleDeleteLevel = (id: string) => {
+    onLevelsChange(levels.filter(l => l.id !== id));
+  };
+
+  const handleCreateLevel = () => {
+    if (!newLevelName.trim() || selectedScreenIds.length === 0) return;
+
+    const newLevel: Level = {
+      id: `level-${Date.now()}`,
+      name: newLevelName,
+      screenIds: selectedScreenIds
+    };
+    onLevelsChange([...levels, newLevel]);
+    setNewLevelName("");
+    setSelectedScreenIds([]);
+  };
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+      {/* Left/Main Panel: Level Cards */}
+      <Card className="rounded-lg border bg-card text-card-foreground shadow-sm p-4 lg:col-span-3">
+        <h2 className="text-lg font-bold text-primary mb-4">Levels</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 gap-4">
+          {levels.map((level, index) => {
             const screensForLevel = level.screenIds
               .map(id => screens.find(s => s.id === id))
               .filter(Boolean) as Screen[];
@@ -86,3 +166,45 @@
               </Card>
             );
           })}
+        </div>
+      </Card>
+
+      {/* Right Panel: Add Level */}
+      <Card className="rounded-lg border bg-card text-card-foreground shadow-sm p-4 space-y-4">
+        <h3 className="text-sm font-bold text-primary mb-2">Add Level</h3>
+        <Input
+          value={newLevelName}
+          onChange={e => setNewLevelName(e.target.value)}
+          placeholder="Level name"
+        />
+        <div className="space-y-1 max-h-64 overflow-auto">
+          {screens.map(screen => (
+            <label
+              key={screen.id}
+              className="flex items-center justify-between p-2 rounded border cursor-pointer transition-all border-border hover:border-primary/50"
+            >
+              <span className="text-sm truncate">{screen.name}</span>
+              <Checkbox
+                checked={selectedScreenIds.includes(screen.id)}
+                onCheckedChange={checked => {
+                  if (checked) {
+                    setSelectedScreenIds([...selectedScreenIds, screen.id]);
+                  } else {
+                    setSelectedScreenIds(selectedScreenIds.filter(id => id !== screen.id));
+                  }
+                }}
+              />
+            </label>
+          ))}
+        </div>
+        <Button
+          onClick={handleCreateLevel}
+          disabled={!newLevelName.trim() || selectedScreenIds.length === 0}
+          className="w-full"
+        >
+          Add Level
+        </Button>
+      </Card>
+    </div>
+  );
+};
