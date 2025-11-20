@@ -87,37 +87,24 @@ export const LevelDesigner = ({ levels, screens, onLevelsChange }: LevelDesigner
                   <div className="absolute top-2 left-2 cursor-grab">
                     <GripHorizontal className="w-5 h-5" />
                   </div>
-              
-                  {/* Level name at the top */}
-                  <div className="absolute top-2 left-1/2 -translate-x-1/2 text-center w-full px-2">
-                    <span className="text-sm font-bold text-foreground truncate">{level.name}</span>
-                  </div>
-              
+
                   {/* Level pill top-right */}
                   <div className="absolute top-2 right-2">
                     <Badge className="text-xs">{index + 1}</Badge>
                   </div>
-              
+
                   {/* Screen carousel */}
                   {currentScreen ? (
-                    <div className="relative w-full h-40 overflow-hidden rounded mt-10 bg-muted flex items-center justify-center">
-                      {currentScreen.thumbnail ? (
-                        <img
-                          src={screen.thumbnail || "/placeholder.png"}
-                          alt={screen.name}
-                          className="w-full h-full object-cover rounded"
-                        />
-                      ) : (
-                        <div className="flex items-center justify-center w-full h-full bg-gray-800 text-white text-xs">
-                          {currentScreen.name}
-                        </div>
-                      )}
-              
+                    <div className="relative w-full h-40 overflow-hidden rounded mt-8 bg-muted flex items-center justify-center">
+                      <img
+                        src={currentScreen.thumbnail || ""}
+                        alt={currentScreen.name}
+                        className="object-cover w-full h-full"
+                      />
                       {/* Screen pill */}
                       <span className="absolute bottom-1 left-1 text-xs bg-black/60 text-white px-1 rounded">
                         {currentScreen.name} ({getScreenTypeLabel(currentScreen.type)})
                       </span>
-              
                       {/* Carousel arrows */}
                       {level.screenIds.length > 1 && (
                         <>
@@ -141,7 +128,7 @@ export const LevelDesigner = ({ levels, screens, onLevelsChange }: LevelDesigner
                       No screens
                     </div>
                   )}
-              
+
                   {/* Bottom: Delete button */}
                   <div className="flex justify-end p-2">
                     <Button
