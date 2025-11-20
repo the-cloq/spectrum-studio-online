@@ -95,7 +95,7 @@ export const LevelDesigner = ({ levels, screens, onLevelsChange }: LevelDesigner
   };
 
   return (
-    <div className="flex h-full gap-4">
+    <div className="flex gap-4 min-h-[600px]">
       {/* Levels List */}
       <div className="w-64 flex flex-col gap-4">
         <Card className="bg-card border-border">
