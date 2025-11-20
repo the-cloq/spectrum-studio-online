@@ -182,20 +182,27 @@ export const LevelDesigner = ({ levels, screens, onLevelsChange }: LevelDesigner
             placeholder="Level name"
             className="mb-4"
           />
-          <div className="space-y-1 max-h-64 overflow-auto mb-4">
-            {screens.map(screen => (
-              <label key={screen.id} className="flex items-center gap-2">
+          <div className="space-y-2 max-h-64 overflow-auto mb-4">
+            {screens.map((screen) => (
+              <label
+                key={screen.id}
+                className="flex items-center justify-between p-2 rounded border cursor-pointer transition-all border-border hover:border-primary/50"
+              >
+                {/* Screen Name */}
+                <span className="text-sm truncate flex-1">{screen.name}</span>
+          
+                {/* Checkbox instead of bin icon */}
                 <Checkbox
                   checked={selectedScreenIds.includes(screen.id)}
                   onCheckedChange={(checked) => {
                     if (checked) {
                       setSelectedScreenIds([...selectedScreenIds, screen.id]);
                     } else {
-                      setSelectedScreenIds(selectedScreenIds.filter(id => id !== screen.id));
+                      setSelectedScreenIds(selectedScreenIds.filter((id) => id !== screen.id));
                     }
                   }}
+                  className="h-6 w-6 p-0"
                 />
-                <span className="text-sm">{screen.name}</span>
               </label>
             ))}
           </div>
