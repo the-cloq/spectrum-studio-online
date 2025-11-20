@@ -1,10 +1,10 @@
-import { useState } from "react";
+import React, { useState, useRef } from "react";
+import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Trash2, Grip } from "lucide-react";
 import { type Level, type Screen } from "@/types/spectrum";
-import { Plus, Trash2, Grip } from "lucide-react";
 
 interface LevelDesignerProps {
   levels: Level[];
@@ -12,139 +12,175 @@ interface LevelDesignerProps {
   onLevelsChange: (levels: Level[]) => void;
 }
 
-export function LevelDesigner({ levels, screens, onLevelsChange }: LevelDesignerProps) {
+export const LevelDesigner = ({ levels, screens, onLevelsChange }: LevelDesignerProps) => {
   const [newLevelName, setNewLevelName] = useState("");
-  const [selectedScreenIds, setSelectedScreenIds] = useState<Set<string>>(new Set());
-  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
-
-  const handleSelectScreen = (screenId: string) => {
-    const newSet = new Set(selectedScreenIds);
-    if (newSet.has(screenId)) newSet.delete(screenId);
-    else newSet.add(screenId);
-    setSelectedScreenIds(newSet);
-  };
+  const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 
   const handleCreateLevel = () => {
-    if (!newLevelName.trim() || selectedScreenIds.size === 0) return;
-
+    if (!newLevelName.trim()) return;
     const newLevel: Level = {
       id: `level-${Date.now()}`,
       name: newLevelName,
-      screenIds: Array.from(selectedScreenIds),
+      screenIds: [], // initially empty
     };
     onLevelsChange([...levels, newLevel]);
     setNewLevelName("");
-    setSelectedScreenIds(new Set());
   };
 
-  const handleDeleteLevel = (levelId: string) => {
-    onLevelsChange(levels.filter(l => l.id !== levelId));
+  const handleDeleteLevel = (id: string) => {
+    onLevelsChange(levels.filter(l => l.id !== id));
   };
 
-  // Drag and Drop Handlers
-  const handleDragStart = (index: number) => setDraggedIndex(index);
+  // Drag & Drop
+  const handleDragStart = (index: number) => setDraggingIndex(index);
 
   const handleDragOver = (e: React.DragEvent<HTMLDivElement>, index: number) => {
     e.preventDefault();
-    if (draggedIndex === null || draggedIndex === index) return;
-
-    const newLevels = [...levels];
-    const draggedItem = newLevels[draggedIndex];
-    newLevels.splice(draggedIndex, 1);
-    newLevels.splice(index, 0, draggedItem);
-
-    setDraggedIndex(index);
-    onLevelsChange(newLevels);
+    setHoveredIndex(index);
   };
 
-  const handleDragEnd = () => setDraggedIndex(null);
-
-  const getScreenLabel = (screenId: string) => {
-    const screen = screens.find(s => s.id === screenId);
-    return screen ? `${screen.name} (${screen.type})` : "Unknown Screen";
+  const handleDragEnd = () => {
+    if (draggingIndex === null || hoveredIndex === null || draggingIndex === hoveredIndex) {
+      setDraggingIndex(null);
+      setHoveredIndex(null);
+      return;
+    }
+    const reordered = [...levels];
+    const [moved] = reordered.splice(draggingIndex, 1);
+    reordered.splice(hoveredIndex, 0, moved);
+    onLevelsChange(reordered);
+    setDraggingIndex(null);
+    setHoveredIndex(null);
   };
 
   return (
-    <div className="flex gap-4 min-h-[600px]">
-      {/* Left Panel: Create Level */}
-      <div className="w-64 flex flex-col gap-4">
-        <Card className="bg-card border-border">
-          <CardHeader>
-            <CardTitle>Create Level</CardTitle>
-          </CardHeader>
-          <CardContent className="p-4">
-            <Input
-              placeholder="Level name..."
-              value={newLevelName}
-              onChange={e => setNewLevelName(e.target.value)}
-              className="mb-2"
-            />
-            <div className="space-y-2 max-h-64 overflow-y-auto mb-2">
-              {screens.map(screen => (
-                <div
-                  key={screen.id}
-                  className={`p-2 border rounded cursor-pointer ${
-                    selectedScreenIds.has(screen.id)
-                      ? "bg-primary/10 border-primary"
-                      : "hover:bg-muted"
-                  }`}
-                  onClick={() => handleSelectScreen(screen.id)}
-                >
-                  {screen.name} ({screen.type})
-                </div>
-              ))}
-            </div>
-            <Button
-              onClick={handleCreateLevel}
-              disabled={!newLevelName.trim() || selectedScreenIds.size === 0}
-              className="w-full"
-            >
-              <Plus className="w-4 h-4 mr-2" />
-              Create Level
-            </Button>
-          </CardContent>
-        </Card>
+    <div className="p-4">
+      {/* Create Level */}
+      <div className="flex gap-2 mb-4">
+        <Input
+          value={newLevelName}
+          onChange={(e) => setNewLevelName(e.target.value)}
+          placeholder="New level name..."
+          className="bg-background border-border text-sm"
+        />
+        <Button onClick={handleCreateLevel} disabled={!newLevelName.trim()}>
+          Add Level
+        </Button>
       </div>
 
-      {/* Main Content: All Levels Grid */}
-      <div className="flex-1">
-        <h2 className="text-lg font-bold mb-4">All Levels</h2>
-        {levels.length === 0 && <p className="text-muted-foreground">No levels created yet.</p>}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          {levels.map((level, index) => (
+      {/* Grid of Level Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+        {levels.map((level, index) => {
+          const screensForLevel = level.screenIds
+            .map(id => screens.find(s => s.id === id))
+            .filter(Boolean) as Screen[];
+
+          const [currentScreenIndex, setCurrentScreenIndex] = useState(0);
+
+          const nextScreen = (e: React.MouseEvent) => {
+            e.stopPropagation();
+            setCurrentScreenIndex((prev) => (prev + 1) % screensForLevel.length);
+          };
+
+          const prevScreen = (e: React.MouseEvent) => {
+            e.stopPropagation();
+            setCurrentScreenIndex((prev) =>
+              prev === 0 ? screensForLevel.length - 1 : prev - 1
+            );
+          };
+
+          return (
             <Card
               key={level.id}
               draggable
               onDragStart={() => handleDragStart(index)}
-              onDragOver={e => handleDragOver(e, index)}
+              onDragOver={(e) => handleDragOver(e, index)}
               onDragEnd={handleDragEnd}
-              className="p-4 border rounded flex flex-col gap-2 cursor-move"
+              className={`relative p-4 border rounded flex flex-col gap-2 cursor-move group ${
+                draggingIndex === index ? "opacity-50" : ""
+              }`}
             >
+              {/* Top Row: Level Name + Badge */}
               <div className="flex justify-between items-center">
                 <div className="flex items-center gap-2">
                   <Grip className="w-4 h-4" />
                   <span>{level.name}</span>
                 </div>
-                <Badge>Level {index + 1}</Badge>
+                <Badge>{index + 1}</Badge>
               </div>
-              <div className="space-y-1">
-                {level.screenIds.map(screenId => (
-                  <div key={screenId} className="text-xs text-muted-foreground">
-                    {getScreenLabel(screenId)}
+
+              {/* Screen Carousel */}
+              {screensForLevel.length > 0 ? (
+                <div className="relative w-full pt-[75%] bg-muted rounded overflow-hidden">
+                  {/* Displayed screen */}
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    {/* Canvas or thumbnail preview */}
+                    <canvas
+                      width={256}
+                      height={192}
+                      className="w-full h-full bg-gray-900"
+                      ref={(canvas) => {
+                        if (!canvas) return;
+                        const ctx = canvas.getContext("2d");
+                        if (!ctx) return;
+                        const screen = screensForLevel[currentScreenIndex];
+                        // Draw placeholder thumbnail
+                        ctx.fillStyle = "#000000";
+                        ctx.fillRect(0, 0, canvas.width, canvas.height);
+                        ctx.fillStyle = "#fff";
+                        ctx.font = "16px monospace";
+                        ctx.textAlign = "center";
+                        ctx.fillText(screen.name, canvas.width / 2, canvas.height / 2);
+                      }}
+                    />
+
+                    {/* Left Arrow */}
+                    {screensForLevel.length > 1 && (
+                      <button
+                        className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/50 p-1 rounded opacity-0 group-hover:opacity-100 transition"
+                        onClick={prevScreen}
+                      >
+                        ◀
+                      </button>
+                    )}
+
+                    {/* Right Arrow */}
+                    {screensForLevel.length > 1 && (
+                      <button
+                        className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/50 p-1 rounded opacity-0 group-hover:opacity-100 transition"
+                        onClick={nextScreen}
+                      >
+                        ▶
+                      </button>
+                    )}
+
+                    {/* Bottom-left overlay pill */}
+                    <div className="absolute bottom-2 left-2 bg-primary text-white text-xs px-2 py-1 rounded">
+                      {screensForLevel[currentScreenIndex].name} (
+                      {screensForLevel[currentScreenIndex].type})
+                    </div>
                   </div>
-                ))}
-              </div>
+                </div>
+              ) : (
+                <div className="w-full pt-[75%] bg-gray-800 rounded flex items-center justify-center text-white text-xs">
+                  No screens
+                </div>
+              )}
+
+              {/* Delete button */}
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => handleDeleteLevel(level.id)}
+                className="mt-2"
               >
                 <Trash2 className="w-3 h-3" />
               </Button>
             </Card>
-          ))}
-        </div>
+          );
+        })}
       </div>
     </div>
   );
-}
+};
