@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,6 +17,9 @@ export const LevelDesigner = ({ levels, screens, onLevelsChange }: LevelDesigner
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 
+  // Track carousel index per level
+  const [currentScreenIndices, setCurrentScreenIndices] = useState<Record<string, number>>({});
+
   const handleCreateLevel = () => {
     if (!newLevelName.trim()) return;
     const newLevel: Level = {
@@ -30,6 +33,11 @@ export const LevelDesigner = ({ levels, screens, onLevelsChange }: LevelDesigner
 
   const handleDeleteLevel = (id: string) => {
     onLevelsChange(levels.filter(l => l.id !== id));
+    setCurrentScreenIndices(prev => {
+      const copy = { ...prev };
+      delete copy[id];
+      return copy;
+    });
   };
 
   // Drag & Drop
@@ -41,7 +49,11 @@ export const LevelDesigner = ({ levels, screens, onLevelsChange }: LevelDesigner
   };
 
   const handleDragEnd = () => {
-    if (draggingIndex === null || hoveredIndex === null || draggingIndex === hoveredIndex) {
+    if (
+      draggingIndex === null ||
+      hoveredIndex === null ||
+      draggingIndex === hoveredIndex
+    ) {
       setDraggingIndex(null);
       setHoveredIndex(null);
       return;
@@ -76,18 +88,25 @@ export const LevelDesigner = ({ levels, screens, onLevelsChange }: LevelDesigner
             .map(id => screens.find(s => s.id === id))
             .filter(Boolean) as Screen[];
 
-          const [currentScreenIndex, setCurrentScreenIndex] = useState(0);
+          const currentIndex = currentScreenIndices[level.id] ?? 0;
 
           const nextScreen = (e: React.MouseEvent) => {
             e.stopPropagation();
-            setCurrentScreenIndex((prev) => (prev + 1) % screensForLevel.length);
+            if (screensForLevel.length === 0) return;
+            setCurrentScreenIndices(prev => ({
+              ...prev,
+              [level.id]: (currentIndex + 1) % screensForLevel.length,
+            }));
           };
 
           const prevScreen = (e: React.MouseEvent) => {
             e.stopPropagation();
-            setCurrentScreenIndex((prev) =>
-              prev === 0 ? screensForLevel.length - 1 : prev - 1
-            );
+            if (screensForLevel.length === 0) return;
+            setCurrentScreenIndices(prev => ({
+              ...prev,
+              [level.id]:
+                currentIndex === 0 ? screensForLevel.length - 1 : currentIndex - 1,
+            }));
           };
 
           return (
@@ -115,7 +134,6 @@ export const LevelDesigner = ({ levels, screens, onLevelsChange }: LevelDesigner
                 <div className="relative w-full pt-[75%] bg-muted rounded overflow-hidden">
                   {/* Displayed screen */}
                   <div className="absolute inset-0 flex items-center justify-center">
-                    {/* Canvas or thumbnail preview */}
                     <canvas
                       width={256}
                       height={192}
@@ -124,8 +142,7 @@ export const LevelDesigner = ({ levels, screens, onLevelsChange }: LevelDesigner
                         if (!canvas) return;
                         const ctx = canvas.getContext("2d");
                         if (!ctx) return;
-                        const screen = screensForLevel[currentScreenIndex];
-                        // Draw placeholder thumbnail
+                        const screen = screensForLevel[currentIndex];
                         ctx.fillStyle = "#000000";
                         ctx.fillRect(0, 0, canvas.width, canvas.height);
                         ctx.fillStyle = "#fff";
@@ -135,30 +152,26 @@ export const LevelDesigner = ({ levels, screens, onLevelsChange }: LevelDesigner
                       }}
                     />
 
-                    {/* Left Arrow */}
                     {screensForLevel.length > 1 && (
-                      <button
-                        className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/50 p-1 rounded opacity-0 group-hover:opacity-100 transition"
-                        onClick={prevScreen}
-                      >
-                        ◀
-                      </button>
+                      <>
+                        <button
+                          className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/50 p-1 rounded opacity-0 group-hover:opacity-100 transition"
+                          onClick={prevScreen}
+                        >
+                          ◀
+                        </button>
+                        <button
+                          className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/50 p-1 rounded opacity-0 group-hover:opacity-100 transition"
+                          onClick={nextScreen}
+                        >
+                          ▶
+                        </button>
+                      </>
                     )}
 
-                    {/* Right Arrow */}
-                    {screensForLevel.length > 1 && (
-                      <button
-                        className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/50 p-1 rounded opacity-0 group-hover:opacity-100 transition"
-                        onClick={nextScreen}
-                      >
-                        ▶
-                      </button>
-                    )}
-
-                    {/* Bottom-left overlay pill */}
                     <div className="absolute bottom-2 left-2 bg-primary text-white text-xs px-2 py-1 rounded">
-                      {screensForLevel[currentScreenIndex].name} (
-                      {screensForLevel[currentScreenIndex].type})
+                      {screensForLevel[currentIndex].name} (
+                      {screensForLevel[currentIndex].type})
                     </div>
                   </div>
                 </div>
