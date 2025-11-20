@@ -4,7 +4,8 @@ import { Toolbar } from "@/components/spectrum/Toolbar";
 import { SpriteEditor } from "@/components/spectrum/SpriteEditor";
 import { BlockDesigner } from "@/components/spectrum/BlockDesigner";
 import { ScreenDesigner } from "@/components/spectrum/ScreenDesigner";
-import { type GameProject, type Sprite, type Block, type Screen } from "@/types/spectrum";
+import { type GameProject, type Sprite, type Block, type Screen, type Level } from "@/types/spectrum";
+import { LevelDesigner } from "@/components/spectrum/LevelDesigner";
 import { exportGameToTAP, downloadTAPFile } from "@/lib/tapExport";
 import { toast } from "sonner";
 
@@ -23,6 +24,7 @@ const Index = () => {
     }],
     blocks: [],
     screens: [],
+    levels: [],
     settings: {
       lives: 3,
       startEnergy: 100,
@@ -67,6 +69,10 @@ const Index = () => {
 
   const handleScreensChange = (screens: Screen[]) => {
     setProject({ ...project, screens });
+  };
+
+  const handleLevelsChange = (levels: Level[]) => {
+    setProject({ ...project, levels });
   };
 
   const handleExportTAP = () => {
@@ -151,11 +157,11 @@ const Index = () => {
         )}
 
         {activeTab === "levels" && (
-          <div className="p-8 text-center text-muted-foreground">
-            <h2 className="text-2xl font-bold text-primary mb-2">Level Editor</h2>
-            <p>Arrange screens and create game progression</p>
-            <p className="text-sm mt-4">Coming soon...</p>
-          </div>
+          <LevelDesigner
+            levels={project.levels}
+            screens={project.screens}
+            onLevelsChange={handleLevelsChange}
+          />
         )}
 
         {activeTab === "settings" && (

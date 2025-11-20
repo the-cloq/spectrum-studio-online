@@ -9,6 +9,13 @@ export type SpectrumColor = {
 
 export type SpriteSize = "8x8" | "16x16" | "24x12" | "32x16";
 
+export type ScreenType = 
+  | "title"
+  | "game"
+  | "level"
+  | "gameover"
+  | "controls";
+
 export type BlockType = 
   | "empty"
   | "solid"
@@ -45,9 +52,16 @@ export type Block = {
 export type Screen = {
   id: string;
   name: string;
+  type: ScreenType;
   tiles: string[][]; // 2D array of block IDs
   width: number;
   height: number;
+};
+
+export type Level = {
+  id: string;
+  name: string;
+  screenIds: string[]; // Multiple screens can be assigned to a level
 };
 
 export type GameProject = {
@@ -56,6 +70,7 @@ export type GameProject = {
   sprites: Sprite[];
   blocks: Block[];
   screens: Screen[];
+  levels: Level[];
   settings: {
     lives: number;
     startEnergy: number;
