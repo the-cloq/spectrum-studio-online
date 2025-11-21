@@ -107,7 +107,8 @@ export const BlockDesigner = ({ sprites, blocks, onBlocksChange }: BlockDesigner
   return (
     <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
       {/* Block Library */}
-    <Card className="p-4 lg:col-span-3 rounded-lg border bg-card text-card-foreground shadow-sm space-y-4">
+      
+      <Card className="p-4 rounded-lg border bg-card text-card-foreground shadow-sm space-y-4 h-fit self-start">
   <h2 className="text-lg font-bold text-primary mb-4">Block Library</h2>
 
   {blocks.length === 0 ? (
