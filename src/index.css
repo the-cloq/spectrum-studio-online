@@ -143,3 +143,19 @@ All colors MUST be HSL.
                 inset 0 0 10px hsl(var(--pixel-glow) / 0.1);
   }
 }
+
+.perspective {
+  perspective: 1200px;
+}
+
+.transform-style-3d {
+  transform-style: preserve-3d;
+}
+
+.backface-hidden {
+  backface-visibility: hidden;
+}
+
+.rotate-y-180 {
+  transform: rotateY(180deg);
+}
