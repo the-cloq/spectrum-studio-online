@@ -82,39 +82,38 @@ export const LevelDesigner = ({ levels, screens, blocks, onLevelsChange }: Level
   return (
     <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
 
-      {/* LEVEL CARDS */}
-     {/* LEVEL CARDS */}
-<Card className="rounded-lg border bg-card text-card-foreground shadow-sm p-4 lg:col-span-3">
-  <h2 className="text-lg font-bold text-primary mb-4">Levels</h2>
-
-  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
-    {levels.map((level, index) => {
-
-      const screensForLevel = level.screenIds
-        .map(id => screens.find(s => s.id === id))
-        .filter(Boolean) as Screen[];
-
-      const currentScreenIndex = screenIndices[level.id] ?? 0;
-      const isFlipped = confirmDeleteId === level.id;
-
-      return (
-        <div key={level.id} className="relative h-[340px]">
-
-          {/* Flip container */}
-          <div
-            draggable={!isFlipped}
-            onDragStart={() => handleDragStart(index)}
-            onDragOver={e => handleDragOver(e, index)}
-            onDragEnd={handleDragEnd}
-            className={`
-              w-full h-full transition-transform duration-500 
-              [transform-style:preserve-3d]
-              ${isFlipped ? "rotate-y-180" : ""}
-              ${draggingIndex === index ? "opacity-50" : ""}
-            `}
-          >
-
-            {/* FRONT */}
+ {/* LEVEL CARDS */}
+  <Card className="rounded-lg border bg-card text-card-foreground shadow-sm p-4 lg:col-span-3">
+    <h2 className="text-lg font-bold text-primary mb-4">Levels</h2>
+  
+    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+      {levels.map((level, index) => {
+  
+        const screensForLevel = level.screenIds
+          .map(id => screens.find(s => s.id === id))
+          .filter(Boolean) as Screen[];
+  
+        const currentScreenIndex = screenIndices[level.id] ?? 0;
+        const isFlipped = confirmDeleteId === level.id;
+  
+        return (
+          <div key={level.id} className="relative h-[340px]">
+  
+            {/* Flip container */}
+            <div
+              draggable={!isFlipped}
+              onDragStart={() => handleDragStart(index)}
+              onDragOver={e => handleDragOver(e, index)}
+              onDragEnd={handleDragEnd}
+              className={`
+                w-full h-full transition-transform duration-500 
+                [transform-style:preserve-3d]
+                ${isFlipped ? "rotate-y-180" : ""}
+                ${draggingIndex === index ? "opacity-50" : ""}
+              `}
+            >
+  
+              {/* FRONT */}
               <Card className="absolute inset-0 backface-hidden p-4 flex flex-col gap-2">
   
                 <div className="flex justify-between items-center">
@@ -244,7 +243,6 @@ export const LevelDesigner = ({ levels, screens, blocks, onLevelsChange }: Level
       })}
     </div>
   </Card>
-
 
                   {/* BACK SIDE (Confirmation) */}
                   <Card className="absolute inset-0 rotate-y-180 backface-hidden p-4 flex flex-col items-center justify-center gap-3 bg-destructive text-white">
