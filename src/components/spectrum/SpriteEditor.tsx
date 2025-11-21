@@ -185,72 +185,6 @@ export const SpriteEditor = ({ sprites, onSpritesChange }: SpriteEditorProps) =>
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-      {/* Sprite Library */}
-      <Card className="p-4">
-        <h2 className="text-lg font-bold text-primary mb-4">Sprite Library</h2>
-        
-        <div className="space-y-2 mb-4 max-h-64 overflow-y-auto">
-          {sprites.map((s) => (
-            <div
-              key={s.id}
-              className={`flex items-center gap-2 p-2 rounded cursor-pointer transition-colors ${
-                s.id === selectedSpriteId ? "bg-primary/20 border border-primary" : "hover:bg-muted"
-              }`}
-              onClick={() => setSelectedSpriteId(s.id)}
-            >
-              <div className="flex-1">
-                <div className="font-semibold text-sm">{s.name}</div>
-                <div className="text-xs text-muted-foreground">{s.size}</div>
-              </div>
-              {sprites.length > 1 && (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleDeleteSprite(s.id);
-                  }}
-                >
-                  <Trash2 className="w-3 h-3" />
-                </Button>
-              )}
-            </div>
-          ))}
-        </div>
-
-        <div className="space-y-3 pt-3 border-t">
-          <div>
-            <Label htmlFor="new-sprite-name">New Sprite Name</Label>
-            <Input
-              id="new-sprite-name"
-              value={newSpriteName}
-              onChange={(e) => setNewSpriteName(e.target.value)}
-              placeholder="e.g., Wall, Player, Enemy"
-            />
-          </div>
-
-          <div>
-            <Label htmlFor="new-sprite-size">Size</Label>
-            <Select value={newSpriteSize} onValueChange={(v) => setNewSpriteSize(v as SpriteSize)}>
-              <SelectTrigger id="new-sprite-size">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="8x8">8x8 (Block)</SelectItem>
-                <SelectItem value="16x16">16x16 (Standard)</SelectItem>
-                <SelectItem value="24x12">24x12 (JetPac style)</SelectItem>
-                <SelectItem value="32x16">32x16 (Large)</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <Button onClick={handleAddSprite} className="w-full">
-            <Plus className="w-4 h-4 mr-2" />
-            Add to Library
-          </Button>
-        </div>
-      </Card>
-
       {/* Main Canvas */}
       <Card className="p-4 lg:col-span-2">
         <div className="space-y-4">
@@ -325,6 +259,72 @@ export const SpriteEditor = ({ sprites, onSpritesChange }: SpriteEditorProps) =>
               style={{ imageRendering: "pixelated" }}
             />
           </div>
+        </div>
+      </Card>
+
+      {/* Sprite Library */}
+      <Card className="p-4">
+        <h2 className="text-lg font-bold text-primary mb-4">Sprite Library</h2>
+        
+        <div className="space-y-2 mb-4 max-h-64 overflow-y-auto">
+          {sprites.map((s) => (
+            <div
+              key={s.id}
+              className={`flex items-center gap-2 p-2 rounded cursor-pointer transition-colors ${
+                s.id === selectedSpriteId ? "bg-primary/20 border border-primary" : "hover:bg-muted"
+              }`}
+              onClick={() => setSelectedSpriteId(s.id)}
+            >
+              <div className="flex-1">
+                <div className="font-semibold text-sm">{s.name}</div>
+                <div className="text-xs text-muted-foreground">{s.size}</div>
+              </div>
+              {sprites.length > 1 && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDeleteSprite(s.id);
+                  }}
+                >
+                  <Trash2 className="w-3 h-3" />
+                </Button>
+              )}
+            </div>
+          ))}
+        </div>
+
+        <div className="space-y-3 pt-3 border-t">
+          <div>
+            <Label htmlFor="new-sprite-name">New Sprite Name</Label>
+            <Input
+              id="new-sprite-name"
+              value={newSpriteName}
+              onChange={(e) => setNewSpriteName(e.target.value)}
+              placeholder="e.g., Wall, Player, Enemy"
+            />
+          </div>
+
+          <div>
+            <Label htmlFor="new-sprite-size">Size</Label>
+            <Select value={newSpriteSize} onValueChange={(v) => setNewSpriteSize(v as SpriteSize)}>
+              <SelectTrigger id="new-sprite-size">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="8x8">8x8 (Block)</SelectItem>
+                <SelectItem value="16x16">16x16 (Standard)</SelectItem>
+                <SelectItem value="24x12">24x12 (JetPac style)</SelectItem>
+                <SelectItem value="32x16">32x16 (Large)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <Button onClick={handleAddSprite} className="w-full">
+            <Plus className="w-4 h-4 mr-2" />
+            Add to Library
+          </Button>
         </div>
       </Card>
 
