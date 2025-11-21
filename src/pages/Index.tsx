@@ -39,7 +39,11 @@ const Index = () => {
     if (saved) {
       try {
         const loaded = JSON.parse(saved);
-        setProject(loaded);
+        const loadedWithDefaults = {
+          ...loaded,
+          levels: loaded.levels ?? [],
+        };
+        setProject(loadedWithDefaults);
         toast.success("Project loaded from browser storage");
       } catch (e) {
         console.error("Failed to load project:", e);
@@ -101,7 +105,11 @@ const Index = () => {
     if (saved) {
       try {
         const loaded = JSON.parse(saved);
-        setProject(loaded);
+        const loadedWithDefaults = {
+          ...loaded,
+          levels: loaded.levels ?? [],
+        };
+        setProject(loadedWithDefaults);
         toast.success("Project loaded!");
       } catch (e) {
         toast.error("Failed to load project");
