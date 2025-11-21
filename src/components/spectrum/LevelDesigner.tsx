@@ -5,15 +5,16 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Trash2, Grip } from "lucide-react";
-import { type Level, type Screen } from "@/types/spectrum";
+import { type Level, type Screen, type Block } from "@/types/spectrum";
 
 interface LevelDesignerProps {
   levels: Level[];
   screens: Screen[];
+  blocks: Block[];
   onLevelsChange: (levels: Level[]) => void;
 }
 
-export const LevelDesigner = ({ levels, screens, onLevelsChange }: LevelDesignerProps) => {
+export const LevelDesigner = ({ levels, screens, blocks, onLevelsChange }: LevelDesignerProps) => {
   const [newLevelName, setNewLevelName] = useState("");
   const [selectedScreenIds, setSelectedScreenIds] = useState<string[]>([]);
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
@@ -124,12 +125,42 @@ export const LevelDesigner = ({ levels, screens, onLevelsChange }: LevelDesigner
                           ctx.fillStyle = "#000";
                           ctx.fillRect(0, 0, canvas.width, canvas.height);
                           
-                          // Simple text display for now
-                          ctx.fillStyle = "#fff";
-                          ctx.font = "16px monospace";
-                          ctx.textAlign = "center";
-                          ctx.fillText(screen.name, canvas.width / 2, canvas.height / 2 - 10);
-                          ctx.fillText(`(${screen.type || 'game'})`, canvas.width / 2, canvas.height / 2 + 10);
+                          // Render screen content
+                          if (screen.type === "title" && screen.pixels) {
+                            // Render title screen pixels
+                            for (let y = 0; y < 192; y++) {
+                              for (let x = 0; x < 256; x++) {
+                                const color = screen.pixels[y]?.[x];
+                                if (color) {
+                                  ctx.fillStyle = color.value;
+                                  ctx.fillRect(x, y, 1, 1);
+                                }
+                              }
+                            }
+                          } else if (screen.type === "game" && screen.tiles) {
+                            // Render game screen tiles
+                            const blockSize = 16;
+                            for (let row = 0; row < 12; row++) {
+                              for (let col = 0; col < 16; col++) {
+                                const blockId = screen.tiles[row]?.[col];
+                                if (blockId) {
+                                  const block = blocks.find(b => b.id === blockId);
+                                  if (block?.sprite?.pixels) {
+                                    // Render block sprite
+                                    for (let y = 0; y < 16; y++) {
+                                      for (let x = 0; x < 16; x++) {
+                                        const colorIndex = block.sprite.pixels[y]?.[x];
+                                        if (colorIndex !== undefined && colorIndex !== 0) {
+                                          ctx.fillStyle = `hsl(${colorIndex * 30}, 70%, 50%)`;
+                                          ctx.fillRect(col * blockSize + x, row * blockSize + y, 1, 1);
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
                         }}
                       />
                       {screensForLevel.length > 1 && (
