@@ -65,7 +65,7 @@ y: Math.floor(e.clientY - rect.top),
 const handleMouseDown = (e: React.MouseEvent) => {
   const pos = getMousePos(e);
   setDragStart(pos);
-  setCrop({ x: pos.x, y: pos.y, w: 0, h: 0 });
+  setCrop({ x: pos.x, y: pos.y, w: 0, h: 0 });  // start crop rect
   setDragging(true);
 };
 
