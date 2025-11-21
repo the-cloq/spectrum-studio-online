@@ -298,6 +298,63 @@ export const ScreenDesigner = ({ blocks, screens, onScreensChange }: ScreenDesig
         )}
 
       </div>
+
+         {/* RIGHT SIDEBAR */}
+      <div className="space-y-4">
+
+        <Card className="p-4 space-y-2">
+          <Label>Screen Name</Label>
+          <Input value={newScreenName} onChange={e => setNewScreenName(e.target.value)} placeholder="Enter name" />
+
+          <Label>Screen Type</Label>
+          <Select value={newScreenType} onValueChange={setNewScreenType}>
+            <SelectTrigger className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="title">Title</SelectItem>
+              <SelectItem value="game">Game</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <Button
+            className="w-full mt-2"
+            disabled={!newScreenName || !newScreenType}
+            onClick={handleCreateScreen}
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            Add Screen
+          </Button>
+        </Card>
+
+        <Card className="p-4">
+          <h3 className="text-sm font-bold text-primary mb-2">Screens</h3>
+          <div className="space-y-2 max-h-64 overflow-auto">
+            {screens.map(screen => (
+              <div
+                key={screen.id}
+                className={`flex items-center justify-between p-2 rounded border cursor-pointer transition-all
+                  ${selectedScreen?.id === screen.id ? "border-primary bg-primary/10" : "border-border hover:border-primary/50"}`}
+                onClick={() => setSelectedScreen(screen)}
+              >
+                <span className="truncate">{screen.name}</span>
+
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-6 w-6 p-0"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDeleteScreen(screen.id);
+                  }}
+                >
+                  <Trash2 className="w-3 h-3" />
+                </Button>
+              </div>
+            ))}
+          </div>
+        </Card>
+      </div>
     </div>
   );
 };
