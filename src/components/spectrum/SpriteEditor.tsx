@@ -10,6 +10,21 @@ import { Eraser, Grid3x3, ZoomIn, ZoomOut, Plus, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
+const countUsedColors = (pixels: number[][]) => {
+  const colors = new Set<number>();
+
+  for (let y = 0; y < pixels.length; y++) {
+    for (let x = 0; x < pixels[y].length; x++) {
+      const value = pixels[y][x];
+      if (value !== 0) { // ignore transparent
+        colors.add(value);
+      }
+    }
+  }
+
+  return colors.size;
+};
+
 interface SpriteEditorProps {
   sprites: Sprite[];
   onSpritesChange: (sprites: Sprite[]) => void;
@@ -80,29 +95,41 @@ export const SpriteEditor = ({ sprites, onSpritesChange }: SpriteEditorProps) =>
   };
 
   const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    const canvas = canvasRef.current;
-    if (!canvas || !sprite) return;
+  const canvas = canvasRef.current;
+  if (!canvas || !sprite) return;
 
-    const rect = canvas.getBoundingClientRect();
-    const x = Math.floor((e.clientX - rect.left) / zoom);
-    const y = Math.floor((e.clientY - rect.top) / zoom);
+  const rect = canvas.getBoundingClientRect();
+  const x = Math.floor((e.clientX - rect.left) / zoom);
+  const y = Math.floor((e.clientY - rect.top) / zoom);
 
-    if (x >= 0 && x < width && y >= 0 && y < height) {
-      const newPixels = sprite.pixels.map(row => [...row]);
-      if (!newPixels[y]) newPixels[y] = new Array(width).fill(0);
-      
-      const colorIndex = isErasing ? 0 : SPECTRUM_COLORS.findIndex(
-        c => c.ink === selectedColor.ink && c.bright === selectedColor.bright
-      );
-      newPixels[y][x] = colorIndex;
+  if (x >= 0 && x < width && y >= 0 && y < height) {
+    const newPixels = sprite.pixels.map(row => [...row]);
+    if (!newPixels[y]) newPixels[y] = new Array(width).fill(0);
 
-      const updatedSprites = sprites.map(s => 
-        s.id === sprite.id ? { ...sprite, pixels: newPixels } : s
-      );
-      onSpritesChange(updatedSprites);
+    const colorIndex = isErasing
+      ? 0
+      : SPECTRUM_COLORS.findIndex(
+          c => c.ink === selectedColor.ink && c.bright === selectedColor.bright
+        );
+
+    newPixels[y][x] = colorIndex;
+
+    // 👇 Count colours after change
+    const colourCount = countUsedColors(newPixels);
+
+    if (colourCount > 2) {
+      toast.error("ZX Spectrum limit: Only 2 colours per sprite allowed.");
+      return; // BLOCK the change
     }
-  };
 
+    const updatedSprites = sprites.map(s =>
+      s.id === sprite.id ? { ...sprite, pixels: newPixels } : s
+    );
+
+    onSpritesChange(updatedSprites);
+  }
+};
+  
   const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
     setIsDrawing(true);
     handleCanvasClick(e);
@@ -259,6 +286,11 @@ export const SpriteEditor = ({ sprites, onSpritesChange }: SpriteEditorProps) =>
               style={{ imageRendering: "pixelated" }}
             />
           </div>
+
+          <div className="text-xs text-muted-foreground mt-2 text-center">
+            Colours used in sprite: {countUsedColors(sprite.pixels)} / 2
+          </div>
+          
         </div>
       </Card>
 
