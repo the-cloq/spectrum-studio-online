@@ -168,6 +168,7 @@ const Index = () => {
           <LevelDesigner
             levels={project.levels}
             screens={project.screens}
+            blocks={project.blocks}
             onLevelsChange={handleLevelsChange}
           />
         )}
