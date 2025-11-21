@@ -184,9 +184,9 @@ export const SpriteEditor = ({ sprites, onSpritesChange }: SpriteEditorProps) =>
   if (!sprite) return null;
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+    <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
       {/* Main Canvas */}
-      <Card className="p-4 lg:col-span-2">
+      <Card className="p-4 lg:col-span-3">
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <div className="space-y-1">
