@@ -78,7 +78,7 @@ export const LevelDesigner = ({ levels, screens, blocks, onLevelsChange }: Level
       {/* Left/Main Panel: Level Cards */}
       <Card className="rounded-lg border bg-card text-card-foreground shadow-sm p-4 lg:col-span-3">
         <h2 className="text-lg font-bold text-primary mb-4">Levels</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
           {levels.map((level, index) => {
             const screensForLevel = level.screenIds
               .map(id => screens.find(s => s.id === id))
