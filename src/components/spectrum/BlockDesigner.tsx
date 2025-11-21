@@ -125,7 +125,7 @@ export const BlockDesigner = ({ sprites, blocks, onBlocksChange }: BlockDesigner
                 }`}
                 onClick={() => setSelectedBlock(block)}
               >
-                <div className="aspect-square bg-muted rounded mb-2 flex items-center justify-center">
+                <div className="aspect-video bg-muted rounded mb-2 flex items-center justify-center">
                   {block.sprite && (
                     <img
                       src={renderSpritePreview(block.sprite)}
