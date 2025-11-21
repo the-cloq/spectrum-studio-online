@@ -26,6 +26,7 @@ export type Sprite = {
   size: SpriteSize;
   pixels: number[][]; // 2D array of color indices
   frames?: Sprite[]; // For animations
+  preview?: string; // Base64 data URL for preview
 };
 
 export type Block = {
@@ -45,9 +46,17 @@ export type Block = {
 export type Screen = {
   id: string;
   name: string;
-  tiles: string[][]; // 2D array of block IDs
+  type: "title" | "game"; // Screen type
+  tiles?: string[][]; // 2D array of block IDs (for game screens)
+  pixels?: SpectrumColor[][]; // 2D array of colors (for title screens)
   width: number;
   height: number;
+};
+
+export type Level = {
+  id: string;
+  name: string;
+  screenIds: string[];
 };
 
 export type GameProject = {
@@ -56,6 +65,7 @@ export type GameProject = {
   sprites: Sprite[];
   blocks: Block[];
   screens: Screen[];
+  levels: Level[];
   settings: {
     lives: number;
     startEnergy: number;
