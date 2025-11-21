@@ -214,6 +214,7 @@ export const LevelDesigner = ({ levels, screens, blocks, onLevelsChange }: Level
           placeholder="Level name"
         />
         <div className="space-y-1 max-h-64 overflow-auto">
+          <h4 className="text-sm font-bold text-primary mb-2">Include Screens</h4>
           {screens.map(screen => (
             <label
               key={screen.id}
