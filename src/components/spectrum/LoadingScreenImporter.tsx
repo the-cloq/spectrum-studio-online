@@ -62,11 +62,17 @@ y: Math.floor(e.clientY - rect.top),
 };
 
 
+const handleMouseDown = (e: React.MouseEvent) => {
+  const pos = getMousePos(e);
+  setDragStart(pos);
+  setCrop({ x: pos.x, y: pos.y, w: 0, h: 0 });
+  setDragging(true);
+};
+
 const handleMouseMove = (e: React.MouseEvent) => {
   if (!dragging || !dragStart) return;
 
   const pos = getMousePos(e);
-
   setCrop({
     x: dragStart.x,
     y: dragStart.y,
@@ -74,18 +80,3 @@ const handleMouseMove = (e: React.MouseEvent) => {
     h: pos.y - dragStart.y,
   });
 };
-
-
-const handleMouseMove = (e: React.MouseEvent) => {
-if (!dragging || !dragStart) return;
-
-
-const pos = getMousePos(e);
-
-
-const w = pos.x - dragStart.x;
-const h = pos.y - dragStart.y;
-
-
-setCrop({
-}
