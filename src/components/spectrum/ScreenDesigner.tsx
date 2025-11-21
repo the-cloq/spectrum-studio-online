@@ -374,7 +374,7 @@ export const ScreenDesigner = ({ blocks, screens, onScreensChange }: ScreenDesig
           </Button>
         </Card>
 
-        <Card className="p-4">
+        <Card className="p-4 h-full">
           <h3 className="text-sm font-bold text-primary mb-2">Screens</h3>
           <div className="space-y-2 max-h-64 overflow-auto">
             {screens.map(screen => (
