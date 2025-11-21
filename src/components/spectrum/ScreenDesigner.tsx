@@ -270,57 +270,57 @@ export const ScreenDesigner = ({ blocks, screens, onScreensChange }: ScreenDesig
           </Card>
         )}
 
-        {{/* BLOCK PALETTE */}
-          {selectedScreen?.type === "game" && (
-            <Card className="p-4">
-              <h3 className="text-sm font-bold mb-2">Blocks</h3>
-          
-              <div className="grid grid-cols-8 md:grid-cols-12 lg:grid-cols-16 gap-1">
-                {blocks.map(block => {
-                  // Generate preview canvas if not available
-                  if (!block.sprite?.preview && block.sprite?.pixels) {
-                    const canvas = document.createElement('canvas');
-                    const size = 32;
-                    canvas.width = size;
-                    canvas.height = size;
-                    const ctx = canvas.getContext('2d');
-                    if (ctx) {
-                      const pixelSize = size / block.sprite.pixels.length;
-                      block.sprite.pixels.forEach((row, y) => {
+        {
+    /* BLOCK PALETTE */ } {
+    selectedScreen?.type === "game" && ( < Card className = "p-4" > < h3 className = "text-sm font-bold mb-2" > Blocks < /h3> <div className="grid grid-cols-8 gap-1"> {blocks.map(block => { / / Generate preview canvas
+            if not available
+            if (!block.sprite?.preview && block.sprite?.pixels) {
+                const canvas = document.createElement('canvas');
+                const size = 32;
+                canvas.width = size;
+                canvas.height = size;
+                const ctx = canvas.getContext('2d');
+                if (ctx) {
+                    const pixelSize = size / block.sprite.pixels.length;
+                    block.sprite.pixels.forEach((row, y) => {
                         row.forEach((colorIndex, x) => {
-                          if (colorIndex) {
-                            ctx.fillStyle = SPECTRUM_COLORS[colorIndex]?.value || "#000";
-                            ctx.fillRect(x * pixelSize, y * pixelSize, pixelSize, pixelSize);
-                          }
+                            if (colorIndex) {
+                                ctx.fillStyle = SPECTRUM_COLORS[colorIndex]?.value || "#000";
+                                ctx.fillRect(x * pixelSize, y * pixelSize, pixelSize, pixelSize);
+                            }
                         });
-                      });
-                      block.sprite.preview = canvas.toDataURL();
+                    });
+                    block.sprite.preview = canvas.toDataURL();
+                }
+            }
+            return ( < button key = {
+                        block.id
                     }
-                  }
-                  
-                  return (
-                    <button
-                      key={block.id}
-                      className={`aspect-square border rounded p-0.5 hover:border-primary
-                      ${selectedBlock?.id === block.id && !isErasing ? "border-primary retro-glow" : "border-border"}`}
-                      onClick={() => { setSelectedBlock(block); setIsErasing(false); }}
-                    >
-                      {block.sprite?.preview ? (
-                        <img
-                          src={block.sprite.preview}
-                          alt={block.name}
-                          className="pixelated w-full h-full"
-                          style={{ imageRendering: "pixelated" }}
-                        />
-                      ) : (
-                        <div className="w-full h-full bg-muted" />
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            </Card>
-          )}
+                    className = {
+                        aspect - square border rounded p - 0.5 hover: border - primary $ {
+                            selectedBlock?.id === block.id && !isErasing ? "border-primary retro-glow" : "border-border"
+                        }
+                    }
+                    onClick = {
+                        () => {
+                            setSelectedBlock(block);
+                            setIsErasing(false);
+                        }
+                    } > {
+                        block.sprite?.preview ? ( < img src = {
+                                block.sprite.preview
+                            }
+                            alt = {
+                                block.name
+                            }
+                            className = "pixelated w-full h-full"
+                            style = {
+                                {
+                                    imageRendering: "pixelated"
+                                }
+                            }
+                            /> ) : ( <div className="w-full h-full bg-muted" / > )
+                    } < /button> ); })} </div > < /Card> )}
       </div>
 
          {/* RIGHT SIDEBAR */}
