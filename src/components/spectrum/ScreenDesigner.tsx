@@ -14,7 +14,7 @@ import LoadingScreenImporter from "@/components/spectrum/LoadingScreenImporter";
 <LoadingScreenImporter
   onImport={(imageData) => {
     // This is where we feed the cropped + converted artwork
-    // into your loading screen system
+    // into the loading screen system
     console.log("Imported ZX Image:", imageData);
   }}
 />
