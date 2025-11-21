@@ -251,12 +251,28 @@ export const ScreenDesigner = ({ blocks, screens, onScreensChange }: ScreenDesig
               {blocks.map(block => (
                 <button
                   key={block.id}
-                  className={`aspect-square bg-muted rounded border-2 p-1 transition-all hover:border-primary 
+                  className={`bg-muted rounded border-2 p-1 transition-all hover:border-primary 
                   ${selectedBlock?.id === block.id && !isErasing ? "border-primary retro-glow" : "border-border"}`}
-                  onClick={() => { setSelectedBlock(block); setIsErasing(false); }}
+                  onClick={() => { 
+                    setSelectedBlock(block);
+                    setIsErasing(false);
+                  }}
                   title={block.name}
                 >
-                  <div className="w-full h-full flex items-center justify-center text-xs font-bold">
+                  {/* Sprite preview */}
+                  <div className="aspect-square bg-muted rounded mb-1 flex items-center justify-center w-12 h-12">
+                    {block.sprite && (
+                      <img
+                        src={renderSpritePreview(block.sprite)}
+                        alt={block.name}
+                        className="pixelated max-w-full max-h-full"
+                        style={{ imageRendering: "pixelated" }}
+                      />
+                    )}
+                  </div>
+              
+                  {/* Name */}
+                  <div className="text-[10px] text-center text-muted-foreground truncate">
                     {block.name}
                   </div>
                 </button>
