@@ -205,15 +205,15 @@ export const LevelDesigner = ({ levels, screens, blocks, onLevelsChange }: Level
         </div>
       </Card>
 
-      {/* Right Panel: Add Level */}
-      <Card className="rounded-lg border bg-card text-card-foreground shadow-sm p-4 space-y-4">
+     {/* Right Panel: Add Level */}
+      <Card className="rounded-lg border bg-card text-card-foreground shadow-sm p-4 space-y-4 max-h-screen flex flex-col">
         <h3 className="text-sm font-bold text-primary mb-2">Add Level</h3>
         <Input
           value={newLevelName}
           onChange={e => setNewLevelName(e.target.value)}
           placeholder="Level name"
         />
-        <div className="space-y-1 max-h-64 overflow-auto">
+        <div className="space-y-1 overflow-auto max-h-full flex-1">
           <h4 className="text-sm font-bold text-primary mb-2">Include Screens</h4>
           {screens.map(screen => (
             <label
