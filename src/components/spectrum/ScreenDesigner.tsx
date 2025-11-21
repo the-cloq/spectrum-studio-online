@@ -236,8 +236,6 @@ export const ScreenDesigner = ({ blocks, screens, onScreensChange }: ScreenDesig
                 <ZoomOut className="w-4 h-4" />
               </Button>
 
-              <span className="text-sm font-mono">{zoom}x</span>
-
               <Button size="sm" variant="outline" onClick={() => setZoom(z => Math.min(MAX_ZOOM, z + 1))}>
                 <ZoomIn className="w-4 h-4" />
               </Button>
