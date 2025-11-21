@@ -54,6 +54,40 @@ export default function ScreenDesigner() {
       ? 2
       : 8;
 
+
+  // Converts a sprite array into an image URL for previews
+const renderSpritePreview = (sprite: number[][]) => {
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d");
+
+  if (!ctx) return "";
+
+  const width = sprite[0]?.length ?? 0;
+  const height = sprite.length;
+
+  canvas.width = width;
+  canvas.height = height;
+
+  const imageData = ctx.createImageData(width, height);
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const index = (y * width + x) * 4;
+      const value = sprite[y][x]; // assuming 0 or 1
+
+      const color = value ? 255 : 0;
+
+      imageData.data[index] = color;     // R
+      imageData.data[index + 1] = color; // G
+      imageData.data[index + 2] = color; // B
+      imageData.data[index + 3] = 255;   // A
+    }
+  }
+
+  ctx.putImageData(imageData, 0, 0);
+  return canvas.toDataURL();
+};
+
   /* ---------------- CREATE SCREEN ---------------- */
 
   const addScreen = () => {
