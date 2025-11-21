@@ -275,7 +275,7 @@ export const ScreenDesigner = ({ blocks, screens, onScreensChange }: ScreenDesig
             <Card className="p-4">
               <h3 className="text-sm font-bold mb-2">Blocks</h3>
           
-              <div className="grid grid-cols-8 md:grid-cols-12 xl:grid-cols-[repeat(16,minmax(0,1fr))] gap-1">
+              <div className="grid grid-cols-8 md:grid-cols-12 xl:grid-cols-[repeat(16,minmax(0,1fr))] gap-3">
                 {blocks.map(block => {
           
                   // Generate preview canvas if not available
