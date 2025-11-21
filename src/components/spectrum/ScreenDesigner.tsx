@@ -346,7 +346,7 @@ export const ScreenDesigner = ({ blocks, screens, onScreensChange }: ScreenDesig
           <Label>Screen Type</Label>
           <Select value={newScreenType} onValueChange={(value) => setNewScreenType(value as "title" | "game" | "")}>
             <SelectTrigger className="w-full">
-              <SelectValue />
+              <SelectValue placeholder="Select Type" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="title">Title</SelectItem>
