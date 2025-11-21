@@ -1,92 +1,64 @@
 import React, { useRef, useState, useEffect } from "react";
-import { spectrumConvertImage } from "@/components/spectrum/spectrumImageTools";
+const tempCanvas = document.createElement("canvas");
 
 
-interface Props {
-onImport: (imageData: ImageData) => void;
-}
+tempCanvas.width = crop.w;
+tempCanvas.height = crop.h;
 
 
-type CropRect = { x: number; y: number; w: number; h: number } | null;
+const tctx = tempCanvas.getContext("2d")!;
+tctx.drawImage(
+srcCanvas,
+crop.x,
+crop.y,
+crop.w,
+crop.h,
+0,
+0,
+crop.w,
+crop.h
+);
 
 
-export default function LoadingScreenImporter({ onImport }: Props) {
-const canvasRef = useRef<HTMLCanvasElement>(null);
-const [image, setImage] = useState<HTMLImageElement | null>(null);
-const [crop, setCrop] = useState<CropRect>(null);
-const [dragStart, setDragStart] = useState<{ x: number; y: number } | null>(null);
-const [dragging, setDragging] = useState(false);
+const imageData = tctx.getImageData(0, 0, crop.w, crop.h);
+const spectrumData = spectrumConvertImage(imageData);
 
 
-const WIDTH = 512;
-const HEIGHT = 384;
-
-
-const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-const file = e.target.files?.[0];
-if (!file) return;
-
-
-const img = new Image();
-img.onload = () => setImage(img);
-img.src = URL.createObjectURL(file);
+onImport(spectrumData);
 };
 
 
-useEffect(() => {
-if (!image) return;
+return (
+<div className="space-y-3 p-4 border rounded">
+<h3 className="font-bold uppercase text-xs text-muted-foreground">
+ZX Spectrum Loading Screen Importer
+</h3>
 
 
-const canvas = canvasRef.current!;
-const ctx = canvas.getContext("2d")!;
+<input type="file" accept="image/*" onChange={handleFileUpload} />
 
 
-ctx.clearRect(0, 0, canvas.width, canvas.height);
-ctx.drawImage(image, 0, 0, WIDTH, HEIGHT);
+<div className="border mt-2 inline-block">
+<canvas
+ref={canvasRef}
+width={WIDTH}
+height={HEIGHT}
+className="cursor-crosshair bg-black"
+onMouseDown={handleMouseDown}
+onMouseMove={handleMouseMove}
+onMouseUp={handleMouseUp}
+/>
+</div>
 
 
-if (crop) {
-ctx.strokeStyle = "red";
-ctx.lineWidth = 2;
-ctx.strokeRect(crop.x, crop.y, crop.w, crop.h);
-}
-}, [image, crop]);
-
-
-const getMousePos = (e: React.MouseEvent) => {
-const rect = canvasRef.current!.getBoundingClientRect();
-return {
-x: Math.floor(e.clientX - rect.left),
-y: Math.floor(e.clientY - rect.top),
-};
-};
-
-
-const handleMouseDown = (e: React.MouseEvent) => {
-const pos = getMousePos(e);
-setDragStart(pos);
-setCrop({
-  x: dragStart.x,
-  y: dragStart.y,
-  w: pos.x - dragStart.x,
-  h: pos.y - dragStart.y,
-});
-
-setDragging(true);
-};
-
-
-const handleMouseMove = (e: React.MouseEvent) => {
-if (!dragging || !dragStart) return;
-
-
-const pos = getMousePos(e);
-
-
-const w = pos.x - dragStart.x;
-const h = pos.y - dragStart.y;
-
-
-setCrop({
-x: dragStart.x,
+<div className="flex gap-2 mt-2">
+<button
+onClick={handleCropAndConvert}
+className="px-3 py-1 bg-primary text-white text-xs rounded"
+>
+Crop & Convert
+</button>
+</div>
+</div>
+);
 }
