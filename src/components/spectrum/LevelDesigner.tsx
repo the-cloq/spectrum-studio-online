@@ -114,37 +114,42 @@ export const LevelDesigner = ({ levels, screens, onLevelsChange }: LevelDesigner
                         height={192}
                         className="w-full h-full bg-gray-900"
                         ref={canvas => {
-                          if (!canvas) return;
+                          if (!canvas || !screensForLevel[currentScreenIndex]) return;
                           const ctx = canvas.getContext("2d");
                           if (!ctx) return;
+                          
                           const screen = screensForLevel[currentScreenIndex];
+                          
+                          // Clear background
                           ctx.fillStyle = "#000";
                           ctx.fillRect(0, 0, canvas.width, canvas.height);
+                          
+                          // Simple text display for now
                           ctx.fillStyle = "#fff";
                           ctx.font = "16px monospace";
                           ctx.textAlign = "center";
-                          ctx.fillText(screen.name, canvas.width / 2, canvas.height / 2);
+                          ctx.fillText(screen.name, canvas.width / 2, canvas.height / 2 - 10);
+                          ctx.fillText(`(${screen.type || 'game'})`, canvas.width / 2, canvas.height / 2 + 10);
                         }}
                       />
                       {screensForLevel.length > 1 && (
                         <>
                           <button
-                            className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/50 p-1 rounded opacity-0 group-hover:opacity-100 transition"
+                            className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/50 text-white p-1 rounded opacity-0 group-hover:opacity-100 transition"
                             onClick={e => { e.stopPropagation(); prevScreen(level.id, screensForLevel); }}
                           >
                             ◀
                           </button>
                           <button
-                            className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/50 p-1 rounded opacity-0 group-hover:opacity-100 transition"
+                            className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/50 text-white p-1 rounded opacity-0 group-hover:opacity-100 transition"
                             onClick={e => { e.stopPropagation(); nextScreen(level.id, screensForLevel); }}
                           >
                             ▶
                           </button>
                         </>
                       )}
-                      <div className="absolute bottom-2 left-2 bg-primary text-white text-xs px-2 py-1 rounded">
-                        {screensForLevel[currentScreenIndex].name} (
-                        {screensForLevel[currentScreenIndex].type})
+                      <div className="absolute bottom-2 left-2 bg-primary text-primary-foreground text-xs px-2 py-1 rounded">
+                        {screensForLevel[currentScreenIndex].name} ({screensForLevel[currentScreenIndex].type || 'game'})
                       </div>
                     </div>
                   </div>
