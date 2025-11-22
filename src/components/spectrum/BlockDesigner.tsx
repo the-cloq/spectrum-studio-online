@@ -75,6 +75,8 @@ export const BlockDesigner = ({ sprites, blocks, onBlocksChange }: BlockDesigner
   };
 
   const renderSpritePreview = (sprite: Sprite) => {
+    if (!sprite.frames?.[0]?.pixels) return "";
+    
     const [width, height] = sprite.size.split("x").map(Number);
     const canvas = document.createElement("canvas");
     canvas.width = width * 2;
@@ -82,7 +84,7 @@ export const BlockDesigner = ({ sprites, blocks, onBlocksChange }: BlockDesigner
     const ctx = canvas.getContext("2d");
     
     if (ctx) {
-      sprite.frames[0]?.pixels.forEach((row, y) => {
+      sprite.frames[0].pixels.forEach((row, y) => {
         row.forEach((colorIndex, x) => {
           // Use actual Spectrum colors from the palette
           let color = "#000000";

@@ -124,12 +124,12 @@ export const ScreenDesigner = ({ blocks, screens, onScreensChange }: ScreenDesig
           if (!blockId) continue;
 
           const block = blocks.find(b => b.id === blockId);
-          if (!block?.sprite) continue;
+          if (!block?.sprite?.frames?.[0]?.pixels) continue;
 
           const sprite = block.sprite;
           const pixelScale = blockSize / 8;
 
-          sprite.frames[0]?.pixels.forEach((row, py) => {
+          sprite.frames[0].pixels.forEach((row, py) => {
             row.forEach((colorIndex, px) => {
               if (!colorIndex) return;
 
@@ -286,7 +286,7 @@ export const ScreenDesigner = ({ blocks, screens, onScreensChange }: ScreenDesig
                     canvas.height = size;
                     const ctx = canvas.getContext("2d");
           
-                    if (ctx) {
+                    if (ctx && block.sprite.frames[0]?.pixels) {
                       const pixelSize = size / block.sprite.frames[0].pixels.length;
                       block.sprite.frames[0].pixels.forEach((row, y) => {
                         row.forEach((colorIndex, x) => {
