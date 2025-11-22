@@ -9,16 +9,6 @@ import { SPECTRUM_COLORS, type SpectrumColor, type Screen, type Block } from "@/
 import { Plus, Trash2, Eraser, ZoomIn, ZoomOut } from "lucide-react";
 import { toast } from "sonner";
 
-import LoadingScreenImporter from "@/components/spectrum/LoadingScreenImporter";
-
-<LoadingScreenImporter
-  onImport={(imageData) => {
-    // This is where we feed the cropped + converted artwork
-    // into the loading screen system
-    console.log("Imported ZX Image:", imageData);
-  }}
-/>
-
 interface ScreenDesignerProps {
   blocks: Block[];
   screens: Screen[];
