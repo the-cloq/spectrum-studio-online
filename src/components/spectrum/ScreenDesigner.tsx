@@ -129,7 +129,7 @@ export const ScreenDesigner = ({ blocks, screens, onScreensChange }: ScreenDesig
           const sprite = block.sprite;
           const pixelScale = blockSize / 8;
 
-          sprite.pixels.forEach((row, py) => {
+          sprite.frames[0]?.pixels.forEach((row, py) => {
             row.forEach((colorIndex, px) => {
               if (!colorIndex) return;
 
@@ -279,7 +279,7 @@ export const ScreenDesigner = ({ blocks, screens, onScreensChange }: ScreenDesig
                 {blocks.map(block => {
           
                   // Generate preview canvas if not available
-                  if (!block.sprite?.preview && block.sprite?.pixels) {
+                  if (!block.sprite?.preview && block.sprite?.frames?.[0]?.pixels) {
                     const canvas = document.createElement("canvas");
                     const size = 32;
                     canvas.width = size;
@@ -287,8 +287,8 @@ export const ScreenDesigner = ({ blocks, screens, onScreensChange }: ScreenDesig
                     const ctx = canvas.getContext("2d");
           
                     if (ctx) {
-                      const pixelSize = size / block.sprite.pixels.length;
-                      block.sprite.pixels.forEach((row, y) => {
+                      const pixelSize = size / block.sprite.frames[0].pixels.length;
+                      block.sprite.frames[0].pixels.forEach((row, y) => {
                         row.forEach((colorIndex, x) => {
                           if (colorIndex) {
                             ctx.fillStyle = SPECTRUM_COLORS[colorIndex]?.value || "#000";

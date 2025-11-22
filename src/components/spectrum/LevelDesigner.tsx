@@ -145,11 +145,11 @@ export const LevelDesigner = ({ levels, screens, blocks, onLevelsChange }: Level
                                 const blockId = screen.tiles[row]?.[col];
                                 if (blockId) {
                                   const block = blocks.find(b => b.id === blockId);
-                                  if (block?.sprite?.pixels) {
+                                  if (block?.sprite?.frames?.[0]?.pixels) {
                                     // Render block sprite
                                     for (let y = 0; y < 16; y++) {
                                       for (let x = 0; x < 16; x++) {
-                                        const colorIndex = block.sprite.pixels[y]?.[x];
+                                        const colorIndex = block.sprite.frames[0].pixels[y]?.[x];
                                         if (colorIndex !== undefined && colorIndex !== 0) {
                                           ctx.fillStyle = `hsl(${colorIndex * 30}, 70%, 50%)`;
                                           ctx.fillRect(col * blockSize + x, row * blockSize + y, 1, 1);

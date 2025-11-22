@@ -82,7 +82,7 @@ export const BlockDesigner = ({ sprites, blocks, onBlocksChange }: BlockDesigner
     const ctx = canvas.getContext("2d");
     
     if (ctx) {
-      sprite.pixels.forEach((row, y) => {
+      sprite.frames[0]?.pixels.forEach((row, y) => {
         row.forEach((colorIndex, x) => {
           // Use actual Spectrum colors from the palette
           let color = "#000000";
