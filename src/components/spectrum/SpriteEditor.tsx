@@ -50,6 +50,7 @@ export const SpriteEditor = ({ sprites, onSpritesChange }: SpriteEditorProps) =>
   const [currentFrameIndex, setCurrentFrameIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [previewFrame, setPreviewFrame] = useState(0);
+  const [draggedFrameIndex, setDraggedFrameIndex] = useState<number | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const previewCanvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -310,6 +311,46 @@ export const SpriteEditor = ({ sprites, onSpritesChange }: SpriteEditorProps) =>
     onSpritesChange(updatedSprites);
   };
 
+  const handleFrameDragStart = (e: React.DragEvent, index: number) => {
+    setDraggedFrameIndex(index);
+    e.dataTransfer.effectAllowed = "move";
+  };
+
+  const handleFrameDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+  };
+
+  const handleFrameDrop = (e: React.DragEvent, dropIndex: number) => {
+    e.preventDefault();
+    if (draggedFrameIndex === null || !sprite || draggedFrameIndex === dropIndex) return;
+
+    const updatedFrames = [...sprite.frames];
+    const [draggedFrame] = updatedFrames.splice(draggedFrameIndex, 1);
+    updatedFrames.splice(dropIndex, 0, draggedFrame);
+
+    const updatedSprites = sprites.map(s =>
+      s.id === sprite.id ? { ...s, frames: updatedFrames } : s
+    );
+    onSpritesChange(updatedSprites);
+
+    // Adjust current frame index if needed
+    if (currentFrameIndex === draggedFrameIndex) {
+      setCurrentFrameIndex(dropIndex);
+    } else if (draggedFrameIndex < currentFrameIndex && dropIndex >= currentFrameIndex) {
+      setCurrentFrameIndex(currentFrameIndex - 1);
+    } else if (draggedFrameIndex > currentFrameIndex && dropIndex <= currentFrameIndex) {
+      setCurrentFrameIndex(currentFrameIndex + 1);
+    }
+
+    setDraggedFrameIndex(null);
+    toast.success("Frame reordered");
+  };
+
+  const handleFrameDragEnd = () => {
+    setDraggedFrameIndex(null);
+  };
+
   if (!sprite) return null;
 
   return (
@@ -419,12 +460,18 @@ export const SpriteEditor = ({ sprites, onSpritesChange }: SpriteEditorProps) =>
               {sprite?.frames.map((_, i) => (
                 <button
                   key={i}
+                  draggable
                   onClick={() => setCurrentFrameIndex(i)}
+                  onDragStart={(e) => handleFrameDragStart(e, i)}
+                  onDragOver={handleFrameDragOver}
+                  onDrop={(e) => handleFrameDrop(e, i)}
+                  onDragEnd={handleFrameDragEnd}
                   className={cn(
-                    "px-4 py-2 rounded border-2 transition-colors min-w-20",
+                    "px-4 py-2 rounded border-2 transition-colors min-w-20 cursor-move",
                     i === currentFrameIndex
                       ? "border-primary bg-primary/10 text-primary font-semibold"
-                      : "border-border hover:border-primary/50"
+                      : "border-border hover:border-primary/50",
+                    draggedFrameIndex === i && "opacity-50"
                   )}
                 >
                   Frame {i + 1}
