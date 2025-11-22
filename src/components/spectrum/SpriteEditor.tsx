@@ -55,7 +55,7 @@ export const SpriteEditor = ({ sprites, onSpritesChange }: SpriteEditorProps) =>
 
   const sprite = sprites.find(s => s.id === selectedSpriteId) || sprites[0];
   const [width, height] = sprite ? sprite.size.split("x").map(Number) : [8, 8];
-  const currentFrame = sprite?.frames[currentFrameIndex];
+  const currentFrame = sprite?.frames?.[currentFrameIndex];
 
   useEffect(() => {
     drawSprite();
