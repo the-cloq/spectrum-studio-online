@@ -20,12 +20,16 @@ export type BlockType =
   | "conveyor-left"
   | "conveyor-right";
 
+export type SpriteFrame = {
+  pixels: number[][];
+};
+
 export type Sprite = {
   id: string;
   name: string;
   size: SpriteSize;
-  pixels: number[][]; // 2D array of color indices
-  frames?: Sprite[]; // For animations
+  frames: SpriteFrame[];
+  animationSpeed: number; // fps (1-12)
   preview?: string; // Base64 data URL for preview
 };
 
