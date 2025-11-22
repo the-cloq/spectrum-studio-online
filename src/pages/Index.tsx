@@ -40,8 +40,25 @@ const Index = () => {
     if (saved) {
       try {
         const loaded = JSON.parse(saved);
+        
+        // Migrate old sprite format to new frames format
+        const migratedSprites = loaded.sprites?.map((sprite: any) => {
+          if (sprite.pixels && !sprite.frames) {
+            // Old format - convert to new
+            return {
+              ...sprite,
+              frames: [{ pixels: sprite.pixels }],
+              animationSpeed: sprite.animationSpeed ?? 4,
+              pixels: undefined, // Remove old property
+            };
+          }
+          // Already new format or has frames
+          return sprite;
+        }) || [];
+        
         const loadedWithDefaults = {
           ...loaded,
+          sprites: migratedSprites,
           levels: loaded.levels ?? [],
         };
         setProject(loadedWithDefaults);
