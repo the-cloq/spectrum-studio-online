@@ -4,7 +4,8 @@ import { Toolbar } from "@/components/spectrum/Toolbar";
 import { SpriteEditor } from "@/components/spectrum/SpriteEditor";
 import { BlockDesigner } from "@/components/spectrum/BlockDesigner";
 import { ScreenDesigner } from "@/components/spectrum/ScreenDesigner";
-import { type GameProject, type Sprite, type Block, type Screen, type Level } from "@/types/spectrum";
+import { type GameProject, type Sprite, type Block, type Screen, type Level, type GameObject } from "@/types/spectrum";
+import { ObjectLibrary } from "@/components/spectrum/ObjectLibrary";
 import { LevelDesigner } from "@/components/spectrum/LevelDesigner";
 import { exportGameToTAP, downloadTAPFile } from "@/lib/tapExport";
 import { toast } from "sonner";
@@ -23,6 +24,7 @@ const Index = () => {
       frames: [{ pixels: Array(16).fill(null).map(() => Array(16).fill(0)) }],
       animationSpeed: 4,
     }],
+    objects: [],
     blocks: [],
     screens: [],
     levels: [],
@@ -59,6 +61,7 @@ const Index = () => {
         const loadedWithDefaults = {
           ...loaded,
           sprites: migratedSprites,
+          objects: loaded.objects ?? [],
           levels: loaded.levels ?? [],
         };
         setProject(loadedWithDefaults);
@@ -97,6 +100,10 @@ const Index = () => {
     setProject({ ...project, levels });
   };
 
+  const handleObjectsChange = (objects: GameObject[]) => {
+    setProject({ ...project, objects });
+  };
+
   const handleExportTAP = () => {
     if (project.screens.length === 0) {
       toast.error("Please create at least one screen before exporting");
@@ -125,6 +132,7 @@ const Index = () => {
         const loaded = JSON.parse(saved);
         const loadedWithDefaults = {
           ...loaded,
+          objects: loaded.objects ?? [],
           levels: loaded.levels ?? [],
         };
         setProject(loadedWithDefaults);
@@ -175,11 +183,11 @@ const Index = () => {
         )}
 
         {activeTab === "objects" && (
-          <div className="p-8 text-center text-muted-foreground">
-            <h2 className="text-2xl font-bold text-primary mb-2">Game Objects</h2>
-            <p>Configure enemies, collectibles, and interactive elements</p>
-            <p className="text-sm mt-4">Coming soon...</p>
-          </div>
+          <ObjectLibrary
+            objects={project.objects}
+            sprites={project.sprites}
+            onObjectsChange={handleObjectsChange}
+          />
         )}
 
         {activeTab === "levels" && (

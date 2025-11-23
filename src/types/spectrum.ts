@@ -9,6 +9,8 @@ export type SpectrumColor = {
 
 export type SpriteSize = "8x8" | "16x16" | "24x12" | "32x16";
 
+export type ObjectType = "player" | "enemy" | "collectible" | "static";
+
 export type BlockType = 
   | "empty"
   | "solid"
@@ -31,6 +33,35 @@ export type Sprite = {
   frames: SpriteFrame[];
   animationSpeed: number; // fps (1-12)
   preview?: string; // Base64 data URL for preview
+};
+
+export type GameObject = {
+  id: string;
+  name: string;
+  type: ObjectType;
+  spriteId: string; // References a sprite instead of embedding it
+  properties: {
+    // Player properties
+    speed?: number;
+    jumpHeight?: number;
+    maxEnergy?: number;
+    
+    // Enemy properties
+    damage?: number;
+    movementPattern?: "stationary" | "patrol" | "chase" | "fly";
+    patrolDistance?: number;
+    patrolSpeed?: number;
+    
+    // Collectible properties
+    points?: number;
+    energyBonus?: number;
+    itemType?: "coin" | "key" | "powerup" | "life";
+    
+    // Static properties
+    blocking?: boolean;
+    deadly?: boolean;
+    interactable?: boolean;
+  };
 };
 
 export type Block = {
@@ -67,6 +98,7 @@ export type GameProject = {
   id: string;
   name: string;
   sprites: Sprite[];
+  objects: GameObject[]; // New object library
   blocks: Block[];
   screens: Screen[];
   levels: Level[];
