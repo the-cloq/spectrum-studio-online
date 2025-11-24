@@ -195,16 +195,25 @@ export const ScreenDesigner = ({ blocks, objects, screens, onScreensChange }: Sc
       }
 
       // Draw placed objects
+      console.log("Drawing placed objects:", placedObjects.length, placedObjects);
       placedObjects.forEach(placed => {
         const obj = objects.find(o => o.id === placed.objectId);
-        if (!obj) return;
+        if (!obj) {
+          console.log("Object not found for placed object:", placed);
+          return;
+        }
 
         const sprite = blocks.find(b => b.id === obj.spriteId)?.sprite;
-        if (!sprite?.frames?.[0]?.pixels) return;
+        if (!sprite?.frames?.[0]?.pixels) {
+          console.log("Sprite not found or has no pixels:", obj.spriteId);
+          return;
+        }
 
         const pixelScale = blockSize / 8;
         const startX = placed.x * blockSize;
         const startY = placed.y * blockSize;
+
+        console.log(`Drawing object ${obj.name} at (${placed.x}, ${placed.y}) -> canvas (${startX}, ${startY})`);
 
         sprite.frames[0].pixels.forEach((row, py) => {
           row.forEach((colorIndex, px) => {
@@ -310,12 +319,17 @@ export const ScreenDesigner = ({ blocks, objects, screens, onScreensChange }: Sc
       direction: "right"
     };
 
+    console.log("Dropping object:", newPlaced, "Total objects before:", placedObjects.length);
+
     const updated = [...placedObjects, newPlaced];
     setPlacedObjects(updated);
     setSelectedPlacedObject(newPlaced);
     updateScreenObjects(updated);
     setDraggedObjectId(null);
-    toast.success(`Placed ${object.name}`);
+    
+    console.log("Objects after drop:", updated.length, updated);
+    
+    toast.success(`Placed ${object.name} at (${newPlaced.x}, ${newPlaced.y})`);
   };
 
   const handleCanvasDragOver = (e: React.DragEvent<HTMLCanvasElement>) => {
