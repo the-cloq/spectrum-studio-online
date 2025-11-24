@@ -180,7 +180,7 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
     );
   };
 
-  // Animation frame cycling - cycles through frames in a simple loop (only when moving)
+  // Animation frame cycling - cycles through frames based on actual velocity
   useEffect(() => {
     if (!selectedObject) return;
 
@@ -196,14 +196,12 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
     const fps = sprite.animationSpeed || 6;
     const frameCount = sprite.frames.length;
 
-    // Only animate when actually moving (not idle)
-    if (playerAction === "idle" || (keysPressed.size === 0 && !isJumping)) {
-      setAnimFrameIndex(0); // Stay on frame 0 when idle
+    // Only animate when actually moving (has velocity)
+    const isMoving = Math.abs(playerVelocity.x) > 0.1 || Math.abs(playerVelocity.y) > 0.1;
+    if (!isMoving) {
+      // Don't animate or reset frame - stay on current frame
       return;
     }
-
-    // Reset to first frame when action or sprite changes
-    setAnimFrameIndex(0);
 
     const interval = setInterval(() => {
       setAnimFrameIndex((prev) => {
@@ -214,7 +212,7 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
     }, 1000 / fps);
 
     return () => clearInterval(interval);
-  }, [selectedObject, sprites, playerAction, keysPressed, isJumping]);
+  }, [selectedObject, sprites, playerAction, playerVelocity]);
 
   // Keyboard controls for player testing - remove keyboard repeat delay
   useEffect(() => {
@@ -298,7 +296,8 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
             setPlayerAction("moveRight");
             setFacingLeft(false);
           } else {
-            setPlayerAction("idle");
+            // When stopping, maintain the facing direction
+            setPlayerAction(facingLeft ? "moveLeft" : "moveRight");
             newVelX = 0;
           }
         }
@@ -340,7 +339,8 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
           setIsJumping(false);
           setPlayerVelocity((v) => ({ ...v, y: 0 }));
           if (!keysPressed.has("left") && !keysPressed.has("right")) {
-            setPlayerAction("idle");
+            // Maintain facing direction when landing
+            setPlayerAction(facingLeft ? "moveLeft" : "moveRight");
           }
           return { x: newX, y: groundY };
         }
