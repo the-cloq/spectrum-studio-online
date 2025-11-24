@@ -196,6 +196,19 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
     );
   };
 
+  // Sync refs with state
+  useEffect(() => {
+    keysPresssedRef.current = keysPressed;
+  }, [keysPressed]);
+
+  useEffect(() => {
+    isJumpingRef.current = isJumping;
+  }, [isJumping]);
+
+  useEffect(() => {
+    playerActionRef.current = playerAction;
+  }, [playerAction]);
+
   // Fixed frame-rate game loop (12fps) - Manic Miner style
   useEffect(() => {
     if (!selectedObject || selectedObject.type !== "player") return;
@@ -302,14 +315,19 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
     // Initiate jump when jump key is pressed (only if not already jumping)
     if (keysPressed.has("jump") && !isJumping) {
       setIsJumping(true);
+      isJumpingRef.current = true;
       setJumpFrameIndex(0);
       
       if (keysPressed.has("left")) {
         setPlayerAction("jumpLeft");
+        playerActionRef.current = "jumpLeft";
       } else if (keysPressed.has("right")) {
         setPlayerAction("jumpRight");
+        playerActionRef.current = "jumpRight";
       } else {
-        setPlayerAction(facingLeft ? "jumpLeft" : "jumpRight");
+        const jumpAction = facingLeft ? "jumpLeft" : "jumpRight";
+        setPlayerAction(jumpAction);
+        playerActionRef.current = jumpAction;
       }
       
       // Remove jump key to prevent re-triggering
@@ -329,7 +347,7 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
         clearInterval(gameLoopIntervalRef.current);
       }
     };
-  }, [selectedObject, keysPressed, isJumping, facingLeft, playerAction, canvasSizeIndex, sprites]);
+  }, [selectedObject, keysPressed, isJumping, facingLeft, canvasSizeIndex, sprites]);
 
   // Keyboard controls for player testing - remove keyboard repeat delay
   useEffect(() => {
