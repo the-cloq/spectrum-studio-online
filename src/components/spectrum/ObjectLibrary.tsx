@@ -273,33 +273,26 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
   }, [selectedObject, sprites, currentFrame, playerPosition, playerAction]);
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">{/* Changed from grid-cols-3 to grid-cols-4 */}
+    <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
       {/* Object Library Panel */}
       <Card className="lg:col-span-1">
         <CardHeader>
           <CardTitle>Object Library</CardTitle>
-          <div className="grid grid-cols-2 gap-2 pt-2">
-            <Button onClick={() => createObject("player")} size="sm" variant="outline">
-              <Plus className="w-4 h-4 mr-1" /> Player
-            </Button>
-            <Button onClick={() => createObject("enemy")} size="sm" variant="outline">
-              <Plus className="w-4 h-4 mr-1" /> Enemy
-            </Button>
-            <Button onClick={() => createObject("ammunition")} size="sm" variant="outline">
-              <Plus className="w-4 h-4 mr-1" /> Ammo
-            </Button>
-            <Button onClick={() => createObject("collectable")} size="sm" variant="outline">
-              <Plus className="w-4 h-4 mr-1" /> Item
-            </Button>
-            <Button onClick={() => createObject("door")} size="sm" variant="outline">
-              <Plus className="w-4 h-4 mr-1" /> Door
-            </Button>
-            <Button onClick={() => createObject("exit")} size="sm" variant="outline">
-              <Plus className="w-4 h-4 mr-1" /> Exit
-            </Button>
-            <Button onClick={() => createObject("moving-platform")} size="sm" variant="outline">
-              <Plus className="w-4 h-4 mr-1" /> Platform
-            </Button>
+          <div className="pt-2">
+            <Select onValueChange={(value: ObjectType) => createObject(value)}>
+              <SelectTrigger>
+                <SelectValue placeholder="Create Object..." />
+              </SelectTrigger>
+              <SelectContent className="z-50">
+                <SelectItem value="player">Player</SelectItem>
+                <SelectItem value="enemy">Enemy</SelectItem>
+                <SelectItem value="ammunition">Ammunition</SelectItem>
+                <SelectItem value="collectable">Collectable</SelectItem>
+                <SelectItem value="door">Door</SelectItem>
+                <SelectItem value="exit">Exit</SelectItem>
+                <SelectItem value="moving-platform">Moving Platform</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </CardHeader>
         <CardContent>
@@ -418,7 +411,7 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="z-50">
                       {sprites.map((sprite) => (
                         <SelectItem key={sprite.id} value={sprite.id}>
                           {sprite.name} ({sprite.size})
@@ -426,9 +419,6 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
                       ))}
                     </SelectContent>
                   </Select>
-                  <div className="pt-2">
-                    {renderSpritePreview(selectedObject.spriteId)}
-                  </div>
                 </div>
               </TabsContent>
 
