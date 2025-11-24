@@ -12,6 +12,7 @@ import { toast } from "sonner";
 interface ScreenDesignerProps {
   blocks: Block[];
   objects: GameObject[];
+  sprites: any[]; // Add sprites array
   screens: Screen[];
   onScreensChange: (screens: Screen[]) => void;
 }
@@ -22,7 +23,7 @@ const BASE_HEIGHT = 192;
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 3;
 
-export const ScreenDesigner = ({ blocks, objects, screens, onScreensChange }: ScreenDesignerProps) => {
+export const ScreenDesigner = ({ blocks, objects, sprites, screens, onScreensChange }: ScreenDesignerProps) => {
 
   const [selectedScreen, setSelectedScreen] = useState<Screen | null>(screens[0] || null);
   const [selectedBlock, setSelectedBlock] = useState<Block | null>(null);
@@ -203,7 +204,7 @@ export const ScreenDesigner = ({ blocks, objects, screens, onScreensChange }: Sc
           return;
         }
 
-        const sprite = blocks.find(b => b.id === obj.spriteId)?.sprite;
+        const sprite = sprites.find(s => s.id === obj.spriteId);
         if (!sprite?.frames?.[0]?.pixels) {
           console.log("Sprite not found or has no pixels:", obj.spriteId);
           return;
@@ -310,6 +311,20 @@ export const ScreenDesigner = ({ blocks, objects, screens, onScreensChange }: Sc
 
     const object = objects.find(o => o.id === draggedObjectId);
     if (!object) return;
+
+    // Check if it's a player type and if one already exists
+    if (object.type === "player") {
+      const existingPlayer = placedObjects.find(p => {
+        const obj = objects.find(o => o.id === p.objectId);
+        return obj?.type === "player";
+      });
+      
+      if (existingPlayer) {
+        toast.error("Only one player can be placed on the screen");
+        setDraggedObjectId(null);
+        return;
+      }
+    }
 
     const newPlaced: PlacedObject = {
       id: `placed-${Date.now()}`,
