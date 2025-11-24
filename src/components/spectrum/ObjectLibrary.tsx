@@ -66,6 +66,7 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
   const keysPresssedRef = useRef<Set<string>>(new Set());
   const isJumpingRef = useRef(false);
   const playerActionRef = useRef<keyof AnimationSet>("idle");
+  const facingLeftRef = useRef(false);
 
   const selectedObject = objects.find(obj => obj.id === selectedObjectId);
 
@@ -206,8 +207,8 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
   }, [isJumping]);
 
   useEffect(() => {
-    playerActionRef.current = playerAction;
-  }, [playerAction]);
+    facingLeftRef.current = facingLeft;
+  }, [facingLeft]);
 
   // Fixed frame-rate game loop (12fps) - Manic Miner style
   useEffect(() => {
@@ -220,6 +221,32 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
       const keys = keysPresssedRef.current;
       const jumping = isJumpingRef.current;
       const currentAction = playerActionRef.current;
+      const facing = facingLeftRef.current;
+
+      // Check for jump initiation
+      if (keys.has("jump") && !jumping) {
+        setIsJumping(true);
+        isJumpingRef.current = true;
+        setJumpFrameIndex(0);
+        
+        if (keys.has("left")) {
+          setPlayerAction("jumpLeft");
+          playerActionRef.current = "jumpLeft";
+        } else if (keys.has("right")) {
+          setPlayerAction("jumpRight");
+          playerActionRef.current = "jumpRight";
+        } else {
+          const jumpAction = facing ? "jumpLeft" : "jumpRight";
+          setPlayerAction(jumpAction);
+          playerActionRef.current = jumpAction;
+        }
+        
+        // Remove jump key to prevent re-triggering
+        const nextKeys = new Set(keys);
+        nextKeys.delete("jump");
+        keysPresssedRef.current = nextKeys;
+        setKeysPressed(nextKeys);
+      }
 
       setPlayerPosition((prevPos) => {
         let newX = prevPos.x;
@@ -232,6 +259,7 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
             setPlayerAction("moveLeft");
             playerActionRef.current = "moveLeft";
             setFacingLeft(true);
+            facingLeftRef.current = true;
           }
         } else if (keys.has("right")) {
           newX += WALK_PIXELS_PER_FRAME;
@@ -239,10 +267,11 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
             setPlayerAction("moveRight");
             playerActionRef.current = "moveRight";
             setFacingLeft(false);
+            facingLeftRef.current = false;
           }
         } else if (!jumping) {
           // Stopped - maintain facing direction
-          const stoppedAction = facingLeft ? "moveLeft" : "moveRight";
+          const stoppedAction = facing ? "moveLeft" : "moveRight";
           setPlayerAction(stoppedAction);
           playerActionRef.current = stoppedAction;
         }
@@ -257,7 +286,7 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
               setIsJumping(false);
               isJumpingRef.current = false;
               if (!keys.has("left") && !keys.has("right")) {
-                const stoppedAction = facingLeft ? "moveLeft" : "moveRight";
+                const stoppedAction = facing ? "moveLeft" : "moveRight";
                 setPlayerAction(stoppedAction);
                 playerActionRef.current = stoppedAction;
               }
@@ -273,7 +302,7 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
               setIsJumping(false);
               isJumpingRef.current = false;
               if (!keys.has("left") && !keys.has("right")) {
-                const stoppedAction = facingLeft ? "moveLeft" : "moveRight";
+                const stoppedAction = facing ? "moveLeft" : "moveRight";
                 setPlayerAction(stoppedAction);
                 playerActionRef.current = stoppedAction;
               }
@@ -311,33 +340,6 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
         return (prev + 1) % frameCount;
       });
     };
-
-    // Initiate jump when jump key is pressed (only if not already jumping)
-    if (keysPressed.has("jump") && !isJumping) {
-      setIsJumping(true);
-      isJumpingRef.current = true;
-      setJumpFrameIndex(0);
-      
-      if (keysPressed.has("left")) {
-        setPlayerAction("jumpLeft");
-        playerActionRef.current = "jumpLeft";
-      } else if (keysPressed.has("right")) {
-        setPlayerAction("jumpRight");
-        playerActionRef.current = "jumpRight";
-      } else {
-        const jumpAction = facingLeft ? "jumpLeft" : "jumpRight";
-        setPlayerAction(jumpAction);
-        playerActionRef.current = jumpAction;
-      }
-      
-      // Remove jump key to prevent re-triggering
-      setKeysPressed((prev) => {
-        const next = new Set(prev);
-        next.delete("jump");
-        keysPresssedRef.current = next; // Update ref
-        return next;
-      });
-    }
 
     // Start fixed frame rate loop
     gameLoopIntervalRef.current = window.setInterval(gameLoop, FRAME_INTERVAL);
