@@ -10,9 +10,6 @@ import { LevelDesigner } from "@/components/spectrum/LevelDesigner";
 import { exportGameToTAP, downloadTAPFile } from "@/lib/tapExport";
 import { toast } from "sonner";
 
-import { useEffect } from "react";
-import { supabase } from "@/supabase"; // make sure this points to your supabase.js
-
 const STORAGE_KEY = "zx-spectrum-project";
 
 const Index = () => {
