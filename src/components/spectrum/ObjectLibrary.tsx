@@ -75,7 +75,7 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
   const getDefaultProperties = (type: ObjectType) => {
     switch (type) {
       case "player":
-        return { speed: 5, jumpHeight: 20, jumpDistance: 2, maxEnergy: 100, maxFallDistance: 20 };
+        return { speed: 5, jumpHeight: 12, jumpDistance: 12, gravity: 5, maxFallDistance: 20 };
       case "enemy":
         return { damage: 10, movementPattern: "patrol" as const, respawnDelay: 3000, direction: "right" as const };
       case "ammunition":
@@ -306,13 +306,17 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
         if (keysPressed.has("jump") && !isJumping) {
           newVelY = -jumpHeight;
           setIsJumping(true);
-          setPlayerAction("jump");
           
-          // Add horizontal velocity during jump based on direction keys
+          // Set jump direction based on facing direction
           if (keysPressed.has("left")) {
+            setPlayerAction("jumpLeft");
             newVelX = -jumpDistance;
           } else if (keysPressed.has("right")) {
+            setPlayerAction("jumpRight");
             newVelX = jumpDistance;
+          } else {
+            // Jump in place using current facing direction
+            setPlayerAction(facingLeft ? "jumpLeft" : "jumpRight");
           }
         }
 
@@ -819,18 +823,18 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
                   </div>
 
                   <div className="space-y-2">
-                    <Label>Jump</Label>
+                    <Label>Jump Left</Label>
                     <Select
-                      value={selectedObject.animations?.jump ?? ANIMATION_NONE_VALUE}
+                      value={selectedObject.animations?.jumpLeft ?? ANIMATION_NONE_VALUE}
                       onValueChange={(value) =>
-                        updateAnimation("jump", value === ANIMATION_NONE_VALUE ? "" : value)
+                        updateAnimation("jumpLeft", value === ANIMATION_NONE_VALUE ? "" : value)
                       }
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="None" />
                       </SelectTrigger>
                       <SelectContent className="z-50">
-                        <SelectItem value={ANIMATION_NONE_VALUE}>None</SelectItem>
+                        <SelectItem value={ANIMATION_NONE_VALUE}>None{selectedObject.animations?.jumpRight ? " (will mirror right)" : ""}</SelectItem>
                         {sprites.map((sprite) => (
                           <SelectItem key={sprite.id} value={sprite.id}>
                             {sprite.name} ({sprite.size})
@@ -838,9 +842,36 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
                         ))}
                       </SelectContent>
                     </Select>
-                    {selectedObject.animations?.jump && (
+                    {selectedObject.animations?.jumpLeft && (
                       <div className="pt-2">
-                        {renderSpritePreview(selectedObject.animations.jump, 2)}
+                        {renderSpritePreview(selectedObject.animations.jumpLeft, 2)}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Jump Right</Label>
+                    <Select
+                      value={selectedObject.animations?.jumpRight ?? ANIMATION_NONE_VALUE}
+                      onValueChange={(value) =>
+                        updateAnimation("jumpRight", value === ANIMATION_NONE_VALUE ? "" : value)
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="None" />
+                      </SelectTrigger>
+                      <SelectContent className="z-50">
+                        <SelectItem value={ANIMATION_NONE_VALUE}>None{selectedObject.animations?.jumpLeft ? " (will mirror left)" : ""}</SelectItem>
+                        {sprites.map((sprite) => (
+                          <SelectItem key={sprite.id} value={sprite.id}>
+                            {sprite.name} ({sprite.size})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {selectedObject.animations?.jumpRight && (
+                      <div className="pt-2">
+                        {renderSpritePreview(selectedObject.animations.jumpRight, 2)}
                       </div>
                     )}
                   </div>
@@ -908,13 +939,13 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label>Max Energy: {selectedObject.properties.maxEnergy}</Label>
+                      <Label>Gravity: {selectedObject.properties.gravity || 5}</Label>
                       <Slider
-                        value={[selectedObject.properties.maxEnergy || 100]}
-                        onValueChange={([value]) => updateProperty("maxEnergy", value)}
-                        min={10}
-                        max={200}
-                        step={10}
+                        value={[selectedObject.properties.gravity || 5]}
+                        onValueChange={([value]) => updateProperty("gravity", value)}
+                        min={1}
+                        max={10}
+                        step={1}
                       />
                     </div>
                   </>

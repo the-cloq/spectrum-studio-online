@@ -43,7 +43,8 @@ export type AnimationSet = {
   moveUp?: string;
   moveDown?: string;
   idle?: string;
-  jump?: string;
+  jumpLeft?: string;
+  jumpRight?: string;
   fire?: string;
 };
 
@@ -58,7 +59,7 @@ export type GameObject = {
     speed?: number;
     jumpHeight?: number;
     jumpDistance?: number;
-    maxEnergy?: number;
+    gravity?: number;
     maxFallDistance?: number;
     
     // Enemy properties
