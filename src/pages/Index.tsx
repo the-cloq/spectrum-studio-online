@@ -10,6 +10,9 @@ import { LevelDesigner } from "@/components/spectrum/LevelDesigner";
 import { exportGameToTAP, downloadTAPFile } from "@/lib/tapExport";
 import { toast } from "sonner";
 
+import { useEffect } from "react";
+import { supabase } from "@/supabase"; // make sure this points to your supabase.js
+
 const STORAGE_KEY = "zx-spectrum-project";
 
 const Index = () => {
@@ -36,6 +39,25 @@ const Index = () => {
     },
   });
 
+  useEffect(() => {
+  async function testSupabase() {
+    // Insert a test row into the "projects" table
+    const { data, error } = await supabase
+      .from("projects")
+      .insert([{ name: "Test Project" }])
+      .select();
+
+    if (error) {
+      console.error("Supabase Error:", error);
+    } else {
+      console.log("Supabase Data:", data);
+    }
+  }
+
+  testSupabase();
+}, []);
+
+  
   // Load project from localStorage
   useEffect(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
