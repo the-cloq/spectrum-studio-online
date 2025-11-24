@@ -276,7 +276,7 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
     const jumpHeight = selectedObject.properties.jumpHeight || 20;
     const jumpDistance = selectedObject.properties.jumpDistance || 2;
     const canvasSize = CANVAS_SIZES[canvasSizeIndex];
-    const gravity = 1;
+    const gravity = (selectedObject.properties.gravity || 5) / 10; // Scale gravity from slider (1-10)
     const groundY = 0;
 
     const gameLoop = () => {
@@ -307,16 +307,24 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
           newVelY = -jumpHeight;
           setIsJumping(true);
           
-          // Set jump direction based on facing direction
+          // Set jump direction and apply horizontal velocity during jump
           if (keysPressed.has("left")) {
             setPlayerAction("jumpLeft");
-            newVelX = -jumpDistance;
+            newVelX = -speed; // Use walking speed, not jumpDistance
           } else if (keysPressed.has("right")) {
             setPlayerAction("jumpRight");
-            newVelX = jumpDistance;
+            newVelX = speed; // Use walking speed, not jumpDistance
           } else {
             // Jump in place using current facing direction
             setPlayerAction(facingLeft ? "jumpLeft" : "jumpRight");
+            newVelX = 0;
+          }
+        } else if (isJumping) {
+          // Apply horizontal movement while in air based on jumpDistance
+          if (keysPressed.has("left")) {
+            newVelX = -jumpDistance;
+          } else if (keysPressed.has("right")) {
+            newVelX = jumpDistance;
           }
         }
 
