@@ -75,7 +75,7 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
   const getDefaultProperties = (type: ObjectType) => {
     switch (type) {
       case "player":
-        return { speed: 5, jumpHeight: 10, maxEnergy: 100, maxFallDistance: 20 };
+        return { speed: 5, jumpHeight: 20, jumpDistance: 2, maxEnergy: 100, maxFallDistance: 20 };
       case "enemy":
         return { damage: 10, movementPattern: "patrol" as const, respawnDelay: 3000, direction: "right" as const };
       case "ammunition":
@@ -180,7 +180,7 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
     );
   };
 
-  // Animation frame cycling - cycles through frames in a ping-pong pattern
+  // Animation frame cycling - cycles through frames in a simple loop (only when moving)
   useEffect(() => {
     if (!selectedObject) return;
 
@@ -196,29 +196,25 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
     const fps = sprite.animationSpeed || 6;
     const frameCount = sprite.frames.length;
 
+    // Only animate when actually moving (not idle)
+    if (playerAction === "idle" || (keysPressed.size === 0 && !isJumping)) {
+      setAnimFrameIndex(0); // Stay on frame 0 when idle
+      return;
+    }
+
     // Reset to first frame when action or sprite changes
     setAnimFrameIndex(0);
-
-    let direction = 1; // 1 = forward, -1 = backward for ping-pong
 
     const interval = setInterval(() => {
       setAnimFrameIndex((prev) => {
         if (frameCount <= 1) return 0;
-
-        let next = prev + direction;
-        if (next >= frameCount) {
-          direction = -1;
-          next = frameCount - 2;
-        } else if (next < 0) {
-          direction = 1;
-          next = 1;
-        }
-        return next;
+        // Simple loop: 0,1,2,3,0,1,2,3...
+        return (prev + 1) % frameCount;
       });
     }, 1000 / fps);
 
     return () => clearInterval(interval);
-  }, [selectedObject, sprites, playerAction]);
+  }, [selectedObject, sprites, playerAction, keysPressed, isJumping]);
 
   // Keyboard controls for player testing - remove keyboard repeat delay
   useEffect(() => {
@@ -277,7 +273,8 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
     if (!selectedObject || selectedObject.type !== "player") return;
 
     const speed = selectedObject.properties.speed || 5;
-    const jumpHeight = selectedObject.properties.jumpHeight || 10;
+    const jumpHeight = selectedObject.properties.jumpHeight || 20;
+    const jumpDistance = selectedObject.properties.jumpDistance || 2;
     const canvasSize = CANVAS_SIZES[canvasSizeIndex];
     const gravity = 1;
     const groundY = 0;
@@ -290,21 +287,33 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
         // Horizontal movement
         if (keysPressed.has("left")) {
           newVelX = -speed;
-          setPlayerAction("moveLeft");
+          if (!isJumping) {
+            setPlayerAction("moveLeft");
+          }
           setFacingLeft(true);
         } else if (keysPressed.has("right")) {
           newVelX = speed;
-          setPlayerAction("moveRight");
+          if (!isJumping) {
+            setPlayerAction("moveRight");
+          }
           setFacingLeft(false);
         } else if (!isJumping) {
           setPlayerAction("idle");
+          newVelX = 0;
         }
 
-        // Jump
+        // Jump with forward velocity
         if (keysPressed.has("jump") && !isJumping) {
-          newVelY = -jumpHeight * 2;
+          newVelY = -jumpHeight;
           setIsJumping(true);
           setPlayerAction("jump");
+          
+          // Add horizontal velocity during jump based on direction keys
+          if (keysPressed.has("left")) {
+            newVelX = -jumpDistance;
+          } else if (keysPressed.has("right")) {
+            newVelX = jumpDistance;
+          }
         }
 
         // Apply gravity
@@ -666,7 +675,12 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
               <TabsContent value="animations" className="space-y-4 max-h-[600px] overflow-y-auto">
                 <div className="space-y-3">
                   <div className="space-y-2">
-                    <Label>Move Left</Label>
+                    <div className="flex items-center justify-between">
+                      <Label>Move Left</Label>
+                      {!selectedObject.animations?.moveLeft && selectedObject.animations?.moveRight && (
+                        <span className="text-xs text-muted-foreground">(will mirror right)</span>
+                      )}
+                    </div>
                     <Select
                       value={selectedObject.animations?.moveLeft ?? ANIMATION_NONE_VALUE}
                       onValueChange={(value) =>
@@ -674,10 +688,10 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
                       }
                     >
                       <SelectTrigger>
-                        <SelectValue placeholder="None" />
+                        <SelectValue placeholder="None (will mirror right)" />
                       </SelectTrigger>
                       <SelectContent className="z-50">
-                        <SelectItem value={ANIMATION_NONE_VALUE}>None</SelectItem>
+                        <SelectItem value={ANIMATION_NONE_VALUE}>None (will mirror right)</SelectItem>
                         {sprites.map((sprite) => (
                           <SelectItem key={sprite.id} value={sprite.id}>
                             {sprite.name} ({sprite.size})
@@ -693,7 +707,12 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
                   </div>
 
                   <div className="space-y-2">
-                    <Label>Move Right</Label>
+                    <div className="flex items-center justify-between">
+                      <Label>Move Right</Label>
+                      {!selectedObject.animations?.moveRight && selectedObject.animations?.moveLeft && (
+                        <span className="text-xs text-muted-foreground">(will mirror left)</span>
+                      )}
+                    </div>
                     <Select
                       value={selectedObject.animations?.moveRight ?? ANIMATION_NONE_VALUE}
                       onValueChange={(value) =>
@@ -870,11 +889,21 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label>Jump Height: {selectedObject.properties.jumpHeight}</Label>
+                      <Label>Jump Height: {selectedObject.properties.jumpHeight}px</Label>
                       <Slider
-                        value={[selectedObject.properties.jumpHeight || 10]}
+                        value={[selectedObject.properties.jumpHeight || 20]}
                         onValueChange={([value]) => updateProperty("jumpHeight", value)}
-                        min={1}
+                        min={5}
+                        max={30}
+                        step={1}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Jump Distance: {selectedObject.properties.jumpDistance}px</Label>
+                      <Slider
+                        value={[selectedObject.properties.jumpDistance || 2]}
+                        onValueChange={([value]) => updateProperty("jumpDistance", value)}
+                        min={5}
                         max={30}
                         step={1}
                       />
