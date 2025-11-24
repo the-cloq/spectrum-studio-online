@@ -37,7 +37,7 @@ const JUMP_TRAJECTORY_UP = [
   -4, -4, -4, -3, -3, -3, -2, -2, -2, -2, -1, -1, -1, -1, -1, -1  // up = -40px (16 frames)
 ];
 const JUMP_TRAJECTORY_DOWN = [
-  2, 2, 3, 3, 4, 4, 4, 5, 5  // faster fall = +32px (9 frames) - authentic ZX Spectrum feel
+  1, 1, 2, 2, 3, 3, 4, 4, 5, 5  // faster fall = +40px (10 frames) - smooth and fast
 ];
 const ASCENT_FRAMES = JUMP_TRAJECTORY_UP.length;
 
@@ -231,7 +231,7 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
       const currentAction = playerActionRef.current;
       const facing = facingLeftRef.current;
 
-      // Check for jump initiation (DON'T remove jump key - track if held)
+      // Check for jump initiation
       if (keys.has("jump") && !jumping) {
         setIsJumping(true);
         isJumpingRef.current = true;
@@ -279,32 +279,41 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
           playerActionRef.current = stoppedAction;
         }
 
-        // Jump executes full arc once initiated - no key holding required
+        // Manic Miner jump: hold key for full arc, release to fall faster
         if (jumping) {
           const currentIdx = jumpFrameIndexRef.current;
           let yDelta = 0;
           
-          // Ascent phase
+          // Check if in ascent phase
           if (currentIdx < ASCENT_FRAMES) {
-            yDelta = JUMP_TRAJECTORY_UP[currentIdx];
-            jumpFrameIndexRef.current = currentIdx + 1;
-            setJumpFrameIndex(currentIdx + 1);
+            // If jump key released during ascent, skip to descent immediately
+            if (!keys.has("jump")) {
+              // Switch to descent phase
+              yDelta = JUMP_TRAJECTORY_DOWN[0];  // Start falling with first descent value
+              jumpFrameIndexRef.current = ASCENT_FRAMES;  // Move to descent
+              setJumpFrameIndex(ASCENT_FRAMES);
+            } else {
+              // Continue ascending while jump held
+              yDelta = JUMP_TRAJECTORY_UP[currentIdx];
+              jumpFrameIndexRef.current = currentIdx + 1;
+              setJumpFrameIndex(currentIdx + 1);
+            }
           } else {
-            // Descent phase (faster fall)
+            // Descent phase - falling
             const descentIdx = currentIdx - ASCENT_FRAMES;
             if (descentIdx < JUMP_TRAJECTORY_DOWN.length) {
               yDelta = JUMP_TRAJECTORY_DOWN[descentIdx];
               jumpFrameIndexRef.current = currentIdx + 1;
               setJumpFrameIndex(currentIdx + 1);
             } else {
-              // Continue falling at final descent speed if still in air
+              // Keep falling at terminal velocity
               yDelta = JUMP_TRAJECTORY_DOWN[JUMP_TRAJECTORY_DOWN.length - 1];
             }
           }
           
           newY += yDelta;
           
-          // Check for ground collision
+          // Ground collision check
           if (newY >= groundY) {
             newY = groundY;
             setIsJumping(false);
