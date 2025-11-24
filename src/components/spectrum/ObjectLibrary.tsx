@@ -180,7 +180,7 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
     );
   };
 
-  // Animation frame cycling - cycles through frames when moving
+  // Animation frame cycling - continuous loop when moving
   useEffect(() => {
     if (!selectedObject) return;
 
@@ -196,23 +196,25 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
     const fps = sprite.animationSpeed || 6;
     const frameCount = sprite.frames.length;
 
-    // Only animate when keys are pressed or jumping (actual movement intent)
-    const isMoving = keysPressed.has("left") || keysPressed.has("right") || isJumping;
+    // Check if any movement is happening
+    const hasMovementKeys = keysPressed.has("left") || keysPressed.has("right");
+    const isMoving = hasMovementKeys || isJumping;
+    
     if (!isMoving) {
-      // Don't animate or reset frame - stay on current frame
+      // Don't animate when stopped - stay on current frame
       return;
     }
 
+    // Continuous animation loop
     const interval = setInterval(() => {
       setAnimFrameIndex((prev) => {
         if (frameCount <= 1) return 0;
-        // Simple loop: 0,1,2,3,0,1,2,3...
         return (prev + 1) % frameCount;
       });
     }, 1000 / fps);
 
     return () => clearInterval(interval);
-  }, [selectedObject, sprites, playerAction, keysPressed, isJumping]);
+  }, [selectedObject, sprites, keysPressed.size, isJumping]); // Only re-run when keys are pressed/released or jump state changes
 
   // Keyboard controls for player testing - remove keyboard repeat delay
   useEffect(() => {
