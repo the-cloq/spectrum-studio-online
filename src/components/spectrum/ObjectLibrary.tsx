@@ -432,7 +432,7 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
                 </div>
               </TabsContent>
 
-              <TabsContent value="animations" className="space-y-4">
+              <TabsContent value="animations" className="space-y-4 max-h-[600px] overflow-y-auto">
                 <div className="space-y-3">
                   <div className="space-y-2">
                     <Label>Move Left</Label>
@@ -443,7 +443,7 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
                       <SelectTrigger>
                         <SelectValue placeholder="None" />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="z-50">
                         <SelectItem value="">None</SelectItem>
                         {sprites.map((sprite) => (
                           <SelectItem key={sprite.id} value={sprite.id}>
@@ -468,7 +468,7 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
                       <SelectTrigger>
                         <SelectValue placeholder="None (will mirror left)" />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="z-50">
                         <SelectItem value="">None (will mirror left)</SelectItem>
                         {sprites.map((sprite) => (
                           <SelectItem key={sprite.id} value={sprite.id}>
@@ -493,7 +493,7 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
                       <SelectTrigger>
                         <SelectValue placeholder="None" />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="z-50">
                         <SelectItem value="">None</SelectItem>
                         {sprites.map((sprite) => (
                           <SelectItem key={sprite.id} value={sprite.id}>
@@ -518,7 +518,7 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
                       <SelectTrigger>
                         <SelectValue placeholder="None (will mirror up)" />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="z-50">
                         <SelectItem value="">None (will mirror up)</SelectItem>
                         {sprites.map((sprite) => (
                           <SelectItem key={sprite.id} value={sprite.id}>
@@ -543,7 +543,7 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
                       <SelectTrigger>
                         <SelectValue placeholder="None" />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="z-50">
                         <SelectItem value="">None</SelectItem>
                         {sprites.map((sprite) => (
                           <SelectItem key={sprite.id} value={sprite.id}>
@@ -568,7 +568,7 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
                       <SelectTrigger>
                         <SelectValue placeholder="None" />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="z-50">
                         <SelectItem value="">None</SelectItem>
                         {sprites.map((sprite) => (
                           <SelectItem key={sprite.id} value={sprite.id}>
@@ -593,7 +593,7 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
                       <SelectTrigger>
                         <SelectValue placeholder="None" />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="z-50">
                         <SelectItem value="">None</SelectItem>
                         {sprites.map((sprite) => (
                           <SelectItem key={sprite.id} value={sprite.id}>
