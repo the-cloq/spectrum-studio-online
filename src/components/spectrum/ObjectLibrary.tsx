@@ -279,24 +279,16 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
           playerActionRef.current = stoppedAction;
         }
 
-        // Manic Miner jump physics: release jump key during ascent = immediate fast fall
+        // Jump executes full arc once initiated - no key holding required
         if (jumping) {
           const currentIdx = jumpFrameIndexRef.current;
           let yDelta = 0;
           
-          // Check if we're in ascent phase
+          // Ascent phase
           if (currentIdx < ASCENT_FRAMES) {
-            // If jump key released during ascent, skip to fast fall immediately
-            if (!keys.has("jump")) {
-              jumpFrameIndexRef.current = ASCENT_FRAMES; // Skip to descent
-              setJumpFrameIndex(ASCENT_FRAMES);
-              yDelta = JUMP_TRAJECTORY_DOWN[0];
-            } else {
-              // Continue ascending while jump held
-              yDelta = JUMP_TRAJECTORY_UP[currentIdx];
-              jumpFrameIndexRef.current = currentIdx + 1;
-              setJumpFrameIndex(currentIdx + 1);
-            }
+            yDelta = JUMP_TRAJECTORY_UP[currentIdx];
+            jumpFrameIndexRef.current = currentIdx + 1;
+            setJumpFrameIndex(currentIdx + 1);
           } else {
             // Descent phase (faster fall)
             const descentIdx = currentIdx - ASCENT_FRAMES;
@@ -304,6 +296,9 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
               yDelta = JUMP_TRAJECTORY_DOWN[descentIdx];
               jumpFrameIndexRef.current = currentIdx + 1;
               setJumpFrameIndex(currentIdx + 1);
+            } else {
+              // Continue falling at final descent speed if still in air
+              yDelta = JUMP_TRAJECTORY_DOWN[JUMP_TRAJECTORY_DOWN.length - 1];
             }
           }
           
@@ -321,13 +316,6 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
               setPlayerAction(stoppedAction);
               playerActionRef.current = stoppedAction;
             }
-          }
-          
-          // Check if jump trajectory is complete
-          const totalFrames = ASCENT_FRAMES + JUMP_TRAJECTORY_DOWN.length;
-          if (currentIdx >= totalFrames - 1 && newY < groundY) {
-            // Continue falling if not on ground
-            newY += JUMP_TRAJECTORY_DOWN[JUMP_TRAJECTORY_DOWN.length - 1];
           }
         }
 
