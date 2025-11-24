@@ -8,7 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { Trash2, Plus, Copy, Play, Pause } from "lucide-react";
-import { type GameObject, type ObjectType, type Sprite, type AnimationSet } from "@/types/spectrum";
+import { type GameObject, type ObjectType, type Sprite, type AnimationSet, SPECTRUM_COLORS } from "@/types/spectrum";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -107,44 +107,50 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
 
   const updateAnimation = (action: keyof AnimationSet, spriteId: string) => {
     if (!selectedObject) return;
-    
+
+    const currentAnimations = selectedObject.animations || {};
+
     updateObject({
       animations: {
-        ...selectedObject.animations,
+        ...currentAnimations,
         [action]: spriteId || undefined,
       },
     });
   };
 
   const renderSpritePreview = (spriteId: string, scale = 1) => {
-    const sprite = sprites.find(s => s.id === spriteId);
-    if (!sprite || !sprite.frames?.[0]) return null;
+    const sprite = sprites.find((s) => s.id === spriteId);
+    if (!sprite || !sprite.frames?.[0]?.pixels) return null;
 
-    const size = parseInt(sprite.size.split("x")[0]);
-    const pixelSize = 8 * scale;
-    
+    const [width] = sprite.size.split("x").map(Number);
+    const pixelSize = 4 * scale;
+
     return (
       <div className="border-2 border-border rounded p-2 inline-block bg-black">
         <div
           className="grid"
           style={{
-            gridTemplateColumns: `repeat(${size}, ${pixelSize}px)`,
-            gap: "1px",
+            gridTemplateColumns: `repeat(${width}, ${pixelSize}px)`
           }}
         >
           {sprite.frames[0].pixels.map((row, y) =>
-            row.map((pixel, x) => (
-              <div
-                key={`${x}-${y}`}
-                style={{
-                  width: `${pixelSize}px`,
-                  height: `${pixelSize}px`,
-                }}
-                className={cn(
-                  pixel === 1 ? "bg-white" : "bg-black"
-                )}
-              />
-            ))
+            row.map((colorIndex, x) => {
+              const color =
+                colorIndex && SPECTRUM_COLORS[colorIndex]
+                  ? SPECTRUM_COLORS[colorIndex].value
+                  : "#000000";
+
+              return (
+                <div
+                  key={`${x}-${y}`}
+                  style={{
+                    width: `${pixelSize}px`,
+                    height: `${pixelSize}px`,
+                    backgroundColor: color
+                  }}
+                />
+              );
+            })
           )}
         </div>
       </div>
@@ -237,7 +243,7 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
     }
 
     const frame = sprite.frames[currentFrame % sprite.frames.length];
-    const pixelSize = 4;
+    const pixelSize = 6;
     const startX = selectedObject.type === "player" ? playerPosition.x : 64;
     const startY = selectedObject.type === "player" ? playerPosition.y : 64;
 
