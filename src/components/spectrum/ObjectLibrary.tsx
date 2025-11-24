@@ -8,7 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { Trash2, Plus, Copy } from "lucide-react";
-import { type GameObject, type ObjectType, type Sprite } from "@/types/spectrum";
+import { type GameObject, type ObjectType, type Sprite, type AnimationSet } from "@/types/spectrum";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -100,17 +100,30 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
     });
   };
 
-  const renderSpritePreview = (spriteId: string) => {
+  const updateAnimation = (action: keyof AnimationSet, spriteId: string) => {
+    if (!selectedObject) return;
+    
+    updateObject({
+      animations: {
+        ...selectedObject.animations,
+        [action]: spriteId || undefined,
+      },
+    });
+  };
+
+  const renderSpritePreview = (spriteId: string, scale = 1) => {
     const sprite = sprites.find(s => s.id === spriteId);
     if (!sprite || !sprite.frames?.[0]) return null;
 
     const size = parseInt(sprite.size.split("x")[0]);
+    const pixelSize = 8 * scale;
+    
     return (
       <div className="border-2 border-border rounded p-2 inline-block bg-black">
         <div
           className="grid"
           style={{
-            gridTemplateColumns: `repeat(${size}, 8px)`,
+            gridTemplateColumns: `repeat(${size}, ${pixelSize}px)`,
             gap: "1px",
           }}
         >
@@ -118,8 +131,11 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
             row.map((pixel, x) => (
               <div
                 key={`${x}-${y}`}
+                style={{
+                  width: `${pixelSize}px`,
+                  height: `${pixelSize}px`,
+                }}
                 className={cn(
-                  "w-2 h-2",
                   pixel === 1 ? "bg-white" : "bg-black"
                 )}
               />
@@ -226,8 +242,9 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
         <CardContent>
           {selectedObject ? (
             <Tabs defaultValue="basic" className="w-full">
-              <TabsList className="grid w-full grid-cols-2">
+              <TabsList className="grid w-full grid-cols-3">
                 <TabsTrigger value="basic">Basic</TabsTrigger>
+                <TabsTrigger value="animations">Animations</TabsTrigger>
                 <TabsTrigger value="properties">Properties</TabsTrigger>
               </TabsList>
 
@@ -285,6 +302,185 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
                   </Select>
                   <div className="pt-2">
                     {renderSpritePreview(selectedObject.spriteId)}
+                  </div>
+                </div>
+              </TabsContent>
+
+              <TabsContent value="animations" className="space-y-4">
+                <div className="space-y-3">
+                  <div className="space-y-2">
+                    <Label>Move Left</Label>
+                    <Select
+                      value={selectedObject.animations?.moveLeft || ""}
+                      onValueChange={(value) => updateAnimation("moveLeft", value)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="None" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="">None</SelectItem>
+                        {sprites.map((sprite) => (
+                          <SelectItem key={sprite.id} value={sprite.id}>
+                            {sprite.name} ({sprite.size})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {selectedObject.animations?.moveLeft && (
+                      <div className="pt-2">
+                        {renderSpritePreview(selectedObject.animations.moveLeft, 2)}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Move Right</Label>
+                    <Select
+                      value={selectedObject.animations?.moveRight || ""}
+                      onValueChange={(value) => updateAnimation("moveRight", value)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="None (will mirror left)" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="">None (will mirror left)</SelectItem>
+                        {sprites.map((sprite) => (
+                          <SelectItem key={sprite.id} value={sprite.id}>
+                            {sprite.name} ({sprite.size})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {selectedObject.animations?.moveRight && (
+                      <div className="pt-2">
+                        {renderSpritePreview(selectedObject.animations.moveRight, 2)}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Move Up</Label>
+                    <Select
+                      value={selectedObject.animations?.moveUp || ""}
+                      onValueChange={(value) => updateAnimation("moveUp", value)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="None" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="">None</SelectItem>
+                        {sprites.map((sprite) => (
+                          <SelectItem key={sprite.id} value={sprite.id}>
+                            {sprite.name} ({sprite.size})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {selectedObject.animations?.moveUp && (
+                      <div className="pt-2">
+                        {renderSpritePreview(selectedObject.animations.moveUp, 2)}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Move Down</Label>
+                    <Select
+                      value={selectedObject.animations?.moveDown || ""}
+                      onValueChange={(value) => updateAnimation("moveDown", value)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="None (will mirror up)" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="">None (will mirror up)</SelectItem>
+                        {sprites.map((sprite) => (
+                          <SelectItem key={sprite.id} value={sprite.id}>
+                            {sprite.name} ({sprite.size})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {selectedObject.animations?.moveDown && (
+                      <div className="pt-2">
+                        {renderSpritePreview(selectedObject.animations.moveDown, 2)}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Idle</Label>
+                    <Select
+                      value={selectedObject.animations?.idle || ""}
+                      onValueChange={(value) => updateAnimation("idle", value)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="None" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="">None</SelectItem>
+                        {sprites.map((sprite) => (
+                          <SelectItem key={sprite.id} value={sprite.id}>
+                            {sprite.name} ({sprite.size})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {selectedObject.animations?.idle && (
+                      <div className="pt-2">
+                        {renderSpritePreview(selectedObject.animations.idle, 2)}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Jump</Label>
+                    <Select
+                      value={selectedObject.animations?.jump || ""}
+                      onValueChange={(value) => updateAnimation("jump", value)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="None" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="">None</SelectItem>
+                        {sprites.map((sprite) => (
+                          <SelectItem key={sprite.id} value={sprite.id}>
+                            {sprite.name} ({sprite.size})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {selectedObject.animations?.jump && (
+                      <div className="pt-2">
+                        {renderSpritePreview(selectedObject.animations.jump, 2)}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Fire</Label>
+                    <Select
+                      value={selectedObject.animations?.fire || ""}
+                      onValueChange={(value) => updateAnimation("fire", value)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="None" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="">None</SelectItem>
+                        {sprites.map((sprite) => (
+                          <SelectItem key={sprite.id} value={sprite.id}>
+                            {sprite.name} ({sprite.size})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {selectedObject.animations?.fire && (
+                      <div className="pt-2">
+                        {renderSpritePreview(selectedObject.animations.fire, 2)}
+                      </div>
+                    )}
                   </div>
                 </div>
               </TabsContent>
