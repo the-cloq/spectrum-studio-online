@@ -12,6 +12,11 @@ import { type GameObject, type ObjectType, type Sprite, type AnimationSet, SPECT
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
+const PREVIEW_ZOOMS_8 = [64, 96, 128, 160, 192, 224, 256] as const;
+const PREVIEW_ZOOMS_16 = [128, 192, 256, 320, 384, 448, 512] as const;
+const PREVIEW_ZOOM_DEFAULT_INDEX = 2;
+const PREVIEW_ZOOM_MAX_INDEX = PREVIEW_ZOOMS_8.length - 1;
+
 interface ObjectLibraryProps {
   objects: GameObject[];
   sprites: Sprite[];
@@ -26,7 +31,7 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
   const [currentFrame, setCurrentFrame] = useState(0);
   const [playerPosition, setPlayerPosition] = useState({ x: 64, y: 64 });
   const [playerAction, setPlayerAction] = useState<keyof AnimationSet>("idle");
-  const [previewZoom, setPreviewZoom] = useState(2);
+  const [previewZoomIndex, setPreviewZoomIndex] = useState(PREVIEW_ZOOM_DEFAULT_INDEX);
   const [showGrid, setShowGrid] = useState(true);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -228,44 +233,75 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
 
     ctx.imageSmoothingEnabled = false;
 
-    const baseWidth = 256;
-    const baseHeight = 192;
-    canvas.width = baseWidth * previewZoom;
-    canvas.height = baseHeight * previewZoom;
-
-    // Clear canvas
-    ctx.fillStyle = "#000000";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
     // Get the appropriate sprite based on action
     let spriteId = selectedObject.spriteId;
     if (selectedObject.type === "player" && selectedObject.animations) {
       spriteId = selectedObject.animations[playerAction] || selectedObject.spriteId;
     }
 
-    const sprite = sprites.find(s => s.id === spriteId);
+    const sprite = sprites.find((s) => s.id === spriteId);
     if (!sprite || !sprite.frames || sprite.frames.length === 0) {
+      canvas.width = 256;
+      canvas.height = 192;
+      ctx.fillStyle = "#000000";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
       ctx.fillStyle = "#666666";
       ctx.font = "12px monospace";
-      ctx.fillText("No animation", 50 * previewZoom, 75 * previewZoom);
+      ctx.fillText("No animation", 20, 40);
       return;
     }
 
     const frame = sprite.frames[currentFrame % sprite.frames.length];
-    const [spriteWidth, spriteHeight] = sprite.size.split("x").map(Number);
-    const pixelSize = 8 * previewZoom;
+    if (!frame || !Array.isArray(frame.pixels)) {
+      canvas.width = 256;
+      canvas.height = 192;
+      ctx.fillStyle = "#000000";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = "#666666";
+      ctx.font = "12px monospace";
+      ctx.fillText("No frame data", 20, 40);
+      return;
+    }
 
-    // Center non-player sprites, allow player to move
-    let startX = selectedObject.type === "player"
-      ? playerPosition.x * previewZoom
-      : (canvas.width - spriteWidth * pixelSize) / 2;
-    let startY = selectedObject.type === "player"
-      ? playerPosition.y * previewZoom
-      : (canvas.height - spriteHeight * pixelSize) / 2;
+    const [spriteWidth, spriteHeight] = sprite.size.split("x").map(Number);
+
+    // Choose target preview size in pixels based on sprite size & zoom level
+    let targetSize: number;
+    if (spriteWidth === 8 && spriteHeight === 8) {
+      targetSize = PREVIEW_ZOOMS_8[previewZoomIndex] ?? PREVIEW_ZOOMS_8[PREVIEW_ZOOM_DEFAULT_INDEX];
+    } else if (spriteWidth === 16 && spriteHeight === 16) {
+      targetSize = PREVIEW_ZOOMS_16[previewZoomIndex] ?? PREVIEW_ZOOMS_16[PREVIEW_ZOOM_DEFAULT_INDEX];
+    } else {
+      // Generic fallback: scale sprite proportionally
+      const basePixelSize = 8 + previewZoomIndex * 2;
+      targetSize = spriteWidth * basePixelSize;
+    }
+
+    const pixelSize = targetSize / spriteWidth;
+    const canvasWidth = spriteWidth * pixelSize;
+    const canvasHeight = spriteHeight * pixelSize;
+
+    canvas.width = canvasWidth;
+    canvas.height = canvasHeight;
+
+    // Clear canvas
+    ctx.fillStyle = "#000000";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Center sprite (player can still move within this area)
+    let startX = (canvasWidth - spriteWidth * pixelSize) / 2;
+    let startY = (canvasHeight - spriteHeight * pixelSize) / 2;
+
+    if (selectedObject.type === "player") {
+      startX += playerPosition.x;
+      startY += playerPosition.y;
+    }
 
     frame.pixels.forEach((row, y) => {
+      if (!row) return;
       row.forEach((colorIndex, x) => {
-        if (!colorIndex) return;
+        // Treat 0 as transparent
+        if (colorIndex === 0) return;
         const color = SPECTRUM_COLORS[colorIndex]?.value || "#FFFFFF";
         ctx.fillStyle = color;
         ctx.fillRect(
@@ -281,7 +317,7 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
     if (showGrid) {
       ctx.strokeStyle = "#333333";
       ctx.lineWidth = 1;
-      const gridSize = 8 * previewZoom;
+      const gridSize = pixelSize;
       for (let x = 0; x <= canvas.width; x += gridSize) {
         ctx.beginPath();
         ctx.moveTo(x, 0);
@@ -295,7 +331,7 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
         ctx.stroke();
       }
     }
-  }, [selectedObject, sprites, currentFrame, playerPosition, playerAction, previewZoom, showGrid]);
+  }, [selectedObject, sprites, currentFrame, playerPosition, playerAction, previewZoomIndex, showGrid]);
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
@@ -958,16 +994,16 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
               <Button
                 size="sm"
                 variant="outline"
-                onClick={() => setPreviewZoom(z => Math.max(1, z - 1))}
-                disabled={previewZoom <= 1}
+                onClick={() => setPreviewZoomIndex((index) => Math.max(0, index - 1))}
+                disabled={previewZoomIndex <= 0}
               >
                 <ZoomOut className="w-4 h-4" />
               </Button>
               <Button
                 size="sm"
                 variant="outline"
-                onClick={() => setPreviewZoom(z => Math.min(4, z + 1))}
-                disabled={previewZoom >= 4}
+                onClick={() => setPreviewZoomIndex((index) => Math.min(PREVIEW_ZOOM_MAX_INDEX, index + 1))}
+                disabled={previewZoomIndex >= PREVIEW_ZOOM_MAX_INDEX}
               >
                 <ZoomIn className="w-4 h-4" />
               </Button>
@@ -984,10 +1020,10 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
         <CardContent>
           {selectedObject ? (
              <div className="space-y-4">
-              <div className="border-2 border-border rounded bg-black p-2 overflow-auto">
+              <div className="border-2 border-border rounded bg-black p-4 flex items-center justify-center">
                 <canvas
                   ref={canvasRef}
-                  className="max-w-full"
+                  className="pixelated"
                   style={{ imageRendering: "pixelated" }}
                 />
               </div>
