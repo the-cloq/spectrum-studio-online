@@ -230,7 +230,7 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
       const currentAction = playerActionRef.current;
       const facing = facingLeftRef.current;
 
-      // Start jump when space/up pressed and not already jumping
+      // Start jump - single press initiates full trajectory
       if (keys.has("jump") && !jumping) {
         setIsJumping(true);
         isJumpingRef.current = true;
@@ -252,7 +252,7 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
         let newX = prevPos.x;
         let newY = prevPos.y;
 
-        // Horizontal movement - works independently during jump
+        // Horizontal movement - independent of jump state
         if (keys.has("left")) {
           newX -= walkSpeed;
           if (!jumping) {
@@ -270,30 +270,26 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
             facingLeftRef.current = false;
           }
         } else if (!jumping) {
-          // Not moving - keep facing direction, freeze animation
           const stoppedAction = facing ? "moveLeft" : "moveRight";
           setPlayerAction(stoppedAction);
           playerActionRef.current = stoppedAction;
         }
 
-        // Jump - play through trajectory table
+        // Jump trajectory - plays fully once initiated, no interruption
         if (jumping) {
           const idx = jumpFrameIndexRef.current;
           
+          // Play through predetermined trajectory
           if (idx < JUMP_TOTAL_FRAMES) {
-            // Apply Y offset from lookup table
-            const yDelta = JUMP_TRAJECTORY[idx];
-            newY += yDelta;
-            
-            // Advance to next frame
+            newY += JUMP_TRAJECTORY[idx];
             jumpFrameIndexRef.current = idx + 1;
             setJumpFrameIndex(idx + 1);
           } else {
-            // Jump complete - keep falling
-            newY += 4; // Terminal fall speed
+            // Past trajectory end - continue falling
+            newY += 4;
           }
           
-          // Ground collision
+          // Land on ground
           if (newY >= groundY) {
             newY = groundY;
             setIsJumping(false);
@@ -301,7 +297,6 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
             jumpFrameIndexRef.current = 0;
             setJumpFrameIndex(0);
             
-            // Return to walk/idle animation
             if (!keys.has("left") && !keys.has("right")) {
               const stoppedAction = facing ? "moveLeft" : "moveRight";
               setPlayerAction(stoppedAction);
