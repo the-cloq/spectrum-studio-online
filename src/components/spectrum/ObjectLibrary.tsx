@@ -33,11 +33,31 @@ const GAME_FPS = 12; // Original ZX Spectrum frame rate
 const FRAME_INTERVAL = 1000 / GAME_FPS; // ~83.33ms per frame
 const WALK_PIXELS_PER_FRAME = 2; // Horizontal movement speed
 
-// Predetermined jump trajectory (Y-offset per frame)
-// Negative = upward, Positive = downward
-const JUMP_TRAJECTORY = [
-  -4, -4, -3, -2, -2, -1, -1, 0, 0, 1, 1, 2, 2, 3, 4, 4
-];
+// Predetermined jump trajectory generator
+// Creates a parabolic trajectory that returns to starting height
+const generateJumpTrajectory = (height: number, distance: number) => {
+  // Calculate frames needed based on distance and walk speed
+  const frames = Math.round(distance / WALK_PIXELS_PER_FRAME);
+  const trajectory: number[] = [];
+  
+  // Generate symmetric parabolic arc
+  const halfFrames = Math.floor(frames / 2);
+  for (let i = 0; i < halfFrames; i++) {
+    const progress = i / halfFrames;
+    const yOffset = -height * Math.sin(progress * Math.PI);
+    trajectory.push(Math.round(yOffset));
+  }
+  
+  // Mirror for descent (ensures return to 0)
+  for (let i = halfFrames - 1; i >= 0; i--) {
+    trajectory.push(-trajectory[i]);
+  }
+  
+  return trajectory;
+};
+
+// Default Manic Miner-style jump (doubled from original: 48px distance, 40px height)
+let JUMP_TRAJECTORY = generateJumpTrajectory(40, 48);
 
 interface ObjectLibraryProps {
   objects: GameObject[];
@@ -92,7 +112,7 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
   const getDefaultProperties = (type: ObjectType) => {
     switch (type) {
       case "player":
-        return { speed: 5, jumpHeight: 12, jumpDistance: 12, gravity: 5, maxFallDistance: 20 };
+        return { speed: 2, jumpHeight: 40, jumpDistance: 48, gravity: 5, maxFallDistance: 20 };
       case "enemy":
         return { damage: 10, movementPattern: "patrol" as const, respawnDelay: 3000, direction: "right" as const };
       case "ammunition":
@@ -139,6 +159,13 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
 
   const updateProperty = (key: string, value: any) => {
     if (!selectedObject) return;
+    
+    // Regenerate jump trajectory if jump properties change
+    if (key === 'jumpHeight' || key === 'jumpDistance') {
+      const height = key === 'jumpHeight' ? value : selectedObject.properties.jumpHeight;
+      const distance = key === 'jumpDistance' ? value : selectedObject.properties.jumpDistance;
+      JUMP_TRAJECTORY = generateJumpTrajectory(height, distance);
+    }
     
     updateObject({
       properties: { ...selectedObject.properties, [key]: value },
@@ -958,43 +985,33 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
                 {selectedObject.type === "player" && (
                   <>
                     <div className="space-y-2">
-                      <Label>Speed: {selectedObject.properties.speed}</Label>
+                      <Label>Speed (pixels/frame): {selectedObject.properties.speed}</Label>
                       <Slider
-                        value={[selectedObject.properties.speed || 5]}
+                        value={[selectedObject.properties.speed || 2]}
                         onValueChange={([value]) => updateProperty("speed", value)}
                         min={1}
-                        max={20}
+                        max={8}
                         step={1}
                       />
                     </div>
                     <div className="space-y-2">
                       <Label>Jump Height: {selectedObject.properties.jumpHeight}px</Label>
                       <Slider
-                        value={[selectedObject.properties.jumpHeight || 20]}
+                        value={[selectedObject.properties.jumpHeight || 40]}
                         onValueChange={([value]) => updateProperty("jumpHeight", value)}
-                        min={5}
-                        max={30}
-                        step={1}
+                        min={16}
+                        max={80}
+                        step={4}
                       />
                     </div>
                     <div className="space-y-2">
                       <Label>Jump Distance: {selectedObject.properties.jumpDistance}px</Label>
                       <Slider
-                        value={[selectedObject.properties.jumpDistance || 2]}
+                        value={[selectedObject.properties.jumpDistance || 48]}
                         onValueChange={([value]) => updateProperty("jumpDistance", value)}
-                        min={5}
-                        max={30}
-                        step={1}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Gravity: {selectedObject.properties.gravity || 5}</Label>
-                      <Slider
-                        value={[selectedObject.properties.gravity || 5]}
-                        onValueChange={([value]) => updateProperty("gravity", value)}
-                        min={1}
-                        max={10}
-                        step={1}
+                        min={24}
+                        max={96}
+                        step={4}
                       />
                     </div>
                   </>
