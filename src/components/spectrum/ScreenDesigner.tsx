@@ -216,6 +216,9 @@ export const ScreenDesigner = ({ blocks, objects, sprites, screens, onScreensCha
 
         console.log(`Drawing object ${obj.name} at (${placed.x}, ${placed.y}) -> canvas (${startX}, ${startY})`);
 
+        const spriteWidth = sprite.frames[0].pixels[0]?.length || 8;
+        const spriteHeight = sprite.frames[0].pixels.length || 8;
+
         sprite.frames[0].pixels.forEach((row, py) => {
           row.forEach((colorIndex, px) => {
             if (!colorIndex) return;
@@ -225,7 +228,7 @@ export const ScreenDesigner = ({ blocks, objects, sprites, screens, onScreensCha
             
             // Flip horizontally if direction is left
             const drawX = placed.direction === "left" 
-              ? startX + (7 - px) * pixelScale 
+              ? startX + (spriteWidth - 1 - px) * pixelScale 
               : startX + px * pixelScale;
             
             ctx.fillRect(
@@ -237,18 +240,21 @@ export const ScreenDesigner = ({ blocks, objects, sprites, screens, onScreensCha
           });
         });
 
-        // Highlight selected object with animated border
+        // Highlight selected object with animated border using actual sprite dimensions
         if (selectedPlacedObject?.id === placed.id) {
+          const highlightWidth = spriteWidth * pixelScale;
+          const highlightHeight = spriteHeight * pixelScale;
+          
           ctx.strokeStyle = "#FFD700";
           ctx.lineWidth = 4;
           ctx.setLineDash([8, 4]);
-          ctx.strokeRect(startX - 2, startY - 2, blockSize + 4, blockSize + 4);
+          ctx.strokeRect(startX - 2, startY - 2, highlightWidth + 4, highlightHeight + 4);
           ctx.setLineDash([]);
           
           // Inner glow
           ctx.strokeStyle = "rgba(255, 215, 0, 0.3)";
           ctx.lineWidth = 2;
-          ctx.strokeRect(startX - 4, startY - 4, blockSize + 8, blockSize + 8);
+          ctx.strokeRect(startX - 4, startY - 4, highlightWidth + 8, highlightHeight + 8);
         }
       });
     }
