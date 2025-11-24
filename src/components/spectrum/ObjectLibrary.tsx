@@ -276,57 +276,52 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
     const jumpHeight = selectedObject.properties.jumpHeight || 20;
     const jumpDistance = selectedObject.properties.jumpDistance || 2;
     const canvasSize = CANVAS_SIZES[canvasSizeIndex];
-    const gravity = (selectedObject.properties.gravity || 5) / 10; // Scale gravity from slider (1-10)
+    
+    // Invert gravity: higher slider = gentler fall (smaller gravity)
+    const rawGravity = selectedObject.properties.gravity || 7;
+    const gravity = (11 - rawGravity) / 10; // 10→0.1, 7→0.4, 1→1.0
     const groundY = 0;
 
     const gameLoop = () => {
       setPlayerVelocity((prev) => {
-        let newVelX = 0;
+        let newVelX = prev.x; // Maintain current horizontal velocity
         let newVelY = prev.y;
 
-        // Horizontal movement
-        if (keysPressed.has("left")) {
-          newVelX = -speed;
-          if (!isJumping) {
+        // Only update horizontal velocity if not jumping (or initiating jump)
+        if (!isJumping) {
+          if (keysPressed.has("left")) {
+            newVelX = -speed;
             setPlayerAction("moveLeft");
-          }
-          setFacingLeft(true);
-        } else if (keysPressed.has("right")) {
-          newVelX = speed;
-          if (!isJumping) {
+            setFacingLeft(true);
+          } else if (keysPressed.has("right")) {
+            newVelX = speed;
             setPlayerAction("moveRight");
+            setFacingLeft(false);
+          } else {
+            setPlayerAction("idle");
+            newVelX = 0;
           }
-          setFacingLeft(false);
-        } else if (!isJumping) {
-          setPlayerAction("idle");
-          newVelX = 0;
         }
 
-        // Jump with forward velocity
+        // Initiate jump - lock in horizontal velocity
         if (keysPressed.has("jump") && !isJumping) {
           newVelY = -jumpHeight;
           setIsJumping(true);
           
-          // Set jump direction and apply horizontal velocity during jump
+          // Lock horizontal velocity based on current movement
           if (keysPressed.has("left")) {
             setPlayerAction("jumpLeft");
-            newVelX = -speed; // Use walking speed, not jumpDistance
+            newVelX = -jumpDistance;
           } else if (keysPressed.has("right")) {
             setPlayerAction("jumpRight");
-            newVelX = speed; // Use walking speed, not jumpDistance
+            newVelX = jumpDistance;
           } else {
-            // Jump in place using current facing direction
+            // Jump in place - maintain current facing
             setPlayerAction(facingLeft ? "jumpLeft" : "jumpRight");
             newVelX = 0;
           }
-        } else if (isJumping) {
-          // Apply horizontal movement while in air based on jumpDistance
-          if (keysPressed.has("left")) {
-            newVelX = -jumpDistance;
-          } else if (keysPressed.has("right")) {
-            newVelX = jumpDistance;
-          }
         }
+        // While jumping, maintain locked horizontal velocity (already set in prev.x)
 
         // Apply gravity
         if (isJumping) {
