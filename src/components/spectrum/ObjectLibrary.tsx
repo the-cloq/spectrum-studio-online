@@ -406,9 +406,8 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
       return;
     }
 
-    // Get frame using ping-pong pattern
-    const sequence = sprite.frames.length >= 3 ? [0, 1, 2, 1] : [0, 1];
-    const frameIdx = sequence[animFrameIndex % sequence.length];
+    // Use the current animation frame index directly - loops through all frames (0,1,2,3,0,1,2,3...)
+    const frameIdx = animFrameIndex % sprite.frames.length;
     const frame = sprite.frames[frameIdx];
     
     if (!frame || !Array.isArray(frame.pixels)) {
