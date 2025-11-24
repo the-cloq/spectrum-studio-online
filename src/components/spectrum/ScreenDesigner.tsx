@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ColorPalette } from "@/components/spectrum/ColorPalette";
-import { SPECTRUM_COLORS, type SpectrumColor, type Screen, type Block, type GameObject } from "@/types/spectrum";
+import { SPECTRUM_COLORS, type SpectrumColor, type Screen, type Block, type GameObject, type PlacedObject } from "@/types/spectrum";
 import { Plus, Trash2, Eraser, ZoomIn, ZoomOut, FlipHorizontal, Move } from "lucide-react";
 import { toast } from "sonner";
 
@@ -15,14 +15,6 @@ interface ScreenDesignerProps {
   screens: Screen[];
   onScreensChange: (screens: Screen[]) => void;
 }
-
-type PlacedObject = {
-  id: string;
-  objectId: string;
-  x: number;
-  y: number;
-  direction: "left" | "right";
-};
 
 const BASE_WIDTH = 256;
 const BASE_HEIGHT = 192;
@@ -41,10 +33,16 @@ export const ScreenDesigner = ({ blocks, objects, screens, onScreensChange }: Sc
   const [newScreenName, setNewScreenName] = useState("");
   const [newScreenType, setNewScreenType] = useState<Screen["type"] | "">("");
   const [zoom, setZoom] = useState(2);
-  const [placedObjects, setPlacedObjects] = useState<PlacedObject[]>([]);
+  const [placedObjects, setPlacedObjects] = useState<PlacedObject[]>(selectedScreen?.placedObjects || []);
   const [selectedPlacedObject, setSelectedPlacedObject] = useState<PlacedObject | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+
+  // Load placed objects when screen changes
+  useEffect(() => {
+    setPlacedObjects(selectedScreen?.placedObjects || []);
+    setSelectedPlacedObject(null);
+  }, [selectedScreen?.id]);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -102,6 +100,7 @@ export const ScreenDesigner = ({ blocks, objects, screens, onScreensChange }: Sc
         const updated = placedObjects.map(obj => obj.id === newPlaced.id ? newPlaced : obj);
         setPlacedObjects(updated);
         setSelectedPlacedObject(newPlaced);
+        updateScreenObjects(updated);
       }
     };
 
@@ -227,11 +226,13 @@ export const ScreenDesigner = ({ blocks, objects, screens, onScreensChange }: Sc
           });
         });
 
-        // Highlight selected object
+        // Highlight selected object with visible border
         if (selectedPlacedObject?.id === placed.id) {
-          ctx.strokeStyle = "#FFFF00";
-          ctx.lineWidth = 2;
-          ctx.strokeRect(startX, startY, blockSize, blockSize);
+          ctx.strokeStyle = "#00FFFF";
+          ctx.lineWidth = 3;
+          ctx.setLineDash([4, 4]);
+          ctx.strokeRect(startX - 1, startY - 1, blockSize + 2, blockSize + 2);
+          ctx.setLineDash([]);
         }
       });
     }
@@ -276,8 +277,10 @@ export const ScreenDesigner = ({ blocks, objects, screens, onScreensChange }: Sc
           y,
           direction: "right"
         };
-        setPlacedObjects([...placedObjects, newPlaced]);
+        const updated = [...placedObjects, newPlaced];
+        setPlacedObjects(updated);
         setSelectedPlacedObject(newPlaced);
+        updateScreenObjects(updated);
         toast.success(`Placed ${selectedObject.name}`);
         return;
       }
@@ -294,6 +297,12 @@ export const ScreenDesigner = ({ blocks, objects, screens, onScreensChange }: Sc
   const updateScreen = (updatedScreen: Screen) => {
     onScreensChange(screens.map(s => s.id === updatedScreen.id ? updatedScreen : s));
     setSelectedScreen(updatedScreen);
+  };
+
+  const updateScreenObjects = (updated: PlacedObject[]) => {
+    if (!selectedScreen) return;
+    const updatedScreen = { ...selectedScreen, placedObjects: updated };
+    updateScreen(updatedScreen);
   };
 
   const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -325,6 +334,7 @@ export const ScreenDesigner = ({ blocks, objects, screens, onScreensChange }: Sc
       setPlacedObjects(updated);
       const newPos = updated.find(o => o.id === selectedPlacedObject.id);
       if (newPos) setSelectedPlacedObject(newPos);
+      updateScreenObjects(updated);
     } else if (isDrawing) {
       handleCanvasClick(e);
     }
@@ -351,7 +361,8 @@ export const ScreenDesigner = ({ blocks, objects, screens, onScreensChange }: Sc
         ? Array(192).fill(null).map(() =>
             Array(256).fill(SPECTRUM_COLORS[0]) // Black
           )
-        : undefined
+        : undefined,
+      placedObjects: []
     };
 
     onScreensChange([...screens, newScreen]);
@@ -372,12 +383,15 @@ export const ScreenDesigner = ({ blocks, objects, screens, onScreensChange }: Sc
     setPlacedObjects(updated);
     const flipped = updated.find(o => o.id === selectedPlacedObject.id);
     if (flipped) setSelectedPlacedObject(flipped);
+    updateScreenObjects(updated);
   };
 
   const handleDeleteObject = () => {
     if (!selectedPlacedObject) return;
-    setPlacedObjects(placedObjects.filter(obj => obj.id !== selectedPlacedObject.id));
+    const updated = placedObjects.filter(obj => obj.id !== selectedPlacedObject.id);
+    setPlacedObjects(updated);
     setSelectedPlacedObject(null);
+    updateScreenObjects(updated);
     toast.success("Object deleted");
   };
 

@@ -113,12 +113,21 @@ export type Block = {
   };
 };
 
+export type PlacedObject = {
+  id: string;
+  objectId: string;
+  x: number;
+  y: number;
+  direction: "left" | "right";
+};
+
 export type Screen = {
   id: string;
   name: string;
   type: "title" | "game"; // Screen type
   tiles?: string[][]; // 2D array of block IDs (for game screens)
   pixels?: SpectrumColor[][]; // 2D array of colors (for title screens)
+  placedObjects?: PlacedObject[]; // Placed game objects
   width: number;
   height: number;
 };
