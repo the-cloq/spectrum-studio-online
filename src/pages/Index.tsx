@@ -9,9 +9,7 @@ import { ObjectLibrary } from "@/components/spectrum/ObjectLibrary";
 import { LevelDesigner } from "@/components/spectrum/LevelDesigner";
 import { exportGameToTAP, downloadTAPFile } from "@/lib/tapExport";
 import { toast } from "sonner";
-
-import { useEffect } from "react";
-import { supabase } from "@/supabase"; // make sure this points to your supabase.js
+import { supabase } from "@/supabase";
 
 const STORAGE_KEY = "zx-spectrum-project";
 
@@ -39,47 +37,23 @@ const Index = () => {
     },
   });
 
-  useEffect(() => {
-  async function testSupabase() {
-    // Insert a test row into the "projects" table
-    const { data, error } = await supabase
-      .from("projects")
-      .insert([{ name: "Test Project" }])
-      .select();
-
-    if (error) {
-      console.error("Supabase Error:", error);
-    } else {
-      console.log("Supabase Data:", data);
-    }
-  }
-
-  testSupabase();
-}, []);
-
-  
-  // Load project from localStorage
+  // Load from localStorage
   useEffect(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
       try {
         const loaded = JSON.parse(saved);
-        
-        // Migrate old sprite format to new frames format
         const migratedSprites = loaded.sprites?.map((sprite: any) => {
           if (sprite.pixels && !sprite.frames) {
-            // Old format - convert to new
             return {
               ...sprite,
               frames: [{ pixels: sprite.pixels }],
               animationSpeed: sprite.animationSpeed ?? 4,
-              pixels: undefined, // Remove old property
+              pixels: undefined,
             };
           }
-          // Already new format or has frames
           return sprite;
         }) || [];
-        
         const loadedWithDefaults = {
           ...loaded,
           sprites: migratedSprites,
@@ -94,7 +68,7 @@ const Index = () => {
     }
   }, []);
 
-  // Auto-save project
+  // Auto-save to localStorage
   useEffect(() => {
     const timer = setTimeout(() => {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(project));
@@ -102,36 +76,18 @@ const Index = () => {
     return () => clearTimeout(timer);
   }, [project]);
 
-  const handleTabChange = (tab: string) => {
-    setActiveTab(tab);
-  };
-
-  const handleSpritesChange = (sprites: Sprite[]) => {
-    setProject({ ...project, sprites });
-  };
-
-  const handleBlocksChange = (blocks: Block[]) => {
-    setProject({ ...project, blocks });
-  };
-
-  const handleScreensChange = (screens: Screen[]) => {
-    setProject({ ...project, screens });
-  };
-
-  const handleLevelsChange = (levels: Level[]) => {
-    setProject({ ...project, levels });
-  };
-
-  const handleObjectsChange = (objects: GameObject[]) => {
-    setProject({ ...project, objects });
-  };
+  const handleTabChange = (tab: string) => setActiveTab(tab);
+  const handleSpritesChange = (sprites: Sprite[]) => setProject({ ...project, sprites });
+  const handleBlocksChange = (blocks: Block[]) => setProject({ ...project, blocks });
+  const handleScreensChange = (screens: Screen[]) => setProject({ ...project, screens });
+  const handleLevelsChange = (levels: Level[]) => setProject({ ...project, levels });
+  const handleObjectsChange = (objects: GameObject[]) => setProject({ ...project, objects });
 
   const handleExportTAP = () => {
     if (project.screens.length === 0) {
       toast.error("Please create at least one screen before exporting");
       return;
     }
-
     try {
       const tapBlob = exportGameToTAP(project);
       downloadTAPFile(tapBlob, project.name);
@@ -142,12 +98,38 @@ const Index = () => {
     }
   };
 
-  const handleSave = () => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(project));
-    toast.success("Project saved!");
+  // Combined local + Supabase save
+  const handleSave = async () => {
+    try {
+      // LocalStorage save
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(project));
+      toast.success("Project saved locally!");
+
+      // Supabase upsert
+      const { data, error } = await supabase
+        .from("projects")
+        .upsert([{
+          id: project.id,
+          name: project.name,
+          data: project
+        }])
+        .select();
+
+      if (error) {
+        console.error("Supabase save error:", error);
+        toast.error("Failed to save project to Supabase");
+      } else {
+        toast.success("Project saved to Supabase!");
+        if (data?.[0]?.id) setProject({ ...project, id: data[0].id });
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("Unexpected error saving project");
+    }
   };
 
-  const handleLoad = () => {
+  const handleLoad = async () => {
+    // Load from localStorage first
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
       try {
@@ -158,12 +140,28 @@ const Index = () => {
           levels: loaded.levels ?? [],
         };
         setProject(loadedWithDefaults);
-        toast.success("Project loaded!");
+        toast.success("Project loaded from localStorage!");
       } catch (e) {
-        toast.error("Failed to load project");
+        toast.error("Failed to load project from localStorage");
       }
-    } else {
-      toast.info("No saved project found");
+    }
+
+    // Optionally, load from Supabase
+    try {
+      const { data, error } = await supabase
+        .from("projects")
+        .select("*")
+        .eq("id", project.id)
+        .single();
+
+      if (error) {
+        console.error("Supabase load error:", error);
+      } else if (data?.data) {
+        setProject(data.data);
+        toast.success("Project loaded from Supabase!");
+      }
+    } catch (err) {
+      console.error("Unexpected error loading from Supabase", err);
     }
   };
 
@@ -179,48 +177,11 @@ const Index = () => {
       <div className="container mx-auto px-4 py-4 space-y-4">
         <Toolbar activeTab={activeTab} onTabChange={handleTabChange} />
         
-        {activeTab === "sprites" && (
-          <div className="space-y-4">
-            <SpriteEditor
-              sprites={project.sprites}
-              onSpritesChange={handleSpritesChange}
-            />
-          </div>
-        )}
-
-        {activeTab === "blocks" && (
-          <BlockDesigner
-            sprites={project.sprites}
-            blocks={project.blocks}
-            onBlocksChange={handleBlocksChange}
-          />
-        )}
-
-        {activeTab === "screens" && (
-          <ScreenDesigner
-            blocks={project.blocks}
-            screens={project.screens}
-            onScreensChange={handleScreensChange}
-          />
-        )}
-
-        {activeTab === "objects" && (
-          <ObjectLibrary
-            objects={project.objects}
-            sprites={project.sprites}
-            onObjectsChange={handleObjectsChange}
-          />
-        )}
-
-        {activeTab === "levels" && (
-          <LevelDesigner
-            levels={project.levels}
-            screens={project.screens}
-            blocks={project.blocks}
-            onLevelsChange={handleLevelsChange}
-          />
-        )}
-
+        {activeTab === "sprites" && <SpriteEditor sprites={project.sprites} onSpritesChange={handleSpritesChange} />}
+        {activeTab === "blocks" && <BlockDesigner sprites={project.sprites} blocks={project.blocks} onBlocksChange={handleBlocksChange} />}
+        {activeTab === "screens" && <ScreenDesigner blocks={project.blocks} screens={project.screens} onScreensChange={handleScreensChange} />}
+        {activeTab === "objects" && <ObjectLibrary objects={project.objects} sprites={project.sprites} onObjectsChange={handleObjectsChange} />}
+        {activeTab === "levels" && <LevelDesigner levels={project.levels} screens={project.screens} blocks={project.blocks} onLevelsChange={handleLevelsChange} />}
         {activeTab === "settings" && (
           <div className="p-8 text-center text-muted-foreground">
             <h2 className="text-2xl font-bold text-primary mb-2">Game Settings</h2>
