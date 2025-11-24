@@ -32,10 +32,10 @@ const ANIMATION_NONE_VALUE = "__none__";
 const GAME_FPS = 12; // Original ZX Spectrum frame rate
 const FRAME_INTERVAL = 1000 / GAME_FPS; // ~83.33ms per frame
 
-// Simple jump trajectory - just Y deltas per frame that sum to zero
+// Jump trajectory for 40px height - Y deltas per frame that sum to zero
 const JUMP_TRAJECTORY = [
-  -3, -3, -2, -2, -2, -1, -1, -1, 0, 0,  // up
-  0, 0, 1, 1, 1, 2, 2, 2, 3, 3           // down - mirrors exactly
+  -4, -4, -4, -3, -3, -3, -2, -2, -2, -2, -1, -1, -1, -1, -1, -1,  // up = -40px
+  1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 4, 4, 4                   // down = +40px
 ];
 
 interface ObjectLibraryProps {
@@ -281,42 +281,42 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
           playerActionRef.current = stoppedAction;
         }
 
-        // Apply jump Y movement using ref
+        // Apply jump Y movement using ref - trajectory completes fully once started
         if (jumping) {
           const currentIdx = jumpFrameIndexRef.current;
           
           if (currentIdx < JUMP_TRAJECTORY.length) {
             newY += JUMP_TRAJECTORY[currentIdx];
             
-            // Advance frame index
-            const nextIdx = currentIdx + 1;
-            jumpFrameIndexRef.current = nextIdx;
-            setJumpFrameIndex(nextIdx);
-            
-            // Check for jump completion
-            if (nextIdx >= JUMP_TRAJECTORY.length) {
+            // Check for ground collision AFTER applying trajectory
+            if (newY >= groundY) {
+              newY = groundY;
               setIsJumping(false);
               isJumpingRef.current = false;
               jumpFrameIndexRef.current = 0;
+              setJumpFrameIndex(0);
               if (!keys.has("left") && !keys.has("right")) {
                 const stoppedAction = facing ? "moveLeft" : "moveRight";
                 setPlayerAction(stoppedAction);
                 playerActionRef.current = stoppedAction;
               }
-            }
-          }
-          
-          // Check for landing
-          if (newY >= groundY) {
-            newY = groundY;
-            setIsJumping(false);
-            isJumpingRef.current = false;
-            jumpFrameIndexRef.current = 0;
-            setJumpFrameIndex(0);
-            if (!keys.has("left") && !keys.has("right")) {
-              const stoppedAction = facing ? "moveLeft" : "moveRight";
-              setPlayerAction(stoppedAction);
-              playerActionRef.current = stoppedAction;
+            } else {
+              // Advance frame index only if we haven't landed
+              const nextIdx = currentIdx + 1;
+              jumpFrameIndexRef.current = nextIdx;
+              setJumpFrameIndex(nextIdx);
+              
+              // Check for jump completion
+              if (nextIdx >= JUMP_TRAJECTORY.length) {
+                setIsJumping(false);
+                isJumpingRef.current = false;
+                jumpFrameIndexRef.current = 0;
+                if (!keys.has("left") && !keys.has("right")) {
+                  const stoppedAction = facing ? "moveLeft" : "moveRight";
+                  setPlayerAction(stoppedAction);
+                  playerActionRef.current = stoppedAction;
+                }
+              }
             }
           }
         }
