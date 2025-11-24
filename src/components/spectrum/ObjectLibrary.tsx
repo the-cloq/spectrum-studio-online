@@ -278,6 +278,7 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
         // Jump trajectory - plays fully once initiated, no interruption
         if (jumping) {
           const idx = jumpFrameIndexRef.current;
+          console.log(`Jump frame ${idx}/${JUMP_TOTAL_FRAMES}, Y delta: ${idx < JUMP_TOTAL_FRAMES ? JUMP_TRAJECTORY[idx] : 4}`);
           
           // Play through predetermined trajectory
           if (idx < JUMP_TOTAL_FRAMES) {
@@ -291,6 +292,7 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
           
           // Land on ground
           if (newY >= groundY) {
+            console.log('Landed on ground');
             newY = groundY;
             setIsJumping(false);
             isJumpingRef.current = false;
