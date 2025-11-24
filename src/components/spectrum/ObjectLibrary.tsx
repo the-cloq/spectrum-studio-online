@@ -28,6 +28,17 @@ const TILE_SIZE = 8;
 
 const ANIMATION_NONE_VALUE = "__none__";
 
+// Manic Miner-style deterministic movement constants
+const GAME_FPS = 12; // Original ZX Spectrum frame rate
+const FRAME_INTERVAL = 1000 / GAME_FPS; // ~83.33ms per frame
+const WALK_PIXELS_PER_FRAME = 2; // Horizontal movement speed
+
+// Predetermined jump trajectory (Y-offset per frame)
+// Negative = upward, Positive = downward
+const JUMP_TRAJECTORY = [
+  -4, -4, -3, -2, -2, -1, -1, 0, 0, 1, 1, 2, 2, 3, 4, 4
+];
+
 interface ObjectLibraryProps {
   objects: GameObject[];
   sprites: Sprite[];
@@ -41,15 +52,15 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
   const [currentFrame, setCurrentFrame] = useState(0);
   const [animFrameIndex, setAnimFrameIndex] = useState(0); // For cycling through animation frames
   const [playerPosition, setPlayerPosition] = useState({ x: 0, y: 0 });
-  const [playerVelocity, setPlayerVelocity] = useState({ x: 0, y: 0 });
   const [playerAction, setPlayerAction] = useState<keyof AnimationSet>("idle");
   const [isJumping, setIsJumping] = useState(false);
+  const [jumpFrameIndex, setJumpFrameIndex] = useState(0); // Current position in jump trajectory
   const [facingLeft, setFacingLeft] = useState(false);
   const [canvasSizeIndex, setCanvasSizeIndex] = useState(DEFAULT_CANVAS_INDEX);
   const [showGrid, setShowGrid] = useState(true);
   const [keysPressed, setKeysPressed] = useState<Set<string>>(new Set());
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const animationFrameRef = useRef<number>(0);
+  const gameLoopIntervalRef = useRef<number | null>(null);
 
   const selectedObject = objects.find(obj => obj.id === selectedObjectId);
 
@@ -180,41 +191,125 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
     );
   };
 
-  // Animation frame cycling - continuous loop when moving
+  // Fixed frame-rate game loop (12fps) - Manic Miner style
   useEffect(() => {
-    if (!selectedObject) return;
+    if (!selectedObject || selectedObject.type !== "player") return;
 
-    // Get the active sprite for current action
-    let spriteId = selectedObject.spriteId;
-    if (selectedObject.animations?.[playerAction]) {
-      spriteId = selectedObject.animations[playerAction] as string;
-    }
+    const canvasSize = CANVAS_SIZES[canvasSizeIndex];
+    const groundY = 0;
 
-    const sprite = sprites.find((s) => s.id === spriteId);
-    if (!sprite || !sprite.frames || sprite.frames.length === 0) return;
+    const gameLoop = () => {
+      setPlayerPosition((prevPos) => {
+        let newX = prevPos.x;
+        let newY = prevPos.y;
 
-    const fps = sprite.animationSpeed || 6;
-    const frameCount = sprite.frames.length;
+        // Horizontal movement - deterministic pixels per frame
+        if (keysPressed.has("left")) {
+          newX -= WALK_PIXELS_PER_FRAME;
+          if (!isJumping) {
+            setPlayerAction("moveLeft");
+            setFacingLeft(true);
+          }
+        } else if (keysPressed.has("right")) {
+          newX += WALK_PIXELS_PER_FRAME;
+          if (!isJumping) {
+            setPlayerAction("moveRight");
+            setFacingLeft(false);
+          }
+        } else if (!isJumping) {
+          // Stopped - maintain facing direction
+          setPlayerAction(facingLeft ? "moveLeft" : "moveRight");
+        }
 
-    // Check if any movement is happening
-    const hasMovementKeys = keysPressed.has("left") || keysPressed.has("right");
-    const isMoving = hasMovementKeys || isJumping;
-    
-    if (!isMoving) {
-      // Don't animate when stopped - stay on current frame
-      return;
-    }
+        // Jump logic - predetermined trajectory
+        if (isJumping) {
+          setJumpFrameIndex((prevIdx) => {
+            const nextIdx = prevIdx + 1;
+            
+            if (nextIdx >= JUMP_TRAJECTORY.length) {
+              // Jump completed
+              setIsJumping(false);
+              if (!keysPressed.has("left") && !keysPressed.has("right")) {
+                setPlayerAction(facingLeft ? "moveLeft" : "moveRight");
+              }
+              return 0;
+            }
 
-    // Continuous animation loop
-    const interval = setInterval(() => {
+            // Apply trajectory offset
+            newY += JUMP_TRAJECTORY[prevIdx];
+            
+            // Check for landing
+            if (newY >= groundY) {
+              newY = groundY;
+              setIsJumping(false);
+              if (!keysPressed.has("left") && !keysPressed.has("right")) {
+                setPlayerAction(facingLeft ? "moveLeft" : "moveRight");
+              }
+              return 0;
+            }
+
+            return nextIdx;
+          });
+        }
+
+        // Clamp position to canvas bounds
+        newX = Math.max(-canvasSize.width / 2 + 16, Math.min(canvasSize.width / 2 - 16, newX));
+        newY = Math.max(-canvasSize.height / 2 + 16, newY);
+
+        return { x: newX, y: newY };
+      });
+
+      // Cycle animation frames - synchronized with game loop
       setAnimFrameIndex((prev) => {
-        if (frameCount <= 1) return 0;
+        if (!selectedObject) return 0;
+
+        let spriteId = selectedObject.spriteId;
+        if (selectedObject.animations?.[playerAction]) {
+          spriteId = selectedObject.animations[playerAction] as string;
+        }
+
+        const sprite = sprites.find((s) => s.id === spriteId);
+        if (!sprite || !sprite.frames || sprite.frames.length === 0) return 0;
+
+        const frameCount = sprite.frames.length;
+        const isMoving = keysPressed.has("left") || keysPressed.has("right") || isJumping;
+
+        if (!isMoving || frameCount <= 1) return prev;
+
         return (prev + 1) % frameCount;
       });
-    }, 1000 / fps);
+    };
 
-    return () => clearInterval(interval);
-  }, [selectedObject, sprites, keysPressed.size, isJumping]); // Only re-run when keys are pressed/released or jump state changes
+    // Initiate jump when jump key is pressed (only if not already jumping)
+    if (keysPressed.has("jump") && !isJumping) {
+      setIsJumping(true);
+      setJumpFrameIndex(0);
+      
+      if (keysPressed.has("left")) {
+        setPlayerAction("jumpLeft");
+      } else if (keysPressed.has("right")) {
+        setPlayerAction("jumpRight");
+      } else {
+        setPlayerAction(facingLeft ? "jumpLeft" : "jumpRight");
+      }
+      
+      // Remove jump key to prevent re-triggering
+      setKeysPressed((prev) => {
+        const next = new Set(prev);
+        next.delete("jump");
+        return next;
+      });
+    }
+
+    // Start fixed frame rate loop
+    gameLoopIntervalRef.current = window.setInterval(gameLoop, FRAME_INTERVAL);
+
+    return () => {
+      if (gameLoopIntervalRef.current !== null) {
+        clearInterval(gameLoopIntervalRef.current);
+      }
+    };
+  }, [selectedObject, keysPressed, isJumping, facingLeft, playerAction, canvasSizeIndex, sprites]);
 
   // Keyboard controls for player testing - remove keyboard repeat delay
   useEffect(() => {
@@ -268,99 +363,6 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
     };
   }, [selectedObject]);
 
-  // Game loop for continuous movement
-  useEffect(() => {
-    if (!selectedObject || selectedObject.type !== "player") return;
-
-    const speed = selectedObject.properties.speed || 5;
-    const jumpHeight = selectedObject.properties.jumpHeight || 20;
-    const jumpDistance = selectedObject.properties.jumpDistance || 2;
-    const canvasSize = CANVAS_SIZES[canvasSizeIndex];
-    
-    // Invert gravity: higher slider = gentler fall (smaller gravity)
-    const rawGravity = selectedObject.properties.gravity || 7;
-    const gravity = (11 - rawGravity) / 10; // 10→0.1, 7→0.4, 1→1.0
-    const groundY = 0;
-
-    const gameLoop = () => {
-      setPlayerVelocity((prev) => {
-        let newVelX = prev.x; // Maintain current horizontal velocity
-        let newVelY = prev.y;
-
-        // Only update horizontal velocity if not jumping (or initiating jump)
-        if (!isJumping) {
-          if (keysPressed.has("left")) {
-            newVelX = -speed;
-            setPlayerAction("moveLeft");
-            setFacingLeft(true);
-          } else if (keysPressed.has("right")) {
-            newVelX = speed;
-            setPlayerAction("moveRight");
-            setFacingLeft(false);
-          } else {
-            // When stopping, maintain the facing direction
-            setPlayerAction(facingLeft ? "moveLeft" : "moveRight");
-            newVelX = 0;
-          }
-        }
-
-        // Initiate jump - lock in horizontal velocity
-        if (keysPressed.has("jump") && !isJumping) {
-          newVelY = -jumpHeight;
-          setIsJumping(true);
-          
-          // Lock horizontal velocity based on current movement
-          if (keysPressed.has("left")) {
-            setPlayerAction("jumpLeft");
-            newVelX = -jumpDistance;
-          } else if (keysPressed.has("right")) {
-            setPlayerAction("jumpRight");
-            newVelX = jumpDistance;
-          } else {
-            // Jump in place - maintain current facing
-            setPlayerAction(facingLeft ? "jumpLeft" : "jumpRight");
-            newVelX = 0;
-          }
-        }
-        // While jumping, maintain locked horizontal velocity (already set in prev.x)
-
-        // Apply gravity
-        if (isJumping) {
-          newVelY += gravity;
-        }
-
-        return { x: newVelX, y: newVelY };
-      });
-
-      setPlayerPosition((prev) => {
-        const newX = Math.max(-canvasSize.width / 2 + 16, Math.min(canvasSize.width / 2 - 16, prev.x + playerVelocity.x));
-        const newY = Math.max(-canvasSize.height / 2 + 16, prev.y + playerVelocity.y);
-
-        // Check if landed
-        if (newY >= groundY && isJumping) {
-          setIsJumping(false);
-          setPlayerVelocity((v) => ({ ...v, y: 0 }));
-          if (!keysPressed.has("left") && !keysPressed.has("right")) {
-            // Maintain facing direction when landing
-            setPlayerAction(facingLeft ? "moveLeft" : "moveRight");
-          }
-          return { x: newX, y: groundY };
-        }
-
-        return { x: newX, y: newY };
-      });
-
-      animationFrameRef.current = requestAnimationFrame(gameLoop);
-    };
-
-    animationFrameRef.current = requestAnimationFrame(gameLoop);
-
-    return () => {
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-      }
-    };
-  }, [selectedObject, keysPressed, playerVelocity, isJumping, canvasSizeIndex]);
 
   // Draw sprite on canvas
   useEffect(() => {
