@@ -61,6 +61,11 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
   const [keysPressed, setKeysPressed] = useState<Set<string>>(new Set());
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const gameLoopIntervalRef = useRef<number | null>(null);
+  
+  // Refs to avoid stale closures in game loop
+  const keysPresssedRef = useRef<Set<string>>(new Set());
+  const isJumpingRef = useRef(false);
+  const playerActionRef = useRef<keyof AnimationSet>("idle");
 
   const selectedObject = objects.find(obj => obj.id === selectedObjectId);
 
@@ -199,38 +204,49 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
     const groundY = 0;
 
     const gameLoop = () => {
+      const keys = keysPresssedRef.current;
+      const jumping = isJumpingRef.current;
+      const currentAction = playerActionRef.current;
+
       setPlayerPosition((prevPos) => {
         let newX = prevPos.x;
         let newY = prevPos.y;
 
         // Horizontal movement - deterministic pixels per frame
-        if (keysPressed.has("left")) {
+        if (keys.has("left")) {
           newX -= WALK_PIXELS_PER_FRAME;
-          if (!isJumping) {
+          if (!jumping) {
             setPlayerAction("moveLeft");
+            playerActionRef.current = "moveLeft";
             setFacingLeft(true);
           }
-        } else if (keysPressed.has("right")) {
+        } else if (keys.has("right")) {
           newX += WALK_PIXELS_PER_FRAME;
-          if (!isJumping) {
+          if (!jumping) {
             setPlayerAction("moveRight");
+            playerActionRef.current = "moveRight";
             setFacingLeft(false);
           }
-        } else if (!isJumping) {
+        } else if (!jumping) {
           // Stopped - maintain facing direction
-          setPlayerAction(facingLeft ? "moveLeft" : "moveRight");
+          const stoppedAction = facingLeft ? "moveLeft" : "moveRight";
+          setPlayerAction(stoppedAction);
+          playerActionRef.current = stoppedAction;
         }
 
         // Jump logic - predetermined trajectory
-        if (isJumping) {
+        if (jumping) {
           setJumpFrameIndex((prevIdx) => {
             const nextIdx = prevIdx + 1;
             
             if (nextIdx >= JUMP_TRAJECTORY.length) {
               // Jump completed
               setIsJumping(false);
-              if (!keysPressed.has("left") && !keysPressed.has("right")) {
-                setPlayerAction(facingLeft ? "moveLeft" : "moveRight");
+              isJumpingRef.current = false;
+              if (!keys.has("left") && !keys.has("right")) {
+                const stoppedAction = facingLeft ? "moveLeft" : "moveRight";
+                setPlayerAction(stoppedAction);
+                playerActionRef.current = stoppedAction;
               }
               return 0;
             }
@@ -242,8 +258,11 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
             if (newY >= groundY) {
               newY = groundY;
               setIsJumping(false);
-              if (!keysPressed.has("left") && !keysPressed.has("right")) {
-                setPlayerAction(facingLeft ? "moveLeft" : "moveRight");
+              isJumpingRef.current = false;
+              if (!keys.has("left") && !keys.has("right")) {
+                const stoppedAction = facingLeft ? "moveLeft" : "moveRight";
+                setPlayerAction(stoppedAction);
+                playerActionRef.current = stoppedAction;
               }
               return 0;
             }
@@ -264,15 +283,15 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
         if (!selectedObject) return 0;
 
         let spriteId = selectedObject.spriteId;
-        if (selectedObject.animations?.[playerAction]) {
-          spriteId = selectedObject.animations[playerAction] as string;
+        if (selectedObject.animations?.[currentAction]) {
+          spriteId = selectedObject.animations[currentAction] as string;
         }
 
         const sprite = sprites.find((s) => s.id === spriteId);
         if (!sprite || !sprite.frames || sprite.frames.length === 0) return 0;
 
         const frameCount = sprite.frames.length;
-        const isMoving = keysPressed.has("left") || keysPressed.has("right") || isJumping;
+        const isMoving = keys.has("left") || keys.has("right") || jumping;
 
         if (!isMoving || frameCount <= 1) return prev;
 
@@ -297,6 +316,7 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
       setKeysPressed((prev) => {
         const next = new Set(prev);
         next.delete("jump");
+        keysPresssedRef.current = next; // Update ref
         return next;
       });
     }
@@ -331,6 +351,7 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
         if (isMoveLeft) next.add("left");
         if (isMoveRight) next.add("right");
         if (isJump) next.add("jump");
+        keysPresssedRef.current = next; // Update ref
         return next;
       });
     };
@@ -350,6 +371,7 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
         if (isMoveLeft) next.delete("left");
         if (isMoveRight) next.delete("right");
         if (isJump) next.delete("jump");
+        keysPresssedRef.current = next; // Update ref
         return next;
       });
     };
