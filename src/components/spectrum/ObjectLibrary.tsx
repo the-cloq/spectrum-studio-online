@@ -216,10 +216,7 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
     const canvasSize = CANVAS_SIZES[canvasSizeIndex];
     const groundY = 0;
 
-    console.log('Game loop starting with properties:', selectedObject.properties);
-
     const gameLoop = () => {
-      // Get current properties from selectedObject (not captured in closure)
       const walkSpeed = selectedObject.properties.speed || 2;
       const keys = keysPresssedRef.current;
       const jumping = isJumpingRef.current;
@@ -244,18 +241,38 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
           playerActionRef.current = jumpAction;
         }
         
-        // Remove jump key to prevent re-triggering
         const nextKeys = new Set(keys);
         nextKeys.delete("jump");
         keysPresssedRef.current = nextKeys;
         setKeysPressed(nextKeys);
       }
 
+      // Update jump frame index first
+      if (jumping) {
+        setJumpFrameIndex((prevIdx) => {
+          const nextIdx = prevIdx + 1;
+          
+          if (nextIdx >= JUMP_TRAJECTORY.length) {
+            setIsJumping(false);
+            isJumpingRef.current = false;
+            if (!keys.has("left") && !keys.has("right")) {
+              const stoppedAction = facing ? "moveLeft" : "moveRight";
+              setPlayerAction(stoppedAction);
+              playerActionRef.current = stoppedAction;
+            }
+            return 0;
+          }
+          
+          return nextIdx;
+        });
+      }
+
+      // Update position
       setPlayerPosition((prevPos) => {
         let newX = prevPos.x;
         let newY = prevPos.y;
 
-        // Horizontal movement - use player's speed property
+        // Horizontal movement
         if (keys.has("left")) {
           newX -= walkSpeed;
           if (!jumping) {
@@ -273,31 +290,17 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
             facingLeftRef.current = false;
           }
         } else if (!jumping) {
-          // Stopped - maintain facing direction
           const stoppedAction = facing ? "moveLeft" : "moveRight";
           setPlayerAction(stoppedAction);
           playerActionRef.current = stoppedAction;
         }
 
-        // Jump logic - apply Y deltas from trajectory
+        // Apply jump Y movement
         if (jumping) {
-          setJumpFrameIndex((prevIdx) => {
-            const nextIdx = prevIdx + 1;
-            
-            if (nextIdx >= JUMP_TRAJECTORY.length) {
-              // Jump completed
-              setIsJumping(false);
-              isJumpingRef.current = false;
-              if (!keys.has("left") && !keys.has("right")) {
-                const stoppedAction = facing ? "moveLeft" : "moveRight";
-                setPlayerAction(stoppedAction);
-                playerActionRef.current = stoppedAction;
-              }
-              return 0;
+          setJumpFrameIndex((currentIdx) => {
+            if (currentIdx > 0 && currentIdx < JUMP_TRAJECTORY.length) {
+              newY += JUMP_TRAJECTORY[currentIdx - 1];
             }
-
-            // Apply Y delta for this frame
-            newY += JUMP_TRAJECTORY[prevIdx];
             
             // Check for landing
             if (newY >= groundY) {
@@ -309,10 +312,9 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
                 setPlayerAction(stoppedAction);
                 playerActionRef.current = stoppedAction;
               }
-              return 0;
             }
-
-            return nextIdx;
+            
+            return currentIdx;
           });
         }
 
