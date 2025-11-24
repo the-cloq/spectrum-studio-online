@@ -7,15 +7,17 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
-import { Trash2, Plus, Copy, Play, Pause, Grid3x3, ZoomIn, ZoomOut } from "lucide-react";
+import { Trash2, Plus, Copy, Grid3x3, ZoomIn, ZoomOut } from "lucide-react";
 import { type GameObject, type ObjectType, type Sprite, type AnimationSet, SPECTRUM_COLORS } from "@/types/spectrum";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
-const PREVIEW_ZOOMS_8 = [64, 96, 128, 160, 192, 224, 256] as const;
-const PREVIEW_ZOOMS_16 = [128, 192, 256, 320, 384, 448, 512] as const;
-const PREVIEW_ZOOM_DEFAULT_INDEX = 2;
-const PREVIEW_ZOOM_MAX_INDEX = PREVIEW_ZOOMS_8.length - 1;
+// Canvas sizes: 512x384 (default) and 256x192 (zoomed out)
+const CANVAS_SIZES = [
+  { width: 256, height: 192 },
+  { width: 512, height: 384 }
+] as const;
+const DEFAULT_CANVAS_INDEX = 1; // Start at 512x384
 const ANIMATION_NONE_VALUE = "__none__";
 
 interface ObjectLibraryProps {
@@ -28,13 +30,18 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
   const [selectedObjectId, setSelectedObjectId] = useState<string | null>(
     objects[0]?.id || null
   );
-  const [isPlaying, setIsPlaying] = useState(true);
   const [currentFrame, setCurrentFrame] = useState(0);
-  const [playerPosition, setPlayerPosition] = useState({ x: 64, y: 64 });
+  const [animFrameIndex, setAnimFrameIndex] = useState(0); // For cycling through animation frames
+  const [playerPosition, setPlayerPosition] = useState({ x: 0, y: 0 });
+  const [playerVelocity, setPlayerVelocity] = useState({ x: 0, y: 0 });
   const [playerAction, setPlayerAction] = useState<keyof AnimationSet>("idle");
-  const [previewZoomIndex, setPreviewZoomIndex] = useState(PREVIEW_ZOOM_DEFAULT_INDEX);
+  const [isJumping, setIsJumping] = useState(false);
+  const [facingLeft, setFacingLeft] = useState(false);
+  const [canvasSizeIndex, setCanvasSizeIndex] = useState(DEFAULT_CANVAS_INDEX);
   const [showGrid, setShowGrid] = useState(true);
+  const [keysPressed, setKeysPressed] = useState<Set<string>>(new Set());
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const animationFrameRef = useRef<number>(0);
 
   const selectedObject = objects.find(obj => obj.id === selectedObjectId);
 
@@ -165,53 +172,55 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
     );
   };
 
-  // Animation frame cycling
+  // Animation frame cycling - cycles through frames 0,1,2,1,0,1,2,1... for walking animation
   useEffect(() => {
-    if (!isPlaying || !selectedObject) return;
+    if (!selectedObject || playerAction === "idle") return;
 
-    const sprite = sprites.find(s => s.id === selectedObject.spriteId);
+    // Get the active sprite for current action
+    let spriteId = selectedObject.spriteId;
+    if (selectedObject.animations?.[playerAction]) {
+      spriteId = selectedObject.animations[playerAction];
+    }
+
+    const sprite = sprites.find(s => s.id === spriteId);
     if (!sprite || !sprite.frames || sprite.frames.length === 0) return;
 
     const fps = sprite.animationSpeed || 6;
     const interval = setInterval(() => {
-      setCurrentFrame(prev => (prev + 1) % sprite.frames.length);
+      setAnimFrameIndex(prev => {
+        // Cycle pattern: 0, 1, 2, 1, 0, 1, 2, 1...
+        if (sprite.frames.length === 1) return 0;
+        if (sprite.frames.length === 2) return (prev + 1) % 2;
+        
+        // For 3+ frames: create ping-pong effect
+        const sequence = [0, 1, 2, 1]; // Frame sequence
+        return (prev + 1) % sequence.length;
+      });
     }, 1000 / fps);
 
     return () => clearInterval(interval);
-  }, [isPlaying, selectedObject, sprites]);
+  }, [selectedObject, sprites, playerAction]);
 
-  // Keyboard controls for player testing
+  // Keyboard controls for player testing - remove keyboard repeat delay
   useEffect(() => {
     if (!selectedObject || selectedObject.type !== "player") return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
       const key = e.key.toLowerCase();
-      const speed = selectedObject.properties.speed || 5;
-
-      switch (key) {
-        case "q":
-          setPlayerPosition(prev => ({ ...prev, x: Math.max(0, prev.x - speed) }));
-          setPlayerAction("moveLeft");
-          break;
-        case "w":
-          setPlayerPosition(prev => ({ ...prev, x: Math.min(200, prev.x + speed) }));
-          setPlayerAction("moveRight");
-          break;
-        case "p":
-          setPlayerPosition(prev => ({ ...prev, y: Math.max(0, prev.y - (selectedObject.properties.jumpHeight || 10)) }));
-          setPlayerAction("jump");
-          setTimeout(() => {
-            setPlayerPosition(prev => ({ ...prev, y: 64 }));
-            setPlayerAction("idle");
-          }, 300);
-          break;
+      if (key === "q" || key === "w" || key === "p") {
+        e.preventDefault();
+        setKeysPressed(prev => new Set(prev).add(key));
       }
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
       const key = e.key.toLowerCase();
-      if (key === "q" || key === "w") {
-        setPlayerAction("idle");
+      if (key === "q" || key === "w" || key === "p") {
+        setKeysPressed(prev => {
+          const next = new Set(prev);
+          next.delete(key);
+          return next;
+        });
       }
     };
 
@@ -223,6 +232,78 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
       window.removeEventListener("keyup", handleKeyUp);
     };
   }, [selectedObject]);
+
+  // Game loop for continuous movement
+  useEffect(() => {
+    if (!selectedObject || selectedObject.type !== "player") return;
+
+    const speed = selectedObject.properties.speed || 5;
+    const jumpHeight = selectedObject.properties.jumpHeight || 10;
+    const canvasSize = CANVAS_SIZES[canvasSizeIndex];
+    const gravity = 1;
+    const groundY = 0;
+
+    const gameLoop = () => {
+      setPlayerVelocity(prev => {
+        let newVelX = 0;
+        let newVelY = prev.y;
+
+        // Horizontal movement
+        if (keysPressed.has("q")) {
+          newVelX = -speed;
+          setPlayerAction("moveLeft");
+          setFacingLeft(true);
+        } else if (keysPressed.has("w")) {
+          newVelX = speed;
+          setPlayerAction("moveRight");
+          setFacingLeft(false);
+        } else if (!isJumping) {
+          setPlayerAction("idle");
+        }
+
+        // Jump
+        if (keysPressed.has("p") && !isJumping) {
+          newVelY = -jumpHeight * 2;
+          setIsJumping(true);
+          setPlayerAction("jump");
+        }
+
+        // Apply gravity
+        if (isJumping) {
+          newVelY += gravity;
+        }
+
+        return { x: newVelX, y: newVelY };
+      });
+
+      setPlayerPosition(prev => {
+        const newX = Math.max(-canvasSize.width / 2 + 16, Math.min(canvasSize.width / 2 - 16, prev.x + playerVelocity.x));
+        const newY = Math.max(-canvasSize.height / 2 + 16, prev.y + playerVelocity.y);
+
+        // Check if landed
+        if (newY >= groundY && isJumping) {
+          setIsJumping(false);
+          setPlayerVelocity(v => ({ ...v, y: 0 }));
+          if (!keysPressed.has("q") && !keysPressed.has("w")) {
+            setPlayerAction("idle");
+          }
+          return { x: newX, y: groundY };
+        }
+
+        return { x: newX, y: newY };
+      });
+
+      animationFrameRef.current = requestAnimationFrame(gameLoop);
+    };
+
+    animationFrameRef.current = requestAnimationFrame(gameLoop);
+
+    return () => {
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+    };
+  }, [selectedObject, keysPressed, playerVelocity, isJumping, canvasSizeIndex]);
 
   // Draw sprite on canvas
   useEffect(() => {
@@ -236,14 +317,26 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
 
     // Get the appropriate sprite based on action
     let spriteId = selectedObject.spriteId;
+    let shouldMirror = false;
+    
     if (selectedObject.type === "player" && selectedObject.animations) {
-      spriteId = selectedObject.animations[playerAction] || selectedObject.spriteId;
+      // Check if we have the animation for current action
+      if (selectedObject.animations[playerAction]) {
+        spriteId = selectedObject.animations[playerAction];
+      } else if (playerAction === "moveRight" && selectedObject.animations.moveLeft) {
+        // Mirror left animation for right movement
+        spriteId = selectedObject.animations.moveLeft;
+        shouldMirror = true;
+      } else {
+        spriteId = selectedObject.spriteId;
+      }
     }
 
     const sprite = sprites.find((s) => s.id === spriteId);
     if (!sprite || !sprite.frames || sprite.frames.length === 0) {
-      canvas.width = 256;
-      canvas.height = 192;
+      const canvasSize = CANVAS_SIZES[canvasSizeIndex];
+      canvas.width = canvasSize.width;
+      canvas.height = canvasSize.height;
       ctx.fillStyle = "#000000";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       ctx.fillStyle = "#666666";
@@ -252,10 +345,15 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
       return;
     }
 
-    const frame = sprite.frames[currentFrame % sprite.frames.length];
+    // Get frame using ping-pong pattern
+    const sequence = sprite.frames.length >= 3 ? [0, 1, 2, 1] : [0, 1];
+    const frameIdx = sequence[animFrameIndex % sequence.length];
+    const frame = sprite.frames[frameIdx];
+    
     if (!frame || !Array.isArray(frame.pixels)) {
-      canvas.width = 256;
-      canvas.height = 192;
+      const canvasSize = CANVAS_SIZES[canvasSizeIndex];
+      canvas.width = canvasSize.width;
+      canvas.height = canvasSize.height;
       ctx.fillStyle = "#000000";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       ctx.fillStyle = "#666666";
@@ -265,60 +363,75 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
     }
 
     const [spriteWidth, spriteHeight] = sprite.size.split("x").map(Number);
-
-    // Choose target preview size in pixels based on sprite size & zoom level
-    let targetSize: number;
-    if (spriteWidth === 8 && spriteHeight === 8) {
-      targetSize = PREVIEW_ZOOMS_8[previewZoomIndex] ?? PREVIEW_ZOOMS_8[PREVIEW_ZOOM_DEFAULT_INDEX];
-    } else if (spriteWidth === 16 && spriteHeight === 16) {
-      targetSize = PREVIEW_ZOOMS_16[previewZoomIndex] ?? PREVIEW_ZOOMS_16[PREVIEW_ZOOM_DEFAULT_INDEX];
-    } else {
-      // Generic fallback: scale sprite proportionally
-      const basePixelSize = 8 + previewZoomIndex * 2;
-      targetSize = spriteWidth * basePixelSize;
-    }
-
-    const pixelSize = targetSize / spriteWidth;
-    const canvasWidth = spriteWidth * pixelSize;
-    const canvasHeight = spriteHeight * pixelSize;
-
-    canvas.width = canvasWidth;
-    canvas.height = canvasHeight;
+    const canvasSize = CANVAS_SIZES[canvasSizeIndex];
+    
+    canvas.width = canvasSize.width;
+    canvas.height = canvasSize.height;
 
     // Clear canvas
     ctx.fillStyle = "#000000";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // Center sprite (player can still move within this area)
-    let startX = (canvasWidth - spriteWidth * pixelSize) / 2;
-    let startY = (canvasHeight - spriteHeight * pixelSize) / 2;
+    // Calculate pixel size to fit sprite in canvas
+    const pixelSize = Math.floor(Math.min(canvasSize.width / (spriteWidth * 2), canvasSize.height / (spriteHeight * 2)));
 
+    // Center sprite in canvas
+    const centerX = canvasSize.width / 2;
+    const centerY = canvasSize.height / 2;
+    
+    let startX = centerX - (spriteWidth * pixelSize) / 2;
+    let startY = centerY - (spriteHeight * pixelSize) / 2;
+
+    // Apply player position offset
     if (selectedObject.type === "player") {
       startX += playerPosition.x;
       startY += playerPosition.y;
     }
 
-    frame.pixels.forEach((row, y) => {
-      if (!row) return;
-      row.forEach((colorIndex, x) => {
-        // Treat 0 as transparent
-        if (colorIndex === 0) return;
-        const color = SPECTRUM_COLORS[colorIndex]?.value || "#FFFFFF";
-        ctx.fillStyle = color;
-        ctx.fillRect(
-          startX + x * pixelSize,
-          startY + y * pixelSize,
-          pixelSize,
-          pixelSize
-        );
+    // Apply horizontal flip if needed
+    if (shouldMirror || (playerAction === "moveRight" && !selectedObject.animations?.moveRight && selectedObject.animations?.moveLeft)) {
+      ctx.save();
+      ctx.translate(startX + (spriteWidth * pixelSize), startY);
+      ctx.scale(-1, 1);
+      
+      frame.pixels.forEach((row, y) => {
+        if (!row) return;
+        row.forEach((colorIndex, x) => {
+          if (colorIndex === 0) return;
+          const color = SPECTRUM_COLORS[colorIndex]?.value || "#FFFFFF";
+          ctx.fillStyle = color;
+          ctx.fillRect(
+            x * pixelSize,
+            y * pixelSize,
+            pixelSize,
+            pixelSize
+          );
+        });
       });
-    });
+      
+      ctx.restore();
+    } else {
+      frame.pixels.forEach((row, y) => {
+        if (!row) return;
+        row.forEach((colorIndex, x) => {
+          if (colorIndex === 0) return;
+          const color = SPECTRUM_COLORS[colorIndex]?.value || "#FFFFFF";
+          ctx.fillStyle = color;
+          ctx.fillRect(
+            startX + x * pixelSize,
+            startY + y * pixelSize,
+            pixelSize,
+            pixelSize
+          );
+        });
+      });
+    }
 
     // Draw grid
     if (showGrid) {
       ctx.strokeStyle = "#333333";
       ctx.lineWidth = 1;
-      const gridSize = pixelSize;
+      const gridSize = 8; // 8x8 grid
       for (let x = 0; x <= canvas.width; x += gridSize) {
         ctx.beginPath();
         ctx.moveTo(x, 0);
@@ -332,7 +445,7 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
         ctx.stroke();
       }
     }
-  }, [selectedObject, sprites, currentFrame, playerPosition, playerAction, previewZoomIndex, showGrid]);
+  }, [selectedObject, sprites, animFrameIndex, playerPosition, playerAction, canvasSizeIndex, showGrid]);
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
@@ -1009,16 +1122,19 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
               <Button
                 size="sm"
                 variant="outline"
-                onClick={() => setPreviewZoomIndex((index) => Math.max(0, index - 1))}
-                disabled={previewZoomIndex <= 0}
+                onClick={() => setCanvasSizeIndex(0)}
+                disabled={canvasSizeIndex === 0}
               >
                 <ZoomOut className="w-4 h-4" />
               </Button>
+              <span className="text-xs text-muted-foreground min-w-[80px] text-center">
+                {CANVAS_SIZES[canvasSizeIndex].width}×{CANVAS_SIZES[canvasSizeIndex].height}
+              </span>
               <Button
                 size="sm"
                 variant="outline"
-                onClick={() => setPreviewZoomIndex((index) => Math.min(PREVIEW_ZOOM_MAX_INDEX, index + 1))}
-                disabled={previewZoomIndex >= PREVIEW_ZOOM_MAX_INDEX}
+                onClick={() => setCanvasSizeIndex(1)}
+                disabled={canvasSizeIndex === 1}
               >
                 <ZoomIn className="w-4 h-4" />
               </Button>
@@ -1041,23 +1157,6 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
                   className="pixelated"
                   style={{ imageRendering: "pixelated" }}
                 />
-              </div>
-
-              <div className="flex items-center justify-between">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setIsPlaying(!isPlaying)}
-                >
-                  {isPlaying ? (
-                    <><Pause className="w-4 h-4 mr-1" /> Pause</>
-                  ) : (
-                    <><Play className="w-4 h-4 mr-1" /> Play</>
-                  )}
-                </Button>
-                <div className="text-xs text-muted-foreground">
-                  Frame: {currentFrame + 1} / {sprites.find(s => s.id === selectedObject.spriteId)?.frames?.length || 1}
-                </div>
               </div>
 
               {selectedObject.type === "player" && (
