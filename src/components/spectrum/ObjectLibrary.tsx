@@ -477,7 +477,13 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
         selectedObject.animations?.moveLeft) ||
       (playerAction === "moveLeft" &&
         !selectedObject.animations?.moveLeft &&
-        selectedObject.animations?.moveRight)
+        selectedObject.animations?.moveRight) ||
+      (playerAction === "jumpRight" &&
+        !selectedObject.animations?.jumpRight &&
+        selectedObject.animations?.jumpLeft) ||
+      (playerAction === "jumpLeft" &&
+        !selectedObject.animations?.jumpLeft &&
+        selectedObject.animations?.jumpRight)
     ) {
       ctx.save();
       ctx.translate(startX + spriteWidth * pixelSize, startY);
