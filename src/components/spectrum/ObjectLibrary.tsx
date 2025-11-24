@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
-import { Trash2, Plus, Copy } from "lucide-react";
+import { Trash2, Plus, Copy, Play, Pause } from "lucide-react";
 import { type GameObject, type ObjectType, type Sprite, type AnimationSet } from "@/types/spectrum";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -22,6 +22,11 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
   const [selectedObjectId, setSelectedObjectId] = useState<string | null>(
     objects[0]?.id || null
   );
+  const [isPlaying, setIsPlaying] = useState(true);
+  const [currentFrame, setCurrentFrame] = useState(0);
+  const [playerPosition, setPlayerPosition] = useState({ x: 64, y: 64 });
+  const [playerAction, setPlayerAction] = useState<keyof AnimationSet>("idle");
+  const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const selectedObject = objects.find(obj => obj.id === selectedObjectId);
 
@@ -146,8 +151,129 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
     );
   };
 
+  // Animation frame cycling
+  useEffect(() => {
+    if (!isPlaying || !selectedObject) return;
+
+    const sprite = sprites.find(s => s.id === selectedObject.spriteId);
+    if (!sprite || !sprite.frames || sprite.frames.length === 0) return;
+
+    const fps = sprite.animationSpeed || 6;
+    const interval = setInterval(() => {
+      setCurrentFrame(prev => (prev + 1) % sprite.frames.length);
+    }, 1000 / fps);
+
+    return () => clearInterval(interval);
+  }, [isPlaying, selectedObject, sprites]);
+
+  // Keyboard controls for player testing
+  useEffect(() => {
+    if (!selectedObject || selectedObject.type !== "player") return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const key = e.key.toLowerCase();
+      const speed = selectedObject.properties.speed || 5;
+
+      switch (key) {
+        case "q":
+          setPlayerPosition(prev => ({ ...prev, x: Math.max(0, prev.x - speed) }));
+          setPlayerAction("moveLeft");
+          break;
+        case "w":
+          setPlayerPosition(prev => ({ ...prev, x: Math.min(200, prev.x + speed) }));
+          setPlayerAction("moveRight");
+          break;
+        case "p":
+          setPlayerPosition(prev => ({ ...prev, y: Math.max(0, prev.y - (selectedObject.properties.jumpHeight || 10)) }));
+          setPlayerAction("jump");
+          setTimeout(() => {
+            setPlayerPosition(prev => ({ ...prev, y: 64 }));
+            setPlayerAction("idle");
+          }, 300);
+          break;
+      }
+    };
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      const key = e.key.toLowerCase();
+      if (key === "q" || key === "w") {
+        setPlayerAction("idle");
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("keyup", handleKeyUp);
+
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keyup", handleKeyUp);
+    };
+  }, [selectedObject]);
+
+  // Draw sprite on canvas
+  useEffect(() => {
+    if (!selectedObject || !canvasRef.current) return;
+
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    // Clear canvas
+    ctx.fillStyle = "#000000";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Get the appropriate sprite based on action
+    let spriteId = selectedObject.spriteId;
+    if (selectedObject.type === "player" && selectedObject.animations) {
+      spriteId = selectedObject.animations[playerAction] || selectedObject.spriteId;
+    }
+
+    const sprite = sprites.find(s => s.id === spriteId);
+    if (!sprite || !sprite.frames || sprite.frames.length === 0) {
+      ctx.fillStyle = "#666666";
+      ctx.font = "12px monospace";
+      ctx.fillText("No animation", 50, 75);
+      return;
+    }
+
+    const frame = sprite.frames[currentFrame % sprite.frames.length];
+    const pixelSize = 4;
+    const startX = selectedObject.type === "player" ? playerPosition.x : 64;
+    const startY = selectedObject.type === "player" ? playerPosition.y : 64;
+
+    frame.pixels.forEach((row, y) => {
+      row.forEach((pixel, x) => {
+        if (pixel === 1) {
+          ctx.fillStyle = "#FFFFFF";
+          ctx.fillRect(
+            startX + x * pixelSize,
+            startY + y * pixelSize,
+            pixelSize,
+            pixelSize
+          );
+        }
+      });
+    });
+
+    // Draw grid
+    ctx.strokeStyle = "#333333";
+    ctx.lineWidth = 0.5;
+    for (let x = 0; x <= canvas.width; x += 8) {
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, canvas.height);
+      ctx.stroke();
+    }
+    for (let y = 0; y <= canvas.height; y += 8) {
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(canvas.width, y);
+      ctx.stroke();
+    }
+  }, [selectedObject, sprites, currentFrame, playerPosition, playerAction]);
+
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+    <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">{/* Changed from grid-cols-3 to grid-cols-4 */}
       {/* Object Library Panel */}
       <Card className="lg:col-span-1">
         <CardHeader>
@@ -804,6 +930,81 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
             <p className="text-center text-muted-foreground py-8">
               Select an object from the library to edit its properties
             </p>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Preview Panel */}
+      <Card className="lg:col-span-1">
+        <CardHeader>
+          <CardTitle>Preview</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {selectedObject ? (
+            <div className="space-y-4">
+              <div className="border-2 border-border rounded bg-black p-2">
+                <canvas
+                  ref={canvasRef}
+                  width={256}
+                  height={192}
+                  className="w-full"
+                  style={{ imageRendering: "pixelated" }}
+                />
+              </div>
+
+              <div className="flex items-center justify-between">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setIsPlaying(!isPlaying)}
+                >
+                  {isPlaying ? (
+                    <><Pause className="w-4 h-4 mr-1" /> Pause</>
+                  ) : (
+                    <><Play className="w-4 h-4 mr-1" /> Play</>
+                  )}
+                </Button>
+                <div className="text-xs text-muted-foreground">
+                  Frame: {currentFrame + 1} / {sprites.find(s => s.id === selectedObject.spriteId)?.frames?.length || 1}
+                </div>
+              </div>
+
+              {selectedObject.type === "player" && (
+                <div className="space-y-2 p-3 border border-border rounded bg-muted/30">
+                  <div className="text-xs font-medium mb-2">Interactive Controls</div>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div className="flex items-center gap-2">
+                      <kbd className="px-2 py-1 bg-background border border-border rounded">Q</kbd>
+                      <span className="text-muted-foreground">Move Left</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <kbd className="px-2 py-1 bg-background border border-border rounded">W</kbd>
+                      <span className="text-muted-foreground">Move Right</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <kbd className="px-2 py-1 bg-background border border-border rounded">P</kbd>
+                      <span className="text-muted-foreground">Jump</span>
+                    </div>
+                  </div>
+                  <div className="text-xs text-muted-foreground pt-2">
+                    Current: {playerAction}
+                  </div>
+                </div>
+              )}
+
+              <div className="text-xs text-muted-foreground space-y-1">
+                <div>Type: <span className="capitalize">{selectedObject.type}</span></div>
+                <div>Sprite: {sprites.find(s => s.id === selectedObject.spriteId)?.name || "Unknown"}</div>
+                {sprites.find(s => s.id === selectedObject.spriteId) && (
+                  <div>FPS: {sprites.find(s => s.id === selectedObject.spriteId)?.animationSpeed || 6}</div>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="text-center text-muted-foreground py-8">
+              <p className="mb-2">No animation created yet</p>
+              <p className="text-xs">Select an object to preview</p>
+            </div>
           )}
         </CardContent>
       </Card>
