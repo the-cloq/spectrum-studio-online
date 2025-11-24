@@ -250,9 +250,12 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
 
     const canvasSize = CANVAS_SIZES[canvasSizeIndex];
     const groundY = 0;
-    const walkSpeed = selectedObject.properties.speed || 2;
+
+    console.log('Game loop starting with properties:', selectedObject.properties);
 
     const gameLoop = () => {
+      // Get current properties from selectedObject (not captured in closure)
+      const walkSpeed = selectedObject.properties.speed || 2;
       const keys = keysPresssedRef.current;
       const jumping = isJumpingRef.current;
       const currentAction = playerActionRef.current;
@@ -381,11 +384,12 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
     gameLoopIntervalRef.current = window.setInterval(gameLoop, FRAME_INTERVAL);
 
     return () => {
+      console.log('Game loop stopping');
       if (gameLoopIntervalRef.current !== null) {
         clearInterval(gameLoopIntervalRef.current);
       }
     };
-  }, [selectedObject, canvasSizeIndex]);
+  }, [selectedObject, canvasSizeIndex, sprites]);
 
   // Keyboard controls for player testing - remove keyboard repeat delay
   useEffect(() => {
