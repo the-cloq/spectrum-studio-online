@@ -134,7 +134,7 @@ const Index = () => {
         
         {activeTab === "sprites" && <SpriteEditor sprites={project.sprites} onSpritesChange={handleSpritesChange} />}
         {activeTab === "blocks" && <BlockDesigner sprites={project.sprites} blocks={project.blocks} onBlocksChange={handleBlocksChange} />}
-        {activeTab === "screens" && <ScreenDesigner blocks={project.blocks} objects={project.objects} screens={project.screens} onScreensChange={handleScreensChange} />}
+        {activeTab === "screens" && <ScreenDesigner blocks={project.blocks} objects={project.objects} sprites={project.sprites} screens={project.screens} onScreensChange={handleScreensChange} />}
         {activeTab === "objects" && <ObjectLibrary objects={project.objects} sprites={project.sprites} onObjectsChange={handleObjectsChange} />}
         {activeTab === "levels" && <LevelDesigner levels={project.levels} screens={project.screens} blocks={project.blocks} onLevelsChange={handleLevelsChange} />}
         {activeTab === "settings" && (
