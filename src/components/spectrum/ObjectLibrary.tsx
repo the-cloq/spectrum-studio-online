@@ -75,7 +75,7 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
   const getDefaultProperties = (type: ObjectType) => {
     switch (type) {
       case "player":
-        return { speed: 5, jumpHeight: 12, jumpDistance: 12, gravity: 5, maxFallDistance: 20 };
+        return { speed: 2, jumpHeight: 12, jumpDistance: 5, gravity: 7, maxFallDistance: 20 };
       case "enemy":
         return { damage: 10, movementPattern: "patrol" as const, respawnDelay: 3000, direction: "right" as const };
       case "ammunition":
@@ -180,7 +180,7 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
     );
   };
 
-  // Animation frame cycling - cycles through frames in a simple loop (only when moving)
+  // Animation frame cycling - cycles through frames continuously when moving
   useEffect(() => {
     if (!selectedObject) return;
 
@@ -197,24 +197,22 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
     const frameCount = sprite.frames.length;
 
     // Only animate when actually moving (not idle)
-    if (playerAction === "idle" || (keysPressed.size === 0 && !isJumping)) {
+    const isMoving = keysPressed.has("left") || keysPressed.has("right") || isJumping;
+    if (playerAction === "idle" && !isMoving) {
       setAnimFrameIndex(0); // Stay on frame 0 when idle
       return;
     }
 
-    // Reset to first frame when action or sprite changes
-    setAnimFrameIndex(0);
-
     const interval = setInterval(() => {
       setAnimFrameIndex((prev) => {
         if (frameCount <= 1) return 0;
-        // Simple loop: 0,1,2,3,0,1,2,3...
+        // Continuous loop: 0,1,2,3,0,1,2,3...
         return (prev + 1) % frameCount;
       });
     }, 1000 / fps);
 
     return () => clearInterval(interval);
-  }, [selectedObject, sprites, playerAction, keysPressed, isJumping]);
+  }, [selectedObject?.id, sprites.length, playerAction === "idle", keysPressed.size > 0, isJumping]);
 
   // Keyboard controls for player testing - remove keyboard repeat delay
   useEffect(() => {
@@ -272,65 +270,69 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
   useEffect(() => {
     if (!selectedObject || selectedObject.type !== "player") return;
 
-    const speed = selectedObject.properties.speed || 5;
-    const jumpHeight = selectedObject.properties.jumpHeight || 20;
-    const jumpDistance = selectedObject.properties.jumpDistance || 2;
+    const speed = selectedObject.properties.speed || 2;
+    const jumpHeight = selectedObject.properties.jumpHeight || 12;
+    const jumpDistance = selectedObject.properties.jumpDistance || 5;
     const canvasSize = CANVAS_SIZES[canvasSizeIndex];
-    const gravity = (selectedObject.properties.gravity || 5) / 10; // Scale gravity from slider (1-10)
+    // Invert gravity: slider 0 = harsh/fast (1.0), slider 10 = gentle/slow (0.1)
+    // Start at 7 means gravity = 0.4 which is moderate
+    const gravity = (11 - (selectedObject.properties.gravity || 7)) / 10;
     const groundY = 0;
+
+    // Store jump velocity for locked trajectory
+    const jumpVelocityRef = useRef({ x: 0, y: 0 });
 
     const gameLoop = () => {
       setPlayerVelocity((prev) => {
-        let newVelX = 0;
+        let newVelX = prev.x;
         let newVelY = prev.y;
 
-        // Horizontal movement
-        if (keysPressed.has("left")) {
-          newVelX = -speed;
-          if (!isJumping) {
+        // Horizontal movement (only when not jumping)
+        if (!isJumping) {
+          if (keysPressed.has("left")) {
+            newVelX = -speed;
             setPlayerAction("moveLeft");
-          }
-          setFacingLeft(true);
-        } else if (keysPressed.has("right")) {
-          newVelX = speed;
-          if (!isJumping) {
+            setFacingLeft(true);
+          } else if (keysPressed.has("right")) {
+            newVelX = speed;
             setPlayerAction("moveRight");
+            setFacingLeft(false);
+          } else {
+            setPlayerAction("idle");
+            newVelX = 0;
           }
-          setFacingLeft(false);
-        } else if (!isJumping) {
-          setPlayerAction("idle");
-          newVelX = 0;
         }
 
-        // Jump with forward velocity
+        // Jump initiation - lock the trajectory
         if (keysPressed.has("jump") && !isJumping) {
           newVelY = -jumpHeight;
           setIsJumping(true);
           
-          // Set jump direction and apply horizontal velocity during jump
+          // Calculate horizontal velocity based on jumpDistance (inverted: 5=max, 30=min)
+          const horizontalSpeed = (31 - jumpDistance) * 0.2; // Invert and scale
+          
+          // Set jump direction and lock horizontal velocity
           if (keysPressed.has("left")) {
             setPlayerAction("jumpLeft");
-            newVelX = -speed; // Use walking speed, not jumpDistance
+            newVelX = -horizontalSpeed;
           } else if (keysPressed.has("right")) {
             setPlayerAction("jumpRight");
-            newVelX = speed; // Use walking speed, not jumpDistance
+            newVelX = horizontalSpeed;
           } else {
             // Jump in place using current facing direction
             setPlayerAction(facingLeft ? "jumpLeft" : "jumpRight");
             newVelX = 0;
           }
-        } else if (isJumping) {
-          // Apply horizontal movement while in air based on jumpDistance
-          if (keysPressed.has("left")) {
-            newVelX = -jumpDistance;
-          } else if (keysPressed.has("right")) {
-            newVelX = jumpDistance;
-          }
+          
+          // Store the locked jump velocity
+          jumpVelocityRef.current = { x: newVelX, y: newVelY };
         }
 
-        // Apply gravity
+        // During jump, maintain locked horizontal velocity and apply gravity
         if (isJumping) {
-          newVelY += gravity;
+          newVelX = jumpVelocityRef.current.x; // Locked trajectory
+          newVelY += gravity; // Apply gravity to vertical velocity
+          jumpVelocityRef.current.y = newVelY; // Update stored vertical velocity
         }
 
         return { x: newVelX, y: newVelY };
@@ -344,8 +346,13 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
         if (newY >= groundY && isJumping) {
           setIsJumping(false);
           setPlayerVelocity((v) => ({ ...v, y: 0 }));
+          jumpVelocityRef.current = { x: 0, y: 0 }; // Reset locked velocity
           if (!keysPressed.has("left") && !keysPressed.has("right")) {
             setPlayerAction("idle");
+          } else if (keysPressed.has("left")) {
+            setPlayerAction("moveLeft");
+          } else if (keysPressed.has("right")) {
+            setPlayerAction("moveRight");
           }
           return { x: newX, y: groundY };
         }
@@ -363,7 +370,7 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
         cancelAnimationFrame(animationFrameRef.current);
       }
     };
-  }, [selectedObject, keysPressed, playerVelocity, isJumping, canvasSizeIndex]);
+  }, [selectedObject, keysPressed, playerVelocity, isJumping, canvasSizeIndex, facingLeft]);
 
   // Draw sprite on canvas
   useEffect(() => {
@@ -919,27 +926,27 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
                     <div className="space-y-2">
                       <Label>Speed: {selectedObject.properties.speed}</Label>
                       <Slider
-                        value={[selectedObject.properties.speed || 5]}
+                        value={[selectedObject.properties.speed || 2]}
                         onValueChange={([value]) => updateProperty("speed", value)}
                         min={1}
-                        max={20}
+                        max={5}
                         step={1}
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label>Jump Height: {selectedObject.properties.jumpHeight}px</Label>
+                      <Label>Jump Height: {selectedObject.properties.jumpHeight}</Label>
                       <Slider
-                        value={[selectedObject.properties.jumpHeight || 20]}
+                        value={[selectedObject.properties.jumpHeight || 12]}
                         onValueChange={([value]) => updateProperty("jumpHeight", value)}
                         min={5}
-                        max={30}
+                        max={14}
                         step={1}
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label>Jump Distance: {selectedObject.properties.jumpDistance}px</Label>
+                      <Label>Jump Distance: {selectedObject.properties.jumpDistance} (lower = longer jump)</Label>
                       <Slider
-                        value={[selectedObject.properties.jumpDistance || 2]}
+                        value={[selectedObject.properties.jumpDistance || 5]}
                         onValueChange={([value]) => updateProperty("jumpDistance", value)}
                         min={5}
                         max={30}
@@ -947,11 +954,11 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label>Gravity: {selectedObject.properties.gravity || 5}</Label>
+                      <Label>Gravity: {selectedObject.properties.gravity || 7} (higher = gentler)</Label>
                       <Slider
-                        value={[selectedObject.properties.gravity || 5]}
+                        value={[selectedObject.properties.gravity || 7]}
                         onValueChange={([value]) => updateProperty("gravity", value)}
-                        min={1}
+                        min={0}
                         max={10}
                         step={1}
                       />
