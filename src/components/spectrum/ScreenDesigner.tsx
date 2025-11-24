@@ -37,6 +37,7 @@ export const ScreenDesigner = ({ blocks, objects, screens, onScreensChange }: Sc
   const [selectedPlacedObject, setSelectedPlacedObject] = useState<PlacedObject | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const [draggedObjectId, setDraggedObjectId] = useState<string | null>(null);
 
   // Load placed objects when screen changes
   useEffect(() => {
@@ -226,13 +227,18 @@ export const ScreenDesigner = ({ blocks, objects, screens, onScreensChange }: Sc
           });
         });
 
-        // Highlight selected object with visible border
+        // Highlight selected object with animated border
         if (selectedPlacedObject?.id === placed.id) {
-          ctx.strokeStyle = "#00FFFF";
-          ctx.lineWidth = 3;
-          ctx.setLineDash([4, 4]);
-          ctx.strokeRect(startX - 1, startY - 1, blockSize + 2, blockSize + 2);
+          ctx.strokeStyle = "#FFD700";
+          ctx.lineWidth = 4;
+          ctx.setLineDash([8, 4]);
+          ctx.strokeRect(startX - 2, startY - 2, blockSize + 4, blockSize + 4);
           ctx.setLineDash([]);
+          
+          // Inner glow
+          ctx.strokeStyle = "rgba(255, 215, 0, 0.3)";
+          ctx.lineWidth = 2;
+          ctx.strokeRect(startX - 4, startY - 4, blockSize + 8, blockSize + 8);
         }
       });
     }
@@ -268,22 +274,8 @@ export const ScreenDesigner = ({ blocks, objects, screens, onScreensChange }: Sc
         return;
       }
 
-      // Place object if one is selected
-      if (selectedObject && !isErasing) {
-        const newPlaced: PlacedObject = {
-          id: `placed-${Date.now()}`,
-          objectId: selectedObject.id,
-          x,
-          y,
-          direction: "right"
-        };
-        const updated = [...placedObjects, newPlaced];
-        setPlacedObjects(updated);
-        setSelectedPlacedObject(newPlaced);
-        updateScreenObjects(updated);
-        toast.success(`Placed ${selectedObject.name}`);
-        return;
-      }
+      // Deselect if clicking empty space
+      setSelectedPlacedObject(null);
 
       // Paint blocks
       if (selectedBlock || isErasing) {
@@ -292,6 +284,42 @@ export const ScreenDesigner = ({ blocks, objects, screens, onScreensChange }: Sc
         updateScreen({ ...selectedScreen, tiles: newTiles });
       }
     }
+  };
+
+  const handleCanvasDrop = (e: React.DragEvent<HTMLCanvasElement>) => {
+    e.preventDefault();
+    if (!selectedScreen || selectedScreen.type !== "game" || !draggedObjectId) return;
+
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const { blockSize } = getGrid();
+
+    const x = Math.floor((e.clientX - rect.left) / blockSize);
+    const y = Math.floor((e.clientY - rect.top) / blockSize);
+
+    const object = objects.find(o => o.id === draggedObjectId);
+    if (!object) return;
+
+    const newPlaced: PlacedObject = {
+      id: `placed-${Date.now()}`,
+      objectId: object.id,
+      x: Math.max(0, Math.min(31, x)),
+      y: Math.max(0, Math.min(23, y)),
+      direction: "right"
+    };
+
+    const updated = [...placedObjects, newPlaced];
+    setPlacedObjects(updated);
+    setSelectedPlacedObject(newPlaced);
+    updateScreenObjects(updated);
+    setDraggedObjectId(null);
+    toast.success(`Placed ${object.name}`);
+  };
+
+  const handleCanvasDragOver = (e: React.DragEvent<HTMLCanvasElement>) => {
+    e.preventDefault();
   };
 
   const updateScreen = (updatedScreen: Screen) => {
@@ -429,6 +457,8 @@ export const ScreenDesigner = ({ blocks, objects, screens, onScreensChange }: Sc
               onMouseMove={handleMouseMove}
               onMouseUp={handleMouseUp}
               onMouseLeave={handleMouseUp}
+              onDrop={handleCanvasDrop}
+              onDragOver={handleCanvasDragOver}
               style={{
                 imageRendering: "pixelated",
                 width: canvasWidth,
@@ -456,31 +486,29 @@ export const ScreenDesigner = ({ blocks, objects, screens, onScreensChange }: Sc
                   const sprite = blocks.find(b => b.id === obj.spriteId)?.sprite;
                   
                   return (
-                    <button
+                    <div
                       key={obj.id}
-                      className={`aspect-square border rounded p-0.5 hover:border-primary
-                        ${selectedObject?.id === obj.id && !isErasing
-                          ? "border-primary retro-glow"
-                          : "border-border"}`}
-                      onClick={() => {
-                        setSelectedObject(obj);
-                        setIsErasing(false);
-                      }}
+                      draggable
+                      onDragStart={() => setDraggedObjectId(obj.id)}
+                      onDragEnd={() => setDraggedObjectId(null)}
+                      className={`aspect-square border rounded p-0.5 hover:border-primary cursor-grab active:cursor-grabbing
+                        ${draggedObjectId === obj.id ? "opacity-50" : ""}
+                        border-border`}
                       title={obj.name}
                     >
                       {sprite?.preview ? (
                         <img
                           src={sprite.preview}
                           alt={obj.name}
-                          className="pixelated w-full h-full"
+                          className="pixelated w-full h-full pointer-events-none"
                           style={{ imageRendering: "pixelated" }}
                         />
                       ) : (
-                        <div className="w-full h-full bg-muted flex items-center justify-center text-xs">
+                        <div className="w-full h-full bg-muted flex items-center justify-center text-xs pointer-events-none">
                           {obj.type[0].toUpperCase()}
                         </div>
                       )}
-                    </button>
+                    </div>
                   );
                 })}
               </div>
