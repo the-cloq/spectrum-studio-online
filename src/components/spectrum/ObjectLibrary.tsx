@@ -224,6 +224,8 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
+    ctx.imageSmoothingEnabled = false;
+
     // Clear canvas
     ctx.fillStyle = "#000000";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -243,21 +245,28 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
     }
 
     const frame = sprite.frames[currentFrame % sprite.frames.length];
-    const pixelSize = 6;
-    const startX = selectedObject.type === "player" ? playerPosition.x : 64;
-    const startY = selectedObject.type === "player" ? playerPosition.y : 64;
+    const [spriteWidth, spriteHeight] = sprite.size.split("x").map(Number);
+    const pixelSize = 8;
+
+    // Center non-player sprites, allow player to move
+    let startX = selectedObject.type === "player"
+      ? playerPosition.x
+      : (canvas.width - spriteWidth * pixelSize) / 2;
+    let startY = selectedObject.type === "player"
+      ? playerPosition.y
+      : (canvas.height - spriteHeight * pixelSize) / 2;
 
     frame.pixels.forEach((row, y) => {
-      row.forEach((pixel, x) => {
-        if (pixel === 1) {
-          ctx.fillStyle = "#FFFFFF";
-          ctx.fillRect(
-            startX + x * pixelSize,
-            startY + y * pixelSize,
-            pixelSize,
-            pixelSize
-          );
-        }
+      row.forEach((colorIndex, x) => {
+        if (!colorIndex) return;
+        const color = SPECTRUM_COLORS[colorIndex]?.value || "#FFFFFF";
+        ctx.fillStyle = color;
+        ctx.fillRect(
+          startX + x * pixelSize,
+          startY + y * pixelSize,
+          pixelSize,
+          pixelSize
+        );
       });
     });
 
@@ -281,7 +290,7 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
   return (
     <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
       {/* Object Library Panel */}
-      <Card className="lg:col-span-1">
+      <Card className="lg:col-span-3">
         <CardHeader>
           <CardTitle>Object Library</CardTitle>
           <div className="pt-2">
@@ -360,7 +369,7 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
       </Card>
 
       {/* Object Editor Panel */}
-      <Card className="lg:col-span-2">
+      <Card className="lg:col-span-1 lg:row-span-2">
         <CardHeader>
           <CardTitle>{selectedObject ? "Edit Object" : "Select an Object"}</CardTitle>
         </CardHeader>
@@ -931,7 +940,7 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
       </Card>
 
       {/* Preview Panel */}
-      <Card className="lg:col-span-1">
+      <Card className="lg:col-span-3 lg:col-start-1">
         <CardHeader>
           <CardTitle>Preview</CardTitle>
         </CardHeader>
