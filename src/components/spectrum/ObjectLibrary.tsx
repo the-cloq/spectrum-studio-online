@@ -347,7 +347,7 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
         clearInterval(gameLoopIntervalRef.current);
       }
     };
-  }, [selectedObject, keysPressed, isJumping, facingLeft, canvasSizeIndex, sprites]);
+  }, [selectedObject, canvasSizeIndex]);
 
   // Keyboard controls for player testing - remove keyboard repeat delay
   useEffect(() => {
