@@ -64,6 +64,7 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
   // Refs to avoid stale closures in game loop
   const keysPresssedRef = useRef<Set<string>>(new Set());
   const isJumpingRef = useRef(false);
+  const jumpFrameIndexRef = useRef(0);
   const playerActionRef = useRef<keyof AnimationSet>("idle");
   const facingLeftRef = useRef(false);
 
@@ -209,6 +210,10 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
     facingLeftRef.current = facingLeft;
   }, [facingLeft]);
 
+  useEffect(() => {
+    jumpFrameIndexRef.current = jumpFrameIndex;
+  }, [jumpFrameIndex]);
+
   // Fixed frame-rate game loop (12fps) - Manic Miner style
   useEffect(() => {
     if (!selectedObject || selectedObject.type !== "player") return;
@@ -228,6 +233,7 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
         setIsJumping(true);
         isJumpingRef.current = true;
         setJumpFrameIndex(0);
+        jumpFrameIndexRef.current = 0;
         
         if (keys.has("left")) {
           setPlayerAction("jumpLeft");
@@ -245,26 +251,6 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
         nextKeys.delete("jump");
         keysPresssedRef.current = nextKeys;
         setKeysPressed(nextKeys);
-      }
-
-      // Update jump frame index first
-      if (jumping) {
-        setJumpFrameIndex((prevIdx) => {
-          const nextIdx = prevIdx + 1;
-          
-          if (nextIdx >= JUMP_TRAJECTORY.length) {
-            setIsJumping(false);
-            isJumpingRef.current = false;
-            if (!keys.has("left") && !keys.has("right")) {
-              const stoppedAction = facing ? "moveLeft" : "moveRight";
-              setPlayerAction(stoppedAction);
-              playerActionRef.current = stoppedAction;
-            }
-            return 0;
-          }
-          
-          return nextIdx;
-        });
       }
 
       // Update position
@@ -295,27 +281,44 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
           playerActionRef.current = stoppedAction;
         }
 
-        // Apply jump Y movement
+        // Apply jump Y movement using ref
         if (jumping) {
-          setJumpFrameIndex((currentIdx) => {
-            if (currentIdx > 0 && currentIdx < JUMP_TRAJECTORY.length) {
-              newY += JUMP_TRAJECTORY[currentIdx - 1];
-            }
+          const currentIdx = jumpFrameIndexRef.current;
+          
+          if (currentIdx < JUMP_TRAJECTORY.length) {
+            newY += JUMP_TRAJECTORY[currentIdx];
             
-            // Check for landing
-            if (newY >= groundY) {
-              newY = groundY;
+            // Advance frame index
+            const nextIdx = currentIdx + 1;
+            jumpFrameIndexRef.current = nextIdx;
+            setJumpFrameIndex(nextIdx);
+            
+            // Check for jump completion
+            if (nextIdx >= JUMP_TRAJECTORY.length) {
               setIsJumping(false);
               isJumpingRef.current = false;
+              jumpFrameIndexRef.current = 0;
               if (!keys.has("left") && !keys.has("right")) {
                 const stoppedAction = facing ? "moveLeft" : "moveRight";
                 setPlayerAction(stoppedAction);
                 playerActionRef.current = stoppedAction;
               }
             }
-            
-            return currentIdx;
-          });
+          }
+          
+          // Check for landing
+          if (newY >= groundY) {
+            newY = groundY;
+            setIsJumping(false);
+            isJumpingRef.current = false;
+            jumpFrameIndexRef.current = 0;
+            setJumpFrameIndex(0);
+            if (!keys.has("left") && !keys.has("right")) {
+              const stoppedAction = facing ? "moveLeft" : "moveRight";
+              setPlayerAction(stoppedAction);
+              playerActionRef.current = stoppedAction;
+            }
+          }
         }
 
         // Clamp position to canvas bounds
