@@ -32,13 +32,13 @@ const ANIMATION_NONE_VALUE = "__none__";
 const GAME_FPS = 12; // Original ZX Spectrum frame rate
 const FRAME_INTERVAL = 1000 / GAME_FPS; // ~83.33ms per frame
 
-// Manic Miner jump: Single lookup table - Y offset per frame
-// Negative = up, Positive = down
+// Manic Miner jump: Full arc if held, cut short if released
 const JUMP_TRAJECTORY = [
   -4, -4, -3, -3, -2, -2, -1, -1, 0, 0,  // Ascent (10 frames, -20px)
   1, 1, 2, 2, 3, 3, 4, 4                  // Descent (8 frames, +20px)
 ];
 const JUMP_TOTAL_FRAMES = JUMP_TRAJECTORY.length;
+const JUMP_PEAK_FRAME = 10; // Frame where ascent ends
 
 interface ObjectLibraryProps {
   objects: GameObject[];
@@ -275,18 +275,22 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
           playerActionRef.current = stoppedAction;
         }
 
-        // Jump trajectory - plays fully once initiated, no interruption
+        // Jump with variable height - release key to fall early
         if (jumping) {
           const idx = jumpFrameIndexRef.current;
-          console.log(`Jump frame ${idx}/${JUMP_TOTAL_FRAMES}, Y delta: ${idx < JUMP_TOTAL_FRAMES ? JUMP_TRAJECTORY[idx] : 4}`);
           
-          // Play through predetermined trajectory
-          if (idx < JUMP_TOTAL_FRAMES) {
+          // If key released during ascent, start falling immediately
+          if (!keys.has("jump") && idx < JUMP_PEAK_FRAME) {
+            console.log(`Jump key released at frame ${idx}, starting fast fall`);
+            // Start falling with increased gravity
+            newY += 3;
+          } else if (idx < JUMP_TOTAL_FRAMES) {
+            // Normal trajectory
             newY += JUMP_TRAJECTORY[idx];
             jumpFrameIndexRef.current = idx + 1;
             setJumpFrameIndex(idx + 1);
           } else {
-            // Past trajectory end - continue falling
+            // Past trajectory - keep falling
             newY += 4;
           }
           
