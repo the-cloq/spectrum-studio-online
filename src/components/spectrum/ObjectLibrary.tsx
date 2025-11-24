@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
-import { Trash2, Plus, Copy, Play, Pause } from "lucide-react";
+import { Trash2, Plus, Copy, Play, Pause, Grid3x3, ZoomIn, ZoomOut } from "lucide-react";
 import { type GameObject, type ObjectType, type Sprite, type AnimationSet, SPECTRUM_COLORS } from "@/types/spectrum";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -26,6 +26,8 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
   const [currentFrame, setCurrentFrame] = useState(0);
   const [playerPosition, setPlayerPosition] = useState({ x: 64, y: 64 });
   const [playerAction, setPlayerAction] = useState<keyof AnimationSet>("idle");
+  const [previewZoom, setPreviewZoom] = useState(2);
+  const [showGrid, setShowGrid] = useState(true);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const selectedObject = objects.find(obj => obj.id === selectedObjectId);
@@ -226,6 +228,11 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
 
     ctx.imageSmoothingEnabled = false;
 
+    const baseWidth = 256;
+    const baseHeight = 192;
+    canvas.width = baseWidth * previewZoom;
+    canvas.height = baseHeight * previewZoom;
+
     // Clear canvas
     ctx.fillStyle = "#000000";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -240,20 +247,20 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
     if (!sprite || !sprite.frames || sprite.frames.length === 0) {
       ctx.fillStyle = "#666666";
       ctx.font = "12px monospace";
-      ctx.fillText("No animation", 50, 75);
+      ctx.fillText("No animation", 50 * previewZoom, 75 * previewZoom);
       return;
     }
 
     const frame = sprite.frames[currentFrame % sprite.frames.length];
     const [spriteWidth, spriteHeight] = sprite.size.split("x").map(Number);
-    const pixelSize = 8;
+    const pixelSize = 8 * previewZoom;
 
     // Center non-player sprites, allow player to move
     let startX = selectedObject.type === "player"
-      ? playerPosition.x
+      ? playerPosition.x * previewZoom
       : (canvas.width - spriteWidth * pixelSize) / 2;
     let startY = selectedObject.type === "player"
-      ? playerPosition.y
+      ? playerPosition.y * previewZoom
       : (canvas.height - spriteHeight * pixelSize) / 2;
 
     frame.pixels.forEach((row, y) => {
@@ -271,21 +278,24 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
     });
 
     // Draw grid
-    ctx.strokeStyle = "#333333";
-    ctx.lineWidth = 0.5;
-    for (let x = 0; x <= canvas.width; x += 8) {
-      ctx.beginPath();
-      ctx.moveTo(x, 0);
-      ctx.lineTo(x, canvas.height);
-      ctx.stroke();
+    if (showGrid) {
+      ctx.strokeStyle = "#333333";
+      ctx.lineWidth = 1;
+      const gridSize = 8 * previewZoom;
+      for (let x = 0; x <= canvas.width; x += gridSize) {
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, canvas.height);
+        ctx.stroke();
+      }
+      for (let y = 0; y <= canvas.height; y += gridSize) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(canvas.width, y);
+        ctx.stroke();
+      }
     }
-    for (let y = 0; y <= canvas.height; y += 8) {
-      ctx.beginPath();
-      ctx.moveTo(0, y);
-      ctx.lineTo(canvas.width, y);
-      ctx.stroke();
-    }
-  }, [selectedObject, sprites, currentFrame, playerPosition, playerAction]);
+  }, [selectedObject, sprites, currentFrame, playerPosition, playerAction, previewZoom, showGrid]);
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
@@ -942,17 +952,42 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
       {/* Preview Panel */}
       <Card className="lg:col-span-3 lg:col-start-1">
         <CardHeader>
-          <CardTitle>Preview</CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle>Preview</CardTitle>
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setPreviewZoom(z => Math.max(1, z - 1))}
+                disabled={previewZoom <= 1}
+              >
+                <ZoomOut className="w-4 h-4" />
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setPreviewZoom(z => Math.min(4, z + 1))}
+                disabled={previewZoom >= 4}
+              >
+                <ZoomIn className="w-4 h-4" />
+              </Button>
+              <Button
+                size="sm"
+                variant={showGrid ? "default" : "outline"}
+                onClick={() => setShowGrid(!showGrid)}
+              >
+                <Grid3x3 className="w-4 h-4" />
+              </Button>
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           {selectedObject ? (
-            <div className="space-y-4">
-              <div className="border-2 border-border rounded bg-black p-2">
+             <div className="space-y-4">
+              <div className="border-2 border-border rounded bg-black p-2 overflow-auto">
                 <canvas
                   ref={canvasRef}
-                  width={256}
-                  height={192}
-                  className="w-full"
+                  className="max-w-full"
                   style={{ imageRendering: "pixelated" }}
                 />
               </div>
