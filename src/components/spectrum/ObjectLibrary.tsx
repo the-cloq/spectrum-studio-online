@@ -32,11 +32,14 @@ const ANIMATION_NONE_VALUE = "__none__";
 const GAME_FPS = 12; // Original ZX Spectrum frame rate
 const FRAME_INTERVAL = 1000 / GAME_FPS; // ~83.33ms per frame
 
-// Jump trajectory for 40px height - Y deltas per frame that sum to zero
-const JUMP_TRAJECTORY = [
-  -4, -4, -4, -3, -3, -3, -2, -2, -2, -2, -1, -1, -1, -1, -1, -1,  // up = -40px
-  1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 4, 4, 4                   // down = +40px
+// Manic Miner-style jump trajectory
+const JUMP_TRAJECTORY_UP = [
+  -4, -4, -4, -3, -3, -3, -2, -2, -2, -2, -1, -1, -1, -1, -1, -1  // up = -40px (16 frames)
 ];
+const JUMP_TRAJECTORY_DOWN = [
+  2, 2, 3, 3, 4, 4, 4, 5, 5  // faster fall = +32px (9 frames) - authentic ZX Spectrum feel
+];
+const ASCENT_FRAMES = JUMP_TRAJECTORY_UP.length;
 
 interface ObjectLibraryProps {
   objects: GameObject[];
@@ -228,7 +231,7 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
       const currentAction = playerActionRef.current;
       const facing = facingLeftRef.current;
 
-      // Check for jump initiation
+      // Check for jump initiation (DON'T remove jump key - track if held)
       if (keys.has("jump") && !jumping) {
         setIsJumping(true);
         isJumpingRef.current = true;
@@ -246,11 +249,6 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
           setPlayerAction(jumpAction);
           playerActionRef.current = jumpAction;
         }
-        
-        const nextKeys = new Set(keys);
-        nextKeys.delete("jump");
-        keysPresssedRef.current = nextKeys;
-        setKeysPressed(nextKeys);
       }
 
       // Update position
@@ -281,43 +279,55 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
           playerActionRef.current = stoppedAction;
         }
 
-        // Apply jump Y movement using ref - trajectory completes fully once started
+        // Manic Miner jump physics: release jump key during ascent = immediate fast fall
         if (jumping) {
           const currentIdx = jumpFrameIndexRef.current;
+          let yDelta = 0;
           
-          if (currentIdx < JUMP_TRAJECTORY.length) {
-            newY += JUMP_TRAJECTORY[currentIdx];
-            
-            // Check for ground collision AFTER applying trajectory
-            if (newY >= groundY) {
-              newY = groundY;
-              setIsJumping(false);
-              isJumpingRef.current = false;
-              jumpFrameIndexRef.current = 0;
-              setJumpFrameIndex(0);
-              if (!keys.has("left") && !keys.has("right")) {
-                const stoppedAction = facing ? "moveLeft" : "moveRight";
-                setPlayerAction(stoppedAction);
-                playerActionRef.current = stoppedAction;
-              }
+          // Check if we're in ascent phase
+          if (currentIdx < ASCENT_FRAMES) {
+            // If jump key released during ascent, skip to fast fall immediately
+            if (!keys.has("jump")) {
+              jumpFrameIndexRef.current = ASCENT_FRAMES; // Skip to descent
+              setJumpFrameIndex(ASCENT_FRAMES);
+              yDelta = JUMP_TRAJECTORY_DOWN[0];
             } else {
-              // Advance frame index only if we haven't landed
-              const nextIdx = currentIdx + 1;
-              jumpFrameIndexRef.current = nextIdx;
-              setJumpFrameIndex(nextIdx);
-              
-              // Check for jump completion
-              if (nextIdx >= JUMP_TRAJECTORY.length) {
-                setIsJumping(false);
-                isJumpingRef.current = false;
-                jumpFrameIndexRef.current = 0;
-                if (!keys.has("left") && !keys.has("right")) {
-                  const stoppedAction = facing ? "moveLeft" : "moveRight";
-                  setPlayerAction(stoppedAction);
-                  playerActionRef.current = stoppedAction;
-                }
-              }
+              // Continue ascending while jump held
+              yDelta = JUMP_TRAJECTORY_UP[currentIdx];
+              jumpFrameIndexRef.current = currentIdx + 1;
+              setJumpFrameIndex(currentIdx + 1);
             }
+          } else {
+            // Descent phase (faster fall)
+            const descentIdx = currentIdx - ASCENT_FRAMES;
+            if (descentIdx < JUMP_TRAJECTORY_DOWN.length) {
+              yDelta = JUMP_TRAJECTORY_DOWN[descentIdx];
+              jumpFrameIndexRef.current = currentIdx + 1;
+              setJumpFrameIndex(currentIdx + 1);
+            }
+          }
+          
+          newY += yDelta;
+          
+          // Check for ground collision
+          if (newY >= groundY) {
+            newY = groundY;
+            setIsJumping(false);
+            isJumpingRef.current = false;
+            jumpFrameIndexRef.current = 0;
+            setJumpFrameIndex(0);
+            if (!keys.has("left") && !keys.has("right")) {
+              const stoppedAction = facing ? "moveLeft" : "moveRight";
+              setPlayerAction(stoppedAction);
+              playerActionRef.current = stoppedAction;
+            }
+          }
+          
+          // Check if jump trajectory is complete
+          const totalFrames = ASCENT_FRAMES + JUMP_TRAJECTORY_DOWN.length;
+          if (currentIdx >= totalFrames - 1 && newY < groundY) {
+            // Continue falling if not on ground
+            newY += JUMP_TRAJECTORY_DOWN[JUMP_TRAJECTORY_DOWN.length - 1];
           }
         }
 
