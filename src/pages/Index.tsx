@@ -9,7 +9,6 @@ import { ObjectLibrary } from "@/components/spectrum/ObjectLibrary";
 import { LevelDesigner } from "@/components/spectrum/LevelDesigner";
 import { exportGameToTAP, downloadTAPFile } from "@/lib/tapExport";
 import { toast } from "sonner";
-import { supabase } from "@/supabase";
 
 const STORAGE_KEY = "zx-spectrum-project";
 
@@ -98,38 +97,12 @@ const Index = () => {
     }
   };
 
-  // Combined local + Supabase save
-  const handleSave = async () => {
-    try {
-      // LocalStorage save
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(project));
-      toast.success("Project saved locally!");
-
-      // Supabase upsert
-      const { data, error } = await supabase
-        .from("projects")
-        .upsert([{
-          id: project.id,
-          name: project.name,
-          data: project
-        }])
-        .select();
-
-      if (error) {
-        console.error("Supabase save error:", error);
-        toast.error("Failed to save project to Supabase");
-      } else {
-        toast.success("Project saved to Supabase!");
-        if (data?.[0]?.id) setProject({ ...project, id: data[0].id });
-      }
-    } catch (err) {
-      console.error(err);
-      toast.error("Unexpected error saving project");
-    }
+  const handleSave = () => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(project));
+    toast.success("Project saved!");
   };
 
-  const handleLoad = async () => {
-    // Load from localStorage first
+  const handleLoad = () => {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
       try {
@@ -140,28 +113,10 @@ const Index = () => {
           levels: loaded.levels ?? [],
         };
         setProject(loadedWithDefaults);
-        toast.success("Project loaded from localStorage!");
+        toast.success("Project loaded!");
       } catch (e) {
-        toast.error("Failed to load project from localStorage");
+        toast.error("Failed to load project");
       }
-    }
-
-    // Optionally, load from Supabase
-    try {
-      const { data, error } = await supabase
-        .from("projects")
-        .select("*")
-        .eq("id", project.id)
-        .single();
-
-      if (error) {
-        console.error("Supabase load error:", error);
-      } else if (data?.data) {
-        setProject(data.data);
-        toast.success("Project loaded from Supabase!");
-      }
-    } catch (err) {
-      console.error("Unexpected error loading from Supabase", err);
     }
   };
 
