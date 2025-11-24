@@ -32,14 +32,13 @@ const ANIMATION_NONE_VALUE = "__none__";
 const GAME_FPS = 12; // Original ZX Spectrum frame rate
 const FRAME_INTERVAL = 1000 / GAME_FPS; // ~83.33ms per frame
 
-// Manic Miner-style jump trajectory
-const JUMP_TRAJECTORY_UP = [
-  -4, -4, -4, -3, -3, -3, -2, -2, -2, -2, -1, -1, -1, -1, -1, -1  // up = -40px (16 frames)
+// Manic Miner jump: Single lookup table - Y offset per frame
+// Negative = up, Positive = down
+const JUMP_TRAJECTORY = [
+  -4, -4, -3, -3, -2, -2, -1, -1, 0, 0,  // Ascent (10 frames, -20px)
+  1, 1, 2, 2, 3, 3, 4, 4                  // Descent (8 frames, +20px)
 ];
-const JUMP_TRAJECTORY_DOWN = [
-  1, 1, 2, 2, 3, 3, 4, 4, 5, 5  // faster fall = +40px (10 frames) - smooth and fast
-];
-const ASCENT_FRAMES = JUMP_TRAJECTORY_UP.length;
+const JUMP_TOTAL_FRAMES = JUMP_TRAJECTORY.length;
 
 interface ObjectLibraryProps {
   objects: GameObject[];
@@ -231,23 +230,20 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
       const currentAction = playerActionRef.current;
       const facing = facingLeftRef.current;
 
-      // Check for jump initiation
+      // Start jump when space/up pressed and not already jumping
       if (keys.has("jump") && !jumping) {
         setIsJumping(true);
         isJumpingRef.current = true;
         setJumpFrameIndex(0);
         jumpFrameIndexRef.current = 0;
         
-        if (keys.has("left")) {
+        // Set jump animation based on current direction
+        if (facing) {
           setPlayerAction("jumpLeft");
           playerActionRef.current = "jumpLeft";
-        } else if (keys.has("right")) {
+        } else {
           setPlayerAction("jumpRight");
           playerActionRef.current = "jumpRight";
-        } else {
-          const jumpAction = facing ? "jumpLeft" : "jumpRight";
-          setPlayerAction(jumpAction);
-          playerActionRef.current = jumpAction;
         }
       }
 
@@ -256,7 +252,7 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
         let newX = prevPos.x;
         let newY = prevPos.y;
 
-        // Horizontal movement
+        // Horizontal movement - works independently during jump
         if (keys.has("left")) {
           newX -= walkSpeed;
           if (!jumping) {
@@ -274,52 +270,38 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
             facingLeftRef.current = false;
           }
         } else if (!jumping) {
+          // Not moving - keep facing direction, freeze animation
           const stoppedAction = facing ? "moveLeft" : "moveRight";
           setPlayerAction(stoppedAction);
           playerActionRef.current = stoppedAction;
         }
 
-        // Manic Miner jump: hold key for full arc, release to fall faster
+        // Jump - play through trajectory table
         if (jumping) {
-          const currentIdx = jumpFrameIndexRef.current;
-          let yDelta = 0;
+          const idx = jumpFrameIndexRef.current;
           
-          // Check if in ascent phase
-          if (currentIdx < ASCENT_FRAMES) {
-            // If jump key released during ascent, skip to descent immediately
-            if (!keys.has("jump")) {
-              // Switch to descent phase
-              yDelta = JUMP_TRAJECTORY_DOWN[0];  // Start falling with first descent value
-              jumpFrameIndexRef.current = ASCENT_FRAMES;  // Move to descent
-              setJumpFrameIndex(ASCENT_FRAMES);
-            } else {
-              // Continue ascending while jump held
-              yDelta = JUMP_TRAJECTORY_UP[currentIdx];
-              jumpFrameIndexRef.current = currentIdx + 1;
-              setJumpFrameIndex(currentIdx + 1);
-            }
+          if (idx < JUMP_TOTAL_FRAMES) {
+            // Apply Y offset from lookup table
+            const yDelta = JUMP_TRAJECTORY[idx];
+            newY += yDelta;
+            
+            // Advance to next frame
+            jumpFrameIndexRef.current = idx + 1;
+            setJumpFrameIndex(idx + 1);
           } else {
-            // Descent phase - falling
-            const descentIdx = currentIdx - ASCENT_FRAMES;
-            if (descentIdx < JUMP_TRAJECTORY_DOWN.length) {
-              yDelta = JUMP_TRAJECTORY_DOWN[descentIdx];
-              jumpFrameIndexRef.current = currentIdx + 1;
-              setJumpFrameIndex(currentIdx + 1);
-            } else {
-              // Keep falling at terminal velocity
-              yDelta = JUMP_TRAJECTORY_DOWN[JUMP_TRAJECTORY_DOWN.length - 1];
-            }
+            // Jump complete - keep falling
+            newY += 4; // Terminal fall speed
           }
           
-          newY += yDelta;
-          
-          // Ground collision check
+          // Ground collision
           if (newY >= groundY) {
             newY = groundY;
             setIsJumping(false);
             isJumpingRef.current = false;
             jumpFrameIndexRef.current = 0;
             setJumpFrameIndex(0);
+            
+            // Return to walk/idle animation
             if (!keys.has("left") && !keys.has("right")) {
               const stoppedAction = facing ? "moveLeft" : "moveRight";
               setPlayerAction(stoppedAction);
