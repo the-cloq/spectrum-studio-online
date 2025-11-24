@@ -5,15 +5,24 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ColorPalette } from "@/components/spectrum/ColorPalette";
-import { SPECTRUM_COLORS, type SpectrumColor, type Screen, type Block } from "@/types/spectrum";
-import { Plus, Trash2, Eraser, ZoomIn, ZoomOut } from "lucide-react";
+import { SPECTRUM_COLORS, type SpectrumColor, type Screen, type Block, type GameObject } from "@/types/spectrum";
+import { Plus, Trash2, Eraser, ZoomIn, ZoomOut, FlipHorizontal, Move } from "lucide-react";
 import { toast } from "sonner";
 
 interface ScreenDesignerProps {
   blocks: Block[];
+  objects: GameObject[];
   screens: Screen[];
   onScreensChange: (screens: Screen[]) => void;
 }
+
+type PlacedObject = {
+  id: string;
+  objectId: string;
+  x: number;
+  y: number;
+  direction: "left" | "right";
+};
 
 const BASE_WIDTH = 256;
 const BASE_HEIGHT = 192;
@@ -21,16 +30,21 @@ const BASE_HEIGHT = 192;
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 3;
 
-export const ScreenDesigner = ({ blocks, screens, onScreensChange }: ScreenDesignerProps) => {
+export const ScreenDesigner = ({ blocks, objects, screens, onScreensChange }: ScreenDesignerProps) => {
 
   const [selectedScreen, setSelectedScreen] = useState<Screen | null>(screens[0] || null);
   const [selectedBlock, setSelectedBlock] = useState<Block | null>(null);
+  const [selectedObject, setSelectedObject] = useState<GameObject | null>(null);
   const [selectedColor, setSelectedColor] = useState<SpectrumColor>(SPECTRUM_COLORS[0]);
   const [isDrawing, setIsDrawing] = useState(false);
   const [isErasing, setIsErasing] = useState(false);
   const [newScreenName, setNewScreenName] = useState("");
   const [newScreenType, setNewScreenType] = useState<Screen["type"] | "">("");
-  const [zoom, setZoom] = useState(2); // DEFAULT = 512x384
+  const [zoom, setZoom] = useState(2);
+  const [placedObjects, setPlacedObjects] = useState<PlacedObject[]>([]);
+  const [selectedPlacedObject, setSelectedPlacedObject] = useState<PlacedObject | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -59,7 +73,41 @@ export const ScreenDesigner = ({ blocks, screens, onScreensChange }: ScreenDesig
 
   useEffect(() => {
     drawScreen();
-  }, [selectedScreen, selectedBlock, selectedColor, isErasing, zoom]);
+  }, [selectedScreen, selectedBlock, selectedColor, isErasing, zoom, placedObjects, selectedPlacedObject]);
+
+  // Arrow key navigation for selected object
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!selectedPlacedObject || !selectedScreen || selectedScreen.type !== "game") return;
+
+      let moved = false;
+      const newPlaced = { ...selectedPlacedObject };
+
+      if (e.key === "ArrowLeft") {
+        newPlaced.x = Math.max(0, newPlaced.x - 1);
+        moved = true;
+      } else if (e.key === "ArrowRight") {
+        newPlaced.x = Math.min(31, newPlaced.x + 1);
+        moved = true;
+      } else if (e.key === "ArrowUp") {
+        newPlaced.y = Math.max(0, newPlaced.y - 1);
+        moved = true;
+      } else if (e.key === "ArrowDown") {
+        newPlaced.y = Math.min(23, newPlaced.y + 1);
+        moved = true;
+      }
+
+      if (moved) {
+        e.preventDefault();
+        const updated = placedObjects.map(obj => obj.id === newPlaced.id ? newPlaced : obj);
+        setPlacedObjects(updated);
+        setSelectedPlacedObject(newPlaced);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [selectedPlacedObject, placedObjects, selectedScreen]);
 
   const drawScreen = () => {
     if (!selectedScreen) return;
@@ -145,6 +193,47 @@ export const ScreenDesigner = ({ blocks, screens, onScreensChange }: ScreenDesig
           });
         }
       }
+
+      // Draw placed objects
+      placedObjects.forEach(placed => {
+        const obj = objects.find(o => o.id === placed.objectId);
+        if (!obj) return;
+
+        const sprite = blocks.find(b => b.id === obj.spriteId)?.sprite;
+        if (!sprite?.frames?.[0]?.pixels) return;
+
+        const pixelScale = blockSize / 8;
+        const startX = placed.x * blockSize;
+        const startY = placed.y * blockSize;
+
+        sprite.frames[0].pixels.forEach((row, py) => {
+          row.forEach((colorIndex, px) => {
+            if (!colorIndex) return;
+
+            const col = SPECTRUM_COLORS[colorIndex]?.value || "#000";
+            ctx.fillStyle = col;
+            
+            // Flip horizontally if direction is left
+            const drawX = placed.direction === "left" 
+              ? startX + (7 - px) * pixelScale 
+              : startX + px * pixelScale;
+            
+            ctx.fillRect(
+              drawX,
+              startY + py * pixelScale,
+              pixelScale,
+              pixelScale
+            );
+          });
+        });
+
+        // Highlight selected object
+        if (selectedPlacedObject?.id === placed.id) {
+          ctx.strokeStyle = "#FFFF00";
+          ctx.lineWidth = 2;
+          ctx.strokeRect(startX, startY, blockSize, blockSize);
+        }
+      });
     }
   };
 
@@ -163,17 +252,42 @@ export const ScreenDesigner = ({ blocks, screens, onScreensChange }: ScreenDesig
     if (selectedScreen.type === "title") {
       const newPixels = selectedScreen.pixels?.map(row => [...row]) || [];
       newPixels[y][x] = isErasing
-        ? SPECTRUM_COLORS[0] // Black
+        ? SPECTRUM_COLORS[0]
         : selectedColor;
 
       updateScreen({ ...selectedScreen, pixels: newPixels });
-    } else {
-      if (!selectedBlock) return;
+    } else if (selectedScreen.type === "game") {
+      // Check if clicked on existing object
+      const clickedObject = placedObjects.find(obj => obj.x === x && obj.y === y);
+      
+      if (clickedObject) {
+        setSelectedPlacedObject(clickedObject);
+        setIsDragging(true);
+        setDragOffset({ x: 0, y: 0 });
+        return;
+      }
 
-      const newTiles = selectedScreen.tiles.map(row => [...row]);
-      newTiles[y][x] = isErasing ? "" : selectedBlock.id;
+      // Place object if one is selected
+      if (selectedObject && !isErasing) {
+        const newPlaced: PlacedObject = {
+          id: `placed-${Date.now()}`,
+          objectId: selectedObject.id,
+          x,
+          y,
+          direction: "right"
+        };
+        setPlacedObjects([...placedObjects, newPlaced]);
+        setSelectedPlacedObject(newPlaced);
+        toast.success(`Placed ${selectedObject.name}`);
+        return;
+      }
 
-      updateScreen({ ...selectedScreen, tiles: newTiles });
+      // Paint blocks
+      if (selectedBlock || isErasing) {
+        const newTiles = selectedScreen.tiles.map(row => [...row]);
+        newTiles[y][x] = isErasing ? "" : selectedBlock?.id || "";
+        updateScreen({ ...selectedScreen, tiles: newTiles });
+      }
     }
   };
 
@@ -188,10 +302,38 @@ export const ScreenDesigner = ({ blocks, screens, onScreensChange }: ScreenDesig
   };
 
   const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (isDrawing) handleCanvasClick(e);
+    if (!selectedScreen || selectedScreen.type !== "game") {
+      if (isDrawing) handleCanvasClick(e);
+      return;
+    }
+
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const { blockSize } = getGrid();
+
+    const x = Math.floor((e.clientX - rect.left) / blockSize);
+    const y = Math.floor((e.clientY - rect.top) / blockSize);
+
+    if (isDragging && selectedPlacedObject) {
+      const updated = placedObjects.map(obj => 
+        obj.id === selectedPlacedObject.id 
+          ? { ...obj, x: Math.max(0, Math.min(31, x)), y: Math.max(0, Math.min(23, y)) }
+          : obj
+      );
+      setPlacedObjects(updated);
+      const newPos = updated.find(o => o.id === selectedPlacedObject.id);
+      if (newPos) setSelectedPlacedObject(newPos);
+    } else if (isDrawing) {
+      handleCanvasClick(e);
+    }
   };
 
-  const handleMouseUp = () => setIsDrawing(false);
+  const handleMouseUp = () => {
+    setIsDrawing(false);
+    setIsDragging(false);
+  };
 
   const handleCreateScreen = () => {
     if (!newScreenName || !newScreenType) return;
@@ -218,6 +360,25 @@ export const ScreenDesigner = ({ blocks, screens, onScreensChange }: ScreenDesig
     setNewScreenType("");
 
     toast.success("New screen created!");
+  };
+
+  const handleFlipObject = () => {
+    if (!selectedPlacedObject) return;
+    const updated = placedObjects.map(obj =>
+      obj.id === selectedPlacedObject.id
+        ? { ...obj, direction: obj.direction === "left" ? "right" : "left" as "left" | "right" }
+        : obj
+    );
+    setPlacedObjects(updated);
+    const flipped = updated.find(o => o.id === selectedPlacedObject.id);
+    if (flipped) setSelectedPlacedObject(flipped);
+  };
+
+  const handleDeleteObject = () => {
+    if (!selectedPlacedObject) return;
+    setPlacedObjects(placedObjects.filter(obj => obj.id !== selectedPlacedObject.id));
+    setSelectedPlacedObject(null);
+    toast.success("Object deleted");
   };
 
   return (
@@ -270,22 +431,59 @@ export const ScreenDesigner = ({ blocks, screens, onScreensChange }: ScreenDesig
           </Card>
         )}
 
-        { /* BLOCK PALETTE */ } 
-          {selectedScreen?.type === "game" && (
+        {/* GAME SCREEN ASSETS */}
+        {selectedScreen?.type === "game" && (
+          <>
+            {/* OBJECTS */}
+            <Card className="p-4">
+              <h3 className="text-sm font-bold mb-2">Objects (Drag to Place)</h3>
+              <div className="grid grid-cols-8 md:grid-cols-12 gap-3">
+                {objects.map(obj => {
+                  const sprite = blocks.find(b => b.id === obj.spriteId)?.sprite;
+                  
+                  return (
+                    <button
+                      key={obj.id}
+                      className={`aspect-square border rounded p-0.5 hover:border-primary
+                        ${selectedObject?.id === obj.id && !isErasing
+                          ? "border-primary retro-glow"
+                          : "border-border"}`}
+                      onClick={() => {
+                        setSelectedObject(obj);
+                        setIsErasing(false);
+                      }}
+                      title={obj.name}
+                    >
+                      {sprite?.preview ? (
+                        <img
+                          src={sprite.preview}
+                          alt={obj.name}
+                          className="pixelated w-full h-full"
+                          style={{ imageRendering: "pixelated" }}
+                        />
+                      ) : (
+                        <div className="w-full h-full bg-muted flex items-center justify-center text-xs">
+                          {obj.type[0].toUpperCase()}
+                        </div>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </Card>
+
+            {/* BLOCKS */}
             <Card className="p-4">
               <h3 className="text-sm font-bold mb-2">Blocks</h3>
-          
               <div className="grid grid-cols-8 md:grid-cols-12 xl:grid-cols-[repeat(16,minmax(0,1fr))] gap-3">
                 {blocks.map(block => {
-          
-                  // Generate preview canvas if not available
                   if (!block.sprite?.preview && block.sprite?.frames?.[0]?.pixels) {
                     const canvas = document.createElement("canvas");
                     const size = 32;
                     canvas.width = size;
                     canvas.height = size;
                     const ctx = canvas.getContext("2d");
-          
+
                     if (ctx && block.sprite.frames[0]?.pixels) {
                       const pixelSize = size / block.sprite.frames[0].pixels.length;
                       block.sprite.frames[0].pixels.forEach((row, y) => {
@@ -301,11 +499,11 @@ export const ScreenDesigner = ({ blocks, screens, onScreensChange }: ScreenDesig
                           }
                         });
                       });
-          
+
                       block.sprite.preview = canvas.toDataURL();
                     }
                   }
-          
+
                   return (
                     <button
                       key={block.id}
@@ -313,9 +511,9 @@ export const ScreenDesigner = ({ blocks, screens, onScreensChange }: ScreenDesig
                         ${selectedBlock?.id === block.id && !isErasing
                           ? "border-primary retro-glow"
                           : "border-border"}`}
-                      onClick={() => { 
-                        setSelectedBlock(block); 
-                        setIsErasing(false); 
+                      onClick={() => {
+                        setSelectedBlock(block);
+                        setIsErasing(false);
                       }}
                     >
                       {block.sprite?.preview ? (
@@ -333,11 +531,48 @@ export const ScreenDesigner = ({ blocks, screens, onScreensChange }: ScreenDesig
                 })}
               </div>
             </Card>
-          )}
+          </>
+        )}
       </div>
 
-         {/* RIGHT SIDEBAR */}
+      {/* RIGHT SIDEBAR */}
       <div className="space-y-4">
+
+        {/* EDIT PANEL - Selected Object */}
+        {selectedPlacedObject && selectedScreen?.type === "game" && (
+          <Card className="p-4 space-y-3">
+            <h3 className="text-sm font-bold text-primary mb-2">Edit Object</h3>
+            
+            <div className="space-y-2">
+              <Label>Position</Label>
+              <div className="text-sm text-muted-foreground">
+                X: {selectedPlacedObject.x}, Y: {selectedPlacedObject.y}
+              </div>
+              <div className="text-xs text-muted-foreground">Use arrow keys to nudge</div>
+            </div>
+
+            <div className="flex gap-2">
+              <Button 
+                size="sm" 
+                variant="outline" 
+                className="flex-1"
+                onClick={handleFlipObject}
+              >
+                <FlipHorizontal className="w-4 h-4 mr-1" />
+                Flip
+              </Button>
+              <Button 
+                size="sm" 
+                variant="destructive" 
+                className="flex-1"
+                onClick={handleDeleteObject}
+              >
+                <Trash2 className="w-4 h-4 mr-1" />
+                Delete
+              </Button>
+            </div>
+          </Card>
+        )}
 
         <Card className="p-4 space-y-2">
           <Label>Screen Name</Label>
