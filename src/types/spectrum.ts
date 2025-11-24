@@ -9,9 +9,11 @@ export type SpectrumColor = {
 
 export type SpriteSize = "8x8" | "16x16" | "24x12" | "32x16";
 
-export type ObjectType = "player" | "enemy" | "collectible" | "static";
+export type ObjectType = "player" | "enemy" | "ammunition" | "collectable" | "door" | "exit" | "moving-platform";
 
-export type BlockType = 
+export type MovingPlatformType = "horizontal" | "vertical" | "elevator" | "rope";
+
+export type BlockType =
   | "empty"
   | "solid"
   | "deadly"
@@ -35,32 +37,63 @@ export type Sprite = {
   preview?: string; // Base64 data URL for preview
 };
 
+export type AnimationSet = {
+  moveLeft?: string; // sprite ID
+  moveRight?: string;
+  moveUp?: string;
+  moveDown?: string;
+  idle?: string;
+  jump?: string;
+  fire?: string;
+};
+
 export type GameObject = {
   id: string;
   name: string;
   type: ObjectType;
-  spriteId: string; // References a sprite instead of embedding it
+  spriteId: string; // Primary sprite reference
+  animations?: AnimationSet; // Directional animations
   properties: {
     // Player properties
     speed?: number;
     jumpHeight?: number;
     maxEnergy?: number;
+    maxFallDistance?: number;
     
     // Enemy properties
     damage?: number;
     movementPattern?: "stationary" | "patrol" | "chase" | "fly";
-    patrolDistance?: number;
-    patrolSpeed?: number;
+    respawnDelay?: number;
+    direction?: "left" | "right" | "up" | "down";
     
-    // Collectible properties
+    // Ammunition properties
+    projectileSpeed?: number;
+    projectileDamage?: number;
+    projectileRange?: number;
+    
+    // Collectable properties
     points?: number;
     energyBonus?: number;
     itemType?: "coin" | "key" | "powerup" | "life";
+    oneTime?: boolean;
     
-    // Static properties
-    blocking?: boolean;
-    deadly?: boolean;
-    interactable?: boolean;
+    // Door properties
+    targetRoom?: string;
+    targetFloor?: number;
+    
+    // Exit properties
+    targetLevel?: string;
+    activationConditions?: string;
+    
+    // Moving Platform properties
+    platformType?: MovingPlatformType;
+    platformSpeed?: number; // 1-8 pixels per frame
+    platformRange?: number; // 1-16 blocks
+    pauseAtEnds?: number; // 0-2000 ms
+    startDirection?: "left" | "right" | "up" | "down";
+    repeatType?: "ping-pong" | "loop";
+    playerCarry?: boolean;
+    elevatorStops?: number[]; // For elevator type
   };
 };
 
