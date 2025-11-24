@@ -18,6 +18,14 @@ const CANVAS_SIZES = [
   { width: 512, height: 384 }
 ] as const;
 const DEFAULT_CANVAS_INDEX = 1; // Start at 512x384
+
+// Logical game grid: 32×24 tiles of 8×8 pixels = 256×192 game space
+const WORLD_WIDTH = 256;
+const WORLD_HEIGHT = 192;
+const GRID_COLS = 32;
+const GRID_ROWS = 24;
+const TILE_SIZE = 8;
+
 const ANIMATION_NONE_VALUE = "__none__";
 
 interface ObjectLibraryProps {
@@ -172,29 +180,40 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
     );
   };
 
-  // Animation frame cycling - cycles through frames 0,1,2,1,0,1,2,1... for walking animation
+  // Animation frame cycling - cycles through frames in a ping-pong pattern
   useEffect(() => {
-    if (!selectedObject || playerAction === "idle") return;
+    if (!selectedObject) return;
 
     // Get the active sprite for current action
     let spriteId = selectedObject.spriteId;
     if (selectedObject.animations?.[playerAction]) {
-      spriteId = selectedObject.animations[playerAction];
+      spriteId = selectedObject.animations[playerAction] as string;
     }
 
-    const sprite = sprites.find(s => s.id === spriteId);
+    const sprite = sprites.find((s) => s.id === spriteId);
     if (!sprite || !sprite.frames || sprite.frames.length === 0) return;
 
     const fps = sprite.animationSpeed || 6;
+    const frameCount = sprite.frames.length;
+
+    // Reset to first frame when action or sprite changes
+    setAnimFrameIndex(0);
+
+    let direction = 1; // 1 = forward, -1 = backward for ping-pong
+
     const interval = setInterval(() => {
-      setAnimFrameIndex(prev => {
-        // Cycle pattern: 0, 1, 2, 1, 0, 1, 2, 1...
-        if (sprite.frames.length === 1) return 0;
-        if (sprite.frames.length === 2) return (prev + 1) % 2;
-        
-        // For 3+ frames: create ping-pong effect
-        const sequence = [0, 1, 2, 1]; // Frame sequence
-        return (prev + 1) % sequence.length;
+      setAnimFrameIndex((prev) => {
+        if (frameCount <= 1) return 0;
+
+        let next = prev + direction;
+        if (next >= frameCount) {
+          direction = -1;
+          next = frameCount - 2;
+        } else if (next < 0) {
+          direction = 1;
+          next = 1;
+        }
+        return next;
       });
     }, 1000 / fps);
 
@@ -206,22 +225,42 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
     if (!selectedObject || selectedObject.type !== "player") return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      const key = e.key.toLowerCase();
-      if (key === "q" || key === "w" || key === "p") {
-        e.preventDefault();
-        setKeysPressed(prev => new Set(prev).add(key));
-      }
+      const rawKey = e.key;
+      const keyLower = rawKey.toLowerCase();
+
+      const isMoveLeft = rawKey === "ArrowLeft" || keyLower === "q";
+      const isMoveRight = rawKey === "ArrowRight" || keyLower === "w";
+      const isJump = rawKey === "ArrowUp" || rawKey === " " || keyLower === "p";
+
+      if (!isMoveLeft && !isMoveRight && !isJump) return;
+
+      e.preventDefault();
+      setKeysPressed((prev) => {
+        const next = new Set(prev);
+        if (isMoveLeft) next.add("left");
+        if (isMoveRight) next.add("right");
+        if (isJump) next.add("jump");
+        return next;
+      });
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
-      const key = e.key.toLowerCase();
-      if (key === "q" || key === "w" || key === "p") {
-        setKeysPressed(prev => {
-          const next = new Set(prev);
-          next.delete(key);
-          return next;
-        });
-      }
+      const rawKey = e.key;
+      const keyLower = rawKey.toLowerCase();
+
+      const isMoveLeft = rawKey === "ArrowLeft" || keyLower === "q";
+      const isMoveRight = rawKey === "ArrowRight" || keyLower === "w";
+      const isJump = rawKey === "ArrowUp" || rawKey === " " || keyLower === "p";
+
+      if (!isMoveLeft && !isMoveRight && !isJump) return;
+
+      setKeysPressed((prev) => {
+        const next = new Set(prev);
+        if (isMoveLeft) next.delete("left");
+        if (isMoveRight) next.delete("right");
+        if (isJump) next.delete("jump");
+        return next;
+      });
     };
 
     window.addEventListener("keydown", handleKeyDown);
@@ -244,16 +283,16 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
     const groundY = 0;
 
     const gameLoop = () => {
-      setPlayerVelocity(prev => {
+      setPlayerVelocity((prev) => {
         let newVelX = 0;
         let newVelY = prev.y;
 
         // Horizontal movement
-        if (keysPressed.has("q")) {
+        if (keysPressed.has("left")) {
           newVelX = -speed;
           setPlayerAction("moveLeft");
           setFacingLeft(true);
-        } else if (keysPressed.has("w")) {
+        } else if (keysPressed.has("right")) {
           newVelX = speed;
           setPlayerAction("moveRight");
           setFacingLeft(false);
@@ -262,7 +301,7 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
         }
 
         // Jump
-        if (keysPressed.has("p") && !isJumping) {
+        if (keysPressed.has("jump") && !isJumping) {
           newVelY = -jumpHeight * 2;
           setIsJumping(true);
           setPlayerAction("jump");
@@ -276,15 +315,15 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
         return { x: newVelX, y: newVelY };
       });
 
-      setPlayerPosition(prev => {
+      setPlayerPosition((prev) => {
         const newX = Math.max(-canvasSize.width / 2 + 16, Math.min(canvasSize.width / 2 - 16, prev.x + playerVelocity.x));
         const newY = Math.max(-canvasSize.height / 2 + 16, prev.y + playerVelocity.y);
 
         // Check if landed
         if (newY >= groundY && isJumping) {
           setIsJumping(false);
-          setPlayerVelocity(v => ({ ...v, y: 0 }));
-          if (!keysPressed.has("q") && !keysPressed.has("w")) {
+          setPlayerVelocity((v) => ({ ...v, y: 0 }));
+          if (!keysPressed.has("left") && !keysPressed.has("right")) {
             setPlayerAction("idle");
           }
           return { x: newX, y: groundY };
@@ -318,14 +357,27 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
     // Get the appropriate sprite based on action
     let spriteId = selectedObject.spriteId;
     let shouldMirror = false;
-    
+
     if (selectedObject.type === "player" && selectedObject.animations) {
-      // Check if we have the animation for current action
-      if (selectedObject.animations[playerAction]) {
-        spriteId = selectedObject.animations[playerAction];
-      } else if (playerAction === "moveRight" && selectedObject.animations.moveLeft) {
+      const animations = selectedObject.animations;
+
+      if (animations[playerAction]) {
+        spriteId = animations[playerAction] as string;
+      } else if (
+        playerAction === "moveRight" &&
+        !animations.moveRight &&
+        animations.moveLeft
+      ) {
         // Mirror left animation for right movement
-        spriteId = selectedObject.animations.moveLeft;
+        spriteId = animations.moveLeft;
+        shouldMirror = true;
+      } else if (
+        playerAction === "moveLeft" &&
+        !animations.moveLeft &&
+        animations.moveRight
+      ) {
+        // Mirror right animation for left movement
+        spriteId = animations.moveRight;
         shouldMirror = true;
       } else {
         spriteId = selectedObject.spriteId;
@@ -364,23 +416,25 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
 
     const [spriteWidth, spriteHeight] = sprite.size.split("x").map(Number);
     const canvasSize = CANVAS_SIZES[canvasSizeIndex];
-    
+
     canvas.width = canvasSize.width;
     canvas.height = canvasSize.height;
 
-    // Clear canvas
+    // Clear canvas background
     ctx.fillStyle = "#000000";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // Calculate pixel size to fit sprite in canvas
-    const pixelSize = Math.floor(Math.min(canvasSize.width / (spriteWidth * 2), canvasSize.height / (spriteHeight * 2)));
+    // Each game pixel is 1×1 in 256×192 view and 2×2 in 512×384 view
+    const pixelScaleX = canvas.width / WORLD_WIDTH;
+    const pixelScaleY = canvas.height / WORLD_HEIGHT;
+    const pixelSize = Math.min(pixelScaleX, pixelScaleY);
 
-    // Center sprite in canvas
-    const centerX = canvasSize.width / 2;
-    const centerY = canvasSize.height / 2;
-    
-    let startX = centerX - (spriteWidth * pixelSize) / 2;
-    let startY = centerY - (spriteHeight * pixelSize) / 2;
+    // Base position: center of the screen
+    const baseX = canvas.width / 2 - (spriteWidth * pixelSize) / 2;
+    const baseY = canvas.height / 2 - (spriteHeight * pixelSize) / 2;
+
+    let startX = baseX;
+    let startY = baseY;
 
     // Apply player position offset
     if (selectedObject.type === "player") {
@@ -388,12 +442,20 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
       startY += playerPosition.y;
     }
 
-    // Apply horizontal flip if needed
-    if (shouldMirror || (playerAction === "moveRight" && !selectedObject.animations?.moveRight && selectedObject.animations?.moveLeft)) {
+    // Draw sprite (with optional horizontal flip)
+    if (
+      shouldMirror ||
+      (playerAction === "moveRight" &&
+        !selectedObject.animations?.moveRight &&
+        selectedObject.animations?.moveLeft) ||
+      (playerAction === "moveLeft" &&
+        !selectedObject.animations?.moveLeft &&
+        selectedObject.animations?.moveRight)
+    ) {
       ctx.save();
-      ctx.translate(startX + (spriteWidth * pixelSize), startY);
+      ctx.translate(startX + spriteWidth * pixelSize, startY);
       ctx.scale(-1, 1);
-      
+
       frame.pixels.forEach((row, y) => {
         if (!row) return;
         row.forEach((colorIndex, x) => {
@@ -408,7 +470,7 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
           );
         });
       });
-      
+
       ctx.restore();
     } else {
       frame.pixels.forEach((row, y) => {
@@ -427,18 +489,22 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
       });
     }
 
-    // Draw grid
+    // Draw 32×24 grid using logical 8×8 tiles
     if (showGrid) {
       ctx.strokeStyle = "#333333";
       ctx.lineWidth = 1;
-      const gridSize = 8; // 8x8 grid
-      for (let x = 0; x <= canvas.width; x += gridSize) {
+
+      const cellWidth = canvas.width / GRID_COLS;
+      const cellHeight = canvas.height / GRID_ROWS;
+
+      for (let x = 0; x <= canvas.width; x += cellWidth) {
         ctx.beginPath();
         ctx.moveTo(x, 0);
         ctx.lineTo(x, canvas.height);
         ctx.stroke();
       }
-      for (let y = 0; y <= canvas.height; y += gridSize) {
+
+      for (let y = 0; y <= canvas.height; y += cellHeight) {
         ctx.beginPath();
         ctx.moveTo(0, y);
         ctx.lineTo(canvas.width, y);
@@ -1164,16 +1230,16 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
                   <div className="text-xs font-medium mb-2">Interactive Controls</div>
                   <div className="grid grid-cols-2 gap-2 text-xs">
                     <div className="flex items-center gap-2">
-                      <kbd className="px-2 py-1 bg-background border border-border rounded">Q</kbd>
-                      <span className="text-muted-foreground">Move Left</span>
+                      <kbd className="px-2 py-1 bg-background border border-border rounded">←</kbd>
+                      <span className="text-muted-foreground text-[11px]">Move Left (Arrow Left or Q)</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <kbd className="px-2 py-1 bg-background border border-border rounded">W</kbd>
-                      <span className="text-muted-foreground">Move Right</span>
+                      <kbd className="px-2 py-1 bg-background border border-border rounded">→</kbd>
+                      <span className="text-muted-foreground text-[11px]">Move Right (Arrow Right or W)</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <kbd className="px-2 py-1 bg-background border border-border rounded">P</kbd>
-                      <span className="text-muted-foreground">Jump</span>
+                      <kbd className="px-2 py-1 bg-background border border-border rounded">↑</kbd>
+                      <span className="text-muted-foreground text-[11px]">Jump (Arrow Up, Space or P)</span>
                     </div>
                   </div>
                   <div className="text-xs text-muted-foreground pt-2">
