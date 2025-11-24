@@ -16,6 +16,7 @@ const PREVIEW_ZOOMS_8 = [64, 96, 128, 160, 192, 224, 256] as const;
 const PREVIEW_ZOOMS_16 = [128, 192, 256, 320, 384, 448, 512] as const;
 const PREVIEW_ZOOM_DEFAULT_INDEX = 2;
 const PREVIEW_ZOOM_MAX_INDEX = PREVIEW_ZOOMS_8.length - 1;
+const ANIMATION_NONE_VALUE = "__none__";
 
 interface ObjectLibraryProps {
   objects: GameObject[];
@@ -488,14 +489,16 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
                   <div className="space-y-2">
                     <Label>Move Left</Label>
                     <Select
-                      value={selectedObject.animations?.moveLeft || ""}
-                      onValueChange={(value) => updateAnimation("moveLeft", value)}
+                      value={selectedObject.animations?.moveLeft ?? ANIMATION_NONE_VALUE}
+                      onValueChange={(value) =>
+                        updateAnimation("moveLeft", value === ANIMATION_NONE_VALUE ? "" : value)
+                      }
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="None" />
                       </SelectTrigger>
                       <SelectContent className="z-50">
-                        <SelectItem value="">None</SelectItem>
+                        <SelectItem value={ANIMATION_NONE_VALUE}>None</SelectItem>
                         {sprites.map((sprite) => (
                           <SelectItem key={sprite.id} value={sprite.id}>
                             {sprite.name} ({sprite.size})
@@ -513,14 +516,16 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
                   <div className="space-y-2">
                     <Label>Move Right</Label>
                     <Select
-                      value={selectedObject.animations?.moveRight || ""}
-                      onValueChange={(value) => updateAnimation("moveRight", value)}
+                      value={selectedObject.animations?.moveRight ?? ANIMATION_NONE_VALUE}
+                      onValueChange={(value) =>
+                        updateAnimation("moveRight", value === ANIMATION_NONE_VALUE ? "" : value)
+                      }
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="None (will mirror left)" />
                       </SelectTrigger>
                       <SelectContent className="z-50">
-                        <SelectItem value="">None (will mirror left)</SelectItem>
+                        <SelectItem value={ANIMATION_NONE_VALUE}>None (will mirror left)</SelectItem>
                         {sprites.map((sprite) => (
                           <SelectItem key={sprite.id} value={sprite.id}>
                             {sprite.name} ({sprite.size})
@@ -538,14 +543,16 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
                   <div className="space-y-2">
                     <Label>Move Up</Label>
                     <Select
-                      value={selectedObject.animations?.moveUp || ""}
-                      onValueChange={(value) => updateAnimation("moveUp", value)}
+                      value={selectedObject.animations?.moveUp ?? ANIMATION_NONE_VALUE}
+                      onValueChange={(value) =>
+                        updateAnimation("moveUp", value === ANIMATION_NONE_VALUE ? "" : value)
+                      }
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="None" />
                       </SelectTrigger>
                       <SelectContent className="z-50">
-                        <SelectItem value="">None</SelectItem>
+                        <SelectItem value={ANIMATION_NONE_VALUE}>None</SelectItem>
                         {sprites.map((sprite) => (
                           <SelectItem key={sprite.id} value={sprite.id}>
                             {sprite.name} ({sprite.size})
@@ -563,14 +570,16 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
                   <div className="space-y-2">
                     <Label>Move Down</Label>
                     <Select
-                      value={selectedObject.animations?.moveDown || ""}
-                      onValueChange={(value) => updateAnimation("moveDown", value)}
+                      value={selectedObject.animations?.moveDown ?? ANIMATION_NONE_VALUE}
+                      onValueChange={(value) =>
+                        updateAnimation("moveDown", value === ANIMATION_NONE_VALUE ? "" : value)
+                      }
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="None (will mirror up)" />
                       </SelectTrigger>
                       <SelectContent className="z-50">
-                        <SelectItem value="">None (will mirror up)</SelectItem>
+                        <SelectItem value={ANIMATION_NONE_VALUE}>None (will mirror up)</SelectItem>
                         {sprites.map((sprite) => (
                           <SelectItem key={sprite.id} value={sprite.id}>
                             {sprite.name} ({sprite.size})
@@ -588,14 +597,16 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
                   <div className="space-y-2">
                     <Label>Idle</Label>
                     <Select
-                      value={selectedObject.animations?.idle || ""}
-                      onValueChange={(value) => updateAnimation("idle", value)}
+                      value={selectedObject.animations?.idle ?? ANIMATION_NONE_VALUE}
+                      onValueChange={(value) =>
+                        updateAnimation("idle", value === ANIMATION_NONE_VALUE ? "" : value)
+                      }
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="None" />
                       </SelectTrigger>
                       <SelectContent className="z-50">
-                        <SelectItem value="">None</SelectItem>
+                        <SelectItem value={ANIMATION_NONE_VALUE}>None</SelectItem>
                         {sprites.map((sprite) => (
                           <SelectItem key={sprite.id} value={sprite.id}>
                             {sprite.name} ({sprite.size})
@@ -613,14 +624,16 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
                   <div className="space-y-2">
                     <Label>Jump</Label>
                     <Select
-                      value={selectedObject.animations?.jump || ""}
-                      onValueChange={(value) => updateAnimation("jump", value)}
+                      value={selectedObject.animations?.jump ?? ANIMATION_NONE_VALUE}
+                      onValueChange={(value) =>
+                        updateAnimation("jump", value === ANIMATION_NONE_VALUE ? "" : value)
+                      }
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="None" />
                       </SelectTrigger>
                       <SelectContent className="z-50">
-                        <SelectItem value="">None</SelectItem>
+                        <SelectItem value={ANIMATION_NONE_VALUE}>None</SelectItem>
                         {sprites.map((sprite) => (
                           <SelectItem key={sprite.id} value={sprite.id}>
                             {sprite.name} ({sprite.size})
@@ -638,14 +651,16 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
                   <div className="space-y-2">
                     <Label>Fire</Label>
                     <Select
-                      value={selectedObject.animations?.fire || ""}
-                      onValueChange={(value) => updateAnimation("fire", value)}
+                      value={selectedObject.animations?.fire ?? ANIMATION_NONE_VALUE}
+                      onValueChange={(value) =>
+                        updateAnimation("fire", value === ANIMATION_NONE_VALUE ? "" : value)
+                      }
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="None" />
                       </SelectTrigger>
                       <SelectContent className="z-50">
-                        <SelectItem value="">None</SelectItem>
+                        <SelectItem value={ANIMATION_NONE_VALUE}>None</SelectItem>
                         {sprites.map((sprite) => (
                           <SelectItem key={sprite.id} value={sprite.id}>
                             {sprite.name} ({sprite.size})
