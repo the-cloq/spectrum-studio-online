@@ -47,13 +47,19 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
   const getDefaultProperties = (type: ObjectType) => {
     switch (type) {
       case "player":
-        return { speed: 5, jumpHeight: 10, maxEnergy: 100 };
+        return { speed: 5, jumpHeight: 10, maxEnergy: 100, maxFallDistance: 20 };
       case "enemy":
-        return { damage: 10, movementPattern: "patrol" as const, patrolDistance: 50, patrolSpeed: 3 };
-      case "collectible":
-        return { points: 10, energyBonus: 0, itemType: "coin" as const };
-      case "static":
-        return { blocking: true, deadly: false, interactable: false };
+        return { damage: 10, movementPattern: "patrol" as const, respawnDelay: 3000, direction: "right" as const };
+      case "ammunition":
+        return { projectileSpeed: 8, projectileDamage: 5, projectileRange: 100 };
+      case "collectable":
+        return { points: 10, energyBonus: 0, itemType: "coin" as const, oneTime: true };
+      case "door":
+        return { targetRoom: "", targetFloor: 0 };
+      case "exit":
+        return { targetLevel: "", activationConditions: "" };
+      case "moving-platform":
+        return { platformType: "horizontal" as const, platformSpeed: 2, platformRange: 8, pauseAtEnds: 500, startDirection: "right" as const, repeatType: "ping-pong" as const, playerCarry: true };
     }
   };
 
@@ -137,11 +143,20 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
             <Button onClick={() => createObject("enemy")} size="sm" variant="outline">
               <Plus className="w-4 h-4 mr-1" /> Enemy
             </Button>
-            <Button onClick={() => createObject("collectible")} size="sm" variant="outline">
+            <Button onClick={() => createObject("ammunition")} size="sm" variant="outline">
+              <Plus className="w-4 h-4 mr-1" /> Ammo
+            </Button>
+            <Button onClick={() => createObject("collectable")} size="sm" variant="outline">
               <Plus className="w-4 h-4 mr-1" /> Item
             </Button>
-            <Button onClick={() => createObject("static")} size="sm" variant="outline">
-              <Plus className="w-4 h-4 mr-1" /> Static
+            <Button onClick={() => createObject("door")} size="sm" variant="outline">
+              <Plus className="w-4 h-4 mr-1" /> Door
+            </Button>
+            <Button onClick={() => createObject("exit")} size="sm" variant="outline">
+              <Plus className="w-4 h-4 mr-1" /> Exit
+            </Button>
+            <Button onClick={() => createObject("moving-platform")} size="sm" variant="outline">
+              <Plus className="w-4 h-4 mr-1" /> Platform
             </Button>
           </div>
         </CardHeader>
@@ -242,8 +257,11 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
                     <SelectContent>
                       <SelectItem value="player">Player</SelectItem>
                       <SelectItem value="enemy">Enemy</SelectItem>
-                      <SelectItem value="collectible">Collectible</SelectItem>
-                      <SelectItem value="static">Static</SelectItem>
+                      <SelectItem value="ammunition">Ammunition</SelectItem>
+                      <SelectItem value="collectable">Collectable</SelectItem>
+                      <SelectItem value="door">Door</SelectItem>
+                      <SelectItem value="exit">Exit</SelectItem>
+                      <SelectItem value="moving-platform">Moving Platform</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -337,29 +355,71 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
                       </Select>
                     </div>
                     <div className="space-y-2">
-                      <Label>Patrol Distance: {selectedObject.properties.patrolDistance}</Label>
+                      <Label>Respawn Delay (ms): {selectedObject.properties.respawnDelay}</Label>
                       <Slider
-                        value={[selectedObject.properties.patrolDistance || 50]}
-                        onValueChange={([value]) => updateProperty("patrolDistance", value)}
-                        min={10}
-                        max={200}
-                        step={10}
+                        value={[selectedObject.properties.respawnDelay || 3000]}
+                        onValueChange={([value]) => updateProperty("respawnDelay", value)}
+                        min={0}
+                        max={10000}
+                        step={500}
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label>Patrol Speed: {selectedObject.properties.patrolSpeed}</Label>
+                      <Label>Direction</Label>
+                      <Select
+                        value={selectedObject.properties.direction || "right"}
+                        onValueChange={(value) => updateProperty("direction", value)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="left">Left</SelectItem>
+                          <SelectItem value="right">Right</SelectItem>
+                          <SelectItem value="up">Up</SelectItem>
+                          <SelectItem value="down">Down</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </>
+                )}
+
+                {selectedObject.type === "ammunition" && (
+                  <>
+                    <div className="space-y-2">
+                      <Label>Projectile Speed: {selectedObject.properties.projectileSpeed}</Label>
                       <Slider
-                        value={[selectedObject.properties.patrolSpeed || 3]}
-                        onValueChange={([value]) => updateProperty("patrolSpeed", value)}
+                        value={[selectedObject.properties.projectileSpeed || 8]}
+                        onValueChange={([value]) => updateProperty("projectileSpeed", value)}
                         min={1}
-                        max={10}
+                        max={20}
                         step={1}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Projectile Damage: {selectedObject.properties.projectileDamage}</Label>
+                      <Slider
+                        value={[selectedObject.properties.projectileDamage || 5]}
+                        onValueChange={([value]) => updateProperty("projectileDamage", value)}
+                        min={1}
+                        max={50}
+                        step={1}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Projectile Range: {selectedObject.properties.projectileRange}</Label>
+                      <Slider
+                        value={[selectedObject.properties.projectileRange || 100]}
+                        onValueChange={([value]) => updateProperty("projectileRange", value)}
+                        min={10}
+                        max={500}
+                        step={10}
                       />
                     </div>
                   </>
                 )}
 
-                {selectedObject.type === "collectible" && (
+                {selectedObject.type === "collectable" && (
                   <>
                     <div className="space-y-2">
                       <Label>Item Type</Label>
@@ -398,30 +458,146 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
                         step={5}
                       />
                     </div>
+                    <div className="flex items-center justify-between">
+                      <Label>One Time Only</Label>
+                      <Switch
+                        checked={selectedObject.properties.oneTime || true}
+                        onCheckedChange={(checked) => updateProperty("oneTime", checked)}
+                      />
+                    </div>
                   </>
                 )}
 
-                {selectedObject.type === "static" && (
+                {selectedObject.type === "door" && (
                   <>
-                    <div className="flex items-center justify-between">
-                      <Label>Blocking</Label>
-                      <Switch
-                        checked={selectedObject.properties.blocking || false}
-                        onCheckedChange={(checked) => updateProperty("blocking", checked)}
+                    <div className="space-y-2">
+                      <Label>Target Room</Label>
+                      <Input
+                        value={selectedObject.properties.targetRoom || ""}
+                        onChange={(e) => updateProperty("targetRoom", e.target.value)}
+                        placeholder="e.g., room-2"
                       />
                     </div>
-                    <div className="flex items-center justify-between">
-                      <Label>Deadly</Label>
-                      <Switch
-                        checked={selectedObject.properties.deadly || false}
-                        onCheckedChange={(checked) => updateProperty("deadly", checked)}
+                    <div className="space-y-2">
+                      <Label>Target Floor: {selectedObject.properties.targetFloor}</Label>
+                      <Slider
+                        value={[selectedObject.properties.targetFloor || 0]}
+                        onValueChange={([value]) => updateProperty("targetFloor", value)}
+                        min={0}
+                        max={10}
+                        step={1}
                       />
                     </div>
+                  </>
+                )}
+
+                {selectedObject.type === "exit" && (
+                  <>
+                    <div className="space-y-2">
+                      <Label>Target Level</Label>
+                      <Input
+                        value={selectedObject.properties.targetLevel || ""}
+                        onChange={(e) => updateProperty("targetLevel", e.target.value)}
+                        placeholder="e.g., level-2"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Activation Conditions</Label>
+                      <Input
+                        value={selectedObject.properties.activationConditions || ""}
+                        onChange={(e) => updateProperty("activationConditions", e.target.value)}
+                        placeholder="e.g., all-keys-collected"
+                      />
+                    </div>
+                  </>
+                )}
+
+                {selectedObject.type === "moving-platform" && (
+                  <>
+                    <div className="space-y-2">
+                      <Label>Platform Type</Label>
+                      <Select
+                        value={selectedObject.properties.platformType || "horizontal"}
+                        onValueChange={(value) => updateProperty("platformType", value)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="horizontal">Horizontal Mover</SelectItem>
+                          <SelectItem value="vertical">Vertical Mover</SelectItem>
+                          <SelectItem value="elevator">Elevator</SelectItem>
+                          <SelectItem value="rope">Rope</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Speed (pixels/frame): {selectedObject.properties.platformSpeed}</Label>
+                      <Slider
+                        value={[selectedObject.properties.platformSpeed || 2]}
+                        onValueChange={([value]) => updateProperty("platformSpeed", value)}
+                        min={1}
+                        max={8}
+                        step={1}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Range (blocks): {selectedObject.properties.platformRange}</Label>
+                      <Slider
+                        value={[selectedObject.properties.platformRange || 8]}
+                        onValueChange={([value]) => updateProperty("platformRange", value)}
+                        min={1}
+                        max={16}
+                        step={1}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Pause at Ends (ms): {selectedObject.properties.pauseAtEnds}</Label>
+                      <Slider
+                        value={[selectedObject.properties.pauseAtEnds || 500]}
+                        onValueChange={([value]) => updateProperty("pauseAtEnds", value)}
+                        min={0}
+                        max={2000}
+                        step={100}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Start Direction</Label>
+                      <Select
+                        value={selectedObject.properties.startDirection || "right"}
+                        onValueChange={(value) => updateProperty("startDirection", value)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="left">Left</SelectItem>
+                          <SelectItem value="right">Right</SelectItem>
+                          <SelectItem value="up">Up</SelectItem>
+                          <SelectItem value="down">Down</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Repeat Type</Label>
+                      <Select
+                        value={selectedObject.properties.repeatType || "ping-pong"}
+                        onValueChange={(value) => updateProperty("repeatType", value)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="ping-pong">Ping-Pong</SelectItem>
+                          <SelectItem value="loop">Loop</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
                     <div className="flex items-center justify-between">
-                      <Label>Interactable</Label>
+                      <Label>Player Carry</Label>
                       <Switch
-                        checked={selectedObject.properties.interactable || false}
-                        onCheckedChange={(checked) => updateProperty("interactable", checked)}
+                        checked={selectedObject.properties.playerCarry !== false}
+                        onCheckedChange={(checked) => updateProperty("playerCarry", checked)}
                       />
                     </div>
                   </>
