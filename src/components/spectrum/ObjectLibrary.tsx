@@ -32,38 +32,11 @@ const ANIMATION_NONE_VALUE = "__none__";
 const GAME_FPS = 12; // Original ZX Spectrum frame rate
 const FRAME_INTERVAL = 1000 / GAME_FPS; // ~83.33ms per frame
 
-// Predetermined jump trajectory generator
-// Creates delta values (frame-to-frame Y changes) for a parabolic jump
-const generateJumpTrajectory = (height: number, distance: number, speed: number) => {
-  // Calculate frames needed based on distance and walk speed
-  const frames = Math.max(8, Math.round(distance / speed));
-  const trajectory: number[] = [];
-  
-  // Generate parabolic arc using frame-to-frame deltas
-  const halfFrames = Math.floor(frames / 2);
-  
-  // Ascending phase - calculate Y position deltas
-  let prevY = 0;
-  for (let i = 0; i <= halfFrames; i++) {
-    const progress = i / halfFrames;
-    const currentY = -height * Math.sin(progress * Math.PI);
-    const delta = Math.round(currentY - prevY);
-    trajectory.push(delta);
-    prevY = currentY;
-  }
-  
-  // Descending phase - mirror the ascent deltas (inverted)
-  for (let i = trajectory.length - 2; i >= 0; i--) {
-    trajectory.push(-trajectory[i]);
-  }
-  
-  return trajectory;
-};
-
-// Store trajectory in a ref-friendly object so we can update it
-const jumpTrajectoryState = {
-  trajectory: generateJumpTrajectory(40, 48, 2)
-};
+// Simple jump trajectory - just Y deltas per frame that sum to zero
+const JUMP_TRAJECTORY = [
+  -3, -3, -2, -2, -2, -1, -1, -1, 0, 0,  // up
+  0, 0, 1, 1, 1, 2, 2, 2, 3, 3           // down - mirrors exactly
+];
 
 interface ObjectLibraryProps {
   objects: GameObject[];
@@ -165,14 +138,6 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
 
   const updateProperty = (key: string, value: any) => {
     if (!selectedObject) return;
-    
-    // Regenerate jump trajectory if jump properties change
-    if (key === 'jumpHeight' || key === 'jumpDistance' || key === 'speed') {
-      const height = key === 'jumpHeight' ? value : selectedObject.properties.jumpHeight;
-      const distance = key === 'jumpDistance' ? value : selectedObject.properties.jumpDistance;
-      const speed = key === 'speed' ? value : selectedObject.properties.speed;
-      jumpTrajectoryState.trajectory = generateJumpTrajectory(height, distance, speed);
-    }
     
     updateObject({
       properties: { ...selectedObject.properties, [key]: value },
@@ -314,13 +279,12 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
           playerActionRef.current = stoppedAction;
         }
 
-        // Jump logic - predetermined trajectory
+        // Jump logic - apply Y deltas from trajectory
         if (jumping) {
           setJumpFrameIndex((prevIdx) => {
             const nextIdx = prevIdx + 1;
-            const trajectory = jumpTrajectoryState.trajectory;
             
-            if (nextIdx >= trajectory.length) {
+            if (nextIdx >= JUMP_TRAJECTORY.length) {
               // Jump completed
               setIsJumping(false);
               isJumpingRef.current = false;
@@ -332,8 +296,8 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
               return 0;
             }
 
-            // Apply trajectory delta (frame-to-frame change)
-            newY += trajectory[prevIdx];
+            // Apply Y delta for this frame
+            newY += JUMP_TRAJECTORY[prevIdx];
             
             // Check for landing
             if (newY >= groundY) {
