@@ -407,6 +407,22 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
         // Mirror right animation for left movement
         spriteId = animations.moveRight;
         shouldMirror = true;
+      } else if (
+        playerAction === "jumpRight" &&
+        !animations.jumpRight &&
+        animations.jumpLeft
+      ) {
+        // Mirror left jump animation for right jump
+        spriteId = animations.jumpLeft;
+        shouldMirror = true;
+      } else if (
+        playerAction === "jumpLeft" &&
+        !animations.jumpLeft &&
+        animations.jumpRight
+      ) {
+        // Mirror right jump animation for left jump
+        spriteId = animations.jumpRight;
+        shouldMirror = true;
       } else {
         spriteId = selectedObject.spriteId;
       }
