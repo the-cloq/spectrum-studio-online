@@ -57,6 +57,7 @@ export type GameObject = {
     // Player properties
     speed?: number;
     jumpHeight?: number;
+    jumpDistance?: number;
     maxEnergy?: number;
     maxFallDistance?: number;
     
