@@ -31,33 +31,39 @@ const ANIMATION_NONE_VALUE = "__none__";
 // Manic Miner-style deterministic movement constants
 const GAME_FPS = 12; // Original ZX Spectrum frame rate
 const FRAME_INTERVAL = 1000 / GAME_FPS; // ~83.33ms per frame
-const WALK_PIXELS_PER_FRAME = 2; // Horizontal movement speed
 
 // Predetermined jump trajectory generator
-// Creates a parabolic trajectory that returns to starting height
-const generateJumpTrajectory = (height: number, distance: number) => {
+// Creates delta values (frame-to-frame Y changes) for a parabolic jump
+const generateJumpTrajectory = (height: number, distance: number, speed: number) => {
   // Calculate frames needed based on distance and walk speed
-  const frames = Math.round(distance / WALK_PIXELS_PER_FRAME);
+  const frames = Math.max(8, Math.round(distance / speed));
   const trajectory: number[] = [];
   
-  // Generate symmetric parabolic arc
+  // Generate parabolic arc using frame-to-frame deltas
   const halfFrames = Math.floor(frames / 2);
-  for (let i = 0; i < halfFrames; i++) {
+  
+  // Ascending phase - calculate Y position deltas
+  let prevY = 0;
+  for (let i = 0; i <= halfFrames; i++) {
     const progress = i / halfFrames;
-    const yOffset = -height * Math.sin(progress * Math.PI);
-    trajectory.push(Math.round(yOffset));
+    const currentY = -height * Math.sin(progress * Math.PI);
+    const delta = Math.round(currentY - prevY);
+    trajectory.push(delta);
+    prevY = currentY;
   }
   
-  // Mirror for descent (ensures return to 0)
-  for (let i = halfFrames - 1; i >= 0; i--) {
+  // Descending phase - mirror the ascent deltas (inverted)
+  for (let i = trajectory.length - 2; i >= 0; i--) {
     trajectory.push(-trajectory[i]);
   }
   
   return trajectory;
 };
 
-// Default Manic Miner-style jump (doubled from original: 48px distance, 40px height)
-let JUMP_TRAJECTORY = generateJumpTrajectory(40, 48);
+// Store trajectory in a ref-friendly object so we can update it
+const jumpTrajectoryState = {
+  trajectory: generateJumpTrajectory(40, 48, 2)
+};
 
 interface ObjectLibraryProps {
   objects: GameObject[];
@@ -161,10 +167,11 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
     if (!selectedObject) return;
     
     // Regenerate jump trajectory if jump properties change
-    if (key === 'jumpHeight' || key === 'jumpDistance') {
+    if (key === 'jumpHeight' || key === 'jumpDistance' || key === 'speed') {
       const height = key === 'jumpHeight' ? value : selectedObject.properties.jumpHeight;
       const distance = key === 'jumpDistance' ? value : selectedObject.properties.jumpDistance;
-      JUMP_TRAJECTORY = generateJumpTrajectory(height, distance);
+      const speed = key === 'speed' ? value : selectedObject.properties.speed;
+      jumpTrajectoryState.trajectory = generateJumpTrajectory(height, distance, speed);
     }
     
     updateObject({
@@ -243,6 +250,7 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
 
     const canvasSize = CANVAS_SIZES[canvasSizeIndex];
     const groundY = 0;
+    const walkSpeed = selectedObject.properties.speed || 2;
 
     const gameLoop = () => {
       const keys = keysPresssedRef.current;
@@ -279,9 +287,9 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
         let newX = prevPos.x;
         let newY = prevPos.y;
 
-        // Horizontal movement - deterministic pixels per frame
+        // Horizontal movement - use player's speed property
         if (keys.has("left")) {
-          newX -= WALK_PIXELS_PER_FRAME;
+          newX -= walkSpeed;
           if (!jumping) {
             setPlayerAction("moveLeft");
             playerActionRef.current = "moveLeft";
@@ -289,7 +297,7 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
             facingLeftRef.current = true;
           }
         } else if (keys.has("right")) {
-          newX += WALK_PIXELS_PER_FRAME;
+          newX += walkSpeed;
           if (!jumping) {
             setPlayerAction("moveRight");
             playerActionRef.current = "moveRight";
@@ -307,8 +315,9 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
         if (jumping) {
           setJumpFrameIndex((prevIdx) => {
             const nextIdx = prevIdx + 1;
+            const trajectory = jumpTrajectoryState.trajectory;
             
-            if (nextIdx >= JUMP_TRAJECTORY.length) {
+            if (nextIdx >= trajectory.length) {
               // Jump completed
               setIsJumping(false);
               isJumpingRef.current = false;
@@ -320,8 +329,8 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
               return 0;
             }
 
-            // Apply trajectory offset
-            newY += JUMP_TRAJECTORY[prevIdx];
+            // Apply trajectory delta (frame-to-frame change)
+            newY += trajectory[prevIdx];
             
             // Check for landing
             if (newY >= groundY) {
