@@ -29,6 +29,15 @@ export const LevelDesigner = ({ levels, screens, blocks, objects, sprites, onLev
   const playCanvasRef = useRef<HTMLCanvasElement>(null);
   const gameLoopRef = useRef<number | null>(null);
 
+  // Manic Miner-style constants (matching ObjectLibrary)
+  const GAME_FPS = 12;
+  const FRAME_INTERVAL = 1000 / GAME_FPS;
+  const JUMP_TRAJECTORY = [
+    -4, -4, -3, -3, -2, -2, -1, -1, 0, 0,  // Ascent (10 frames, -20px)
+    1, 1, 2, 2, 3, 3, 4, 4                  // Descent (8 frames, +20px)
+  ];
+  const JUMP_PEAK_FRAME = 10;
+
   // Drag & Drop
   const handleDragStart = (index: number) => setDraggingIndex(index);
   const handleDragOver = (e: React.DragEvent<HTMLDivElement>, index: number) => {
@@ -122,95 +131,69 @@ export const LevelDesigner = ({ levels, screens, blocks, objects, sprites, onLev
     { width: 768, height: 576 }
   ];
 
-  // Game loop for playing level
+  // Game loop for playing level - Manic Miner style (12fps fixed)
   useEffect(() => {
-    if (!playingLevelId) {
-      console.log("No playing level ID");
-      return;
-    }
-    
-    if (!playCanvasRef.current) {
-      console.log("Canvas ref not ready yet");
-      return;
-    }
+    if (!playingLevelId || !playCanvasRef.current) return;
 
-    console.log("Starting game loop for level:", playingLevelId);
-    
     const canvas = playCanvasRef.current;
     const ctx = canvas.getContext("2d");
-    if (!ctx) {
-      console.log("Failed to get canvas context");
-      return;
-    }
+    if (!ctx) return;
 
     const level = levels.find(l => l.id === playingLevelId);
-    if (!level || level.screenIds.length === 0) {
-      console.log("Level not found or has no screens");
-      return;
-    }
+    if (!level || level.screenIds.length === 0) return;
 
     const currentScreenId = level.screenIds[0];
     const currentScreen = screens.find(s => s.id === currentScreenId);
-    if (!currentScreen) {
-      console.log("Screen not found:", currentScreenId);
-      return;
-    }
-    
-    console.log("Found screen:", currentScreen.name, "Type:", currentScreen.type);
+    if (!currentScreen) return;
 
-    // Player state
-    let playerX = 32;
-    let playerY = 160;
-    let playerVelX = 0;
-    let playerVelY = 0;
-    let isJumping = false;
-    let frameCount = 0;
-    let animFrame = 0;
-    const keys: Record<string, boolean> = {};
-
-    // Find player object on screen
+    // Find player object
     const playerPlaced = currentScreen.placedObjects?.find(po => {
       const obj = objects.find(o => o.id === po.objectId);
       return obj?.type === "player";
     });
+    if (!playerPlaced) return;
 
-    console.log("Player placed:", playerPlaced);
-    console.log("Total placed objects:", currentScreen.placedObjects?.length || 0);
-
-    if (playerPlaced) {
-      playerX = playerPlaced.x * 8;
-      playerY = playerPlaced.y * 8;
-      console.log("Player starting position:", playerX, playerY);
-    }
-
-    const playerObj = playerPlaced ? objects.find(o => o.id === playerPlaced.objectId) : null;
+    const playerObj = objects.find(o => o.id === playerPlaced.objectId);
     const playerSprite = playerObj ? sprites.find(s => s.id === playerObj.spriteId) : null;
-    
-    console.log("Player object:", playerObj?.name);
-    console.log("Player sprite:", playerSprite?.name);
+    if (!playerObj || !playerSprite) return;
+
+    // Calculate ground position (match ObjectLibrary.tsx logic)
+    const spriteHeight = playerSprite.size.split("x").map(Number)[1] || 16;
+    const floorHeightWorld = 16; // 2 tiles
+    let groundY = 192 - floorHeightWorld - spriteHeight;
+
+    // Player state
+    let playerX = playerPlaced.x * 8;
+    let playerY = groundY;
+    let isJumping = false;
+    let jumpFrameIndex = 0;
+    let facingLeft = false;
+    let animFrame = 0;
+    const keys: Record<string, boolean> = {};
 
     // Keyboard handlers
     const handleKeyDown = (e: KeyboardEvent) => {
-      keys[e.key.toLowerCase()] = true;
+      const key = e.key.toLowerCase();
+      if (key === "arrowleft" || key === "q") keys["left"] = true;
+      if (key === "arrowright" || key === "w") keys["right"] = true;
+      if (key === "arrowup" || key === " " || key === "p") keys["jump"] = true;
     };
     const handleKeyUp = (e: KeyboardEvent) => {
-      keys[e.key.toLowerCase()] = false;
+      const key = e.key.toLowerCase();
+      if (key === "arrowleft" || key === "q") keys["left"] = false;
+      if (key === "arrowright" || key === "w") keys["right"] = false;
+      if (key === "arrowup" || key === " " || key === "p") keys["jump"] = false;
     };
 
     window.addEventListener("keydown", handleKeyDown);
     window.addEventListener("keyup", handleKeyUp);
 
     const gameLoop = () => {
-      frameCount++;
+      const walkSpeed = playerObj.properties.speed || 2;
 
-      // Clear canvas with a visible color to confirm it's rendering
+      // Clear canvas
       ctx.fillStyle = "#000";
       ctx.fillRect(0, 0, 256, 192);
-      
-      // Draw a test border to confirm canvas is working
-      ctx.strokeStyle = "#ff0";
-      ctx.lineWidth = 2;
-      ctx.strokeRect(1, 1, 254, 190);
 
       // Render screen tiles/blocks
       if (currentScreen.type === "game" && currentScreen.tiles) {
@@ -235,57 +218,104 @@ export const LevelDesigner = ({ levels, screens, blocks, objects, sprites, onLev
         }
       }
 
-      // Player physics
-      if (playerObj && playerSprite) {
-        const speed = playerObj.properties.speed || 2;
-        const gravity = 0.5;
-        const jumpPower = -8;
+      // Start jump
+      if (keys["jump"] && !isJumping) {
+        isJumping = true;
+        jumpFrameIndex = 0;
+      }
 
-        // Horizontal movement
-        if (keys["arrowleft"] || keys["a"]) {
-          playerVelX = -speed;
-        } else if (keys["arrowright"] || keys["d"]) {
-          playerVelX = speed;
+      // Horizontal movement
+      if (keys["left"]) {
+        playerX -= walkSpeed;
+        facingLeft = true;
+      } else if (keys["right"]) {
+        playerX += walkSpeed;
+        facingLeft = false;
+      }
+
+      // Jump physics - variable height
+      if (isJumping) {
+        if (!keys["jump"] && jumpFrameIndex < JUMP_PEAK_FRAME) {
+          // Released early - fast fall
+          playerY += 3;
+        } else if (jumpFrameIndex < JUMP_TRAJECTORY.length) {
+          // Normal trajectory
+          playerY += JUMP_TRAJECTORY[jumpFrameIndex];
+          jumpFrameIndex++;
         } else {
-          playerVelX = 0;
+          // Keep falling
+          playerY += 4;
         }
 
-        // Jump
-        if ((keys[" "] || keys["arrowup"] || keys["w"]) && !isJumping) {
-          playerVelY = jumpPower;
-          isJumping = true;
-        }
-
-        // Apply gravity
-        playerVelY += gravity;
-
-        // Update position
-        playerX += playerVelX;
-        playerY += playerVelY;
-
-        // Ground collision (simple floor at y=176 for 16px sprite)
-        if (playerY >= 176) {
-          playerY = 176;
-          playerVelY = 0;
+        // Land on ground
+        if (playerY >= groundY) {
+          playerY = groundY;
           isJumping = false;
+          jumpFrameIndex = 0;
+        }
+      }
+
+      // Clamp horizontal bounds
+      if (playerX < 0) playerX = 0;
+      if (playerX > 256 - spriteHeight) playerX = 256 - spriteHeight;
+
+      // Animate sprite frames
+      const isMoving = keys["left"] || keys["right"] || isJumping;
+      if (isMoving && playerSprite.frames.length > 1) {
+        animFrame = (animFrame + 1) % playerSprite.frames.length;
+      }
+
+      // Determine which sprite to use (with mirroring support)
+      let spriteId = playerObj.spriteId;
+      let shouldMirror = false;
+
+      if (playerObj.animations) {
+        const animations = playerObj.animations;
+        let action: keyof typeof animations = facingLeft ? "moveLeft" : "moveRight";
+        
+        if (isJumping) {
+          action = facingLeft ? "jumpLeft" : "jumpRight";
         }
 
-        // Bounds
-        if (playerX < 0) playerX = 0;
-        if (playerX > 256 - 16) playerX = 256 - 16;
-
-        // Animate sprite
-        if (frameCount % 6 === 0 && (keys["arrowleft"] || keys["arrowright"] || keys["a"] || keys["d"])) {
-          animFrame = (animFrame + 1) % (playerSprite.frames.length || 1);
+        if (animations[action]) {
+          spriteId = animations[action] as string;
+        } else if (action === "moveRight" && !animations.moveRight && animations.moveLeft) {
+          spriteId = animations.moveLeft;
+          shouldMirror = true;
+        } else if (action === "moveLeft" && !animations.moveLeft && animations.moveRight) {
+          spriteId = animations.moveRight;
+          shouldMirror = true;
+        } else if (action === "jumpRight" && !animations.jumpRight && animations.jumpLeft) {
+          spriteId = animations.jumpLeft;
+          shouldMirror = true;
+        } else if (action === "jumpLeft" && !animations.jumpLeft && animations.jumpRight) {
+          spriteId = animations.jumpRight;
+          shouldMirror = true;
         }
+      }
 
-        // Render player sprite
-        const frame = playerSprite.frames[animFrame] || playerSprite.frames[0];
-        if (frame?.pixels) {
-          const spriteSize = playerSprite.size.split("x").map(Number);
-          const spriteWidth = spriteSize[0] || 16;
-          const spriteHeight = spriteSize[1] || 16;
-          
+      const currentSprite = sprites.find(s => s.id === spriteId) || playerSprite;
+      const frame = currentSprite.frames[animFrame % currentSprite.frames.length];
+
+      // Render player sprite
+      if (frame?.pixels) {
+        const spriteWidth = currentSprite.size.split("x").map(Number)[0] || 16;
+        const spriteHeight = currentSprite.size.split("x").map(Number)[1] || 16;
+
+        if (shouldMirror) {
+          ctx.save();
+          ctx.scale(-1, 1);
+          for (let y = 0; y < spriteHeight; y++) {
+            for (let x = 0; x < spriteWidth; x++) {
+              const colorIndex = frame.pixels[y]?.[x];
+              if (colorIndex !== undefined && colorIndex !== 0) {
+                ctx.fillStyle = SPECTRUM_COLORS[colorIndex]?.value || "#fff";
+                ctx.fillRect(-(playerX + spriteWidth) + x, playerY + y, 1, 1);
+              }
+            }
+          }
+          ctx.restore();
+        } else {
           for (let y = 0; y < spriteHeight; y++) {
             for (let x = 0; x < spriteWidth; x++) {
               const colorIndex = frame.pixels[y]?.[x];
@@ -297,20 +327,19 @@ export const LevelDesigner = ({ levels, screens, blocks, objects, sprites, onLev
           }
         }
       }
-
-      gameLoopRef.current = requestAnimationFrame(gameLoop);
     };
 
-    gameLoop();
+    // Fixed 12fps game loop
+    gameLoopRef.current = window.setInterval(gameLoop, FRAME_INTERVAL);
 
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);
       if (gameLoopRef.current) {
-        cancelAnimationFrame(gameLoopRef.current);
+        clearInterval(gameLoopRef.current);
       }
     };
-  }, [playingLevelId, levels, screens, blocks, objects, sprites]);
+  }, [playingLevelId, levels, screens, blocks, objects, sprites, JUMP_TRAJECTORY, JUMP_PEAK_FRAME, FRAME_INTERVAL]);
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
