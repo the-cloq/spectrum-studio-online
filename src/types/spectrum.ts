@@ -38,8 +38,10 @@ export type Sprite = {
   collisionBox?: {
     width: number; // Visible sprite width for collision (pixels)
     height: number; // Visible sprite height for collision (pixels)
-    offsetX: number; // X offset from sprite origin
-    offsetY: number; // Y offset from sprite origin
+    offsetTop: number; // Offset from top edge (pixels)
+    offsetBottom: number; // Offset from bottom edge (pixels)
+    offsetLeft: number; // Offset from left edge (pixels)
+    offsetRight: number; // Offset from right edge (pixels)
   };
 };
 
