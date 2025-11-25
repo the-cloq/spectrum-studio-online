@@ -385,6 +385,128 @@ export const SpriteEditor = ({ sprites, onSpritesChange }: SpriteEditorProps) =>
             </div>
           </div>
 
+          {/* Collision Box Configuration */}
+          <Card className="p-4 bg-muted/30">
+            <h3 className="text-sm font-semibold mb-3">Collision Box (ZX Spectrum authentic)</h3>
+            <p className="text-xs text-muted-foreground mb-3">
+              Define the collision area matching the visible sprite pixels. Default uses full sprite size.
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs">Width (px)</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  max={width}
+                  value={sprite.collisionBox?.width ?? width}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value) || width;
+                    onSpritesChange(
+                      sprites.map(s =>
+                        s.id === sprite.id
+                          ? {
+                              ...s,
+                              collisionBox: {
+                                width: val,
+                                height: s.collisionBox?.height ?? height,
+                                offsetX: s.collisionBox?.offsetX ?? 0,
+                                offsetY: s.collisionBox?.offsetY ?? 0
+                              }
+                            }
+                          : s
+                      )
+                    );
+                  }}
+                  className="h-8"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Height (px)</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  max={height}
+                  value={sprite.collisionBox?.height ?? height}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value) || height;
+                    onSpritesChange(
+                      sprites.map(s =>
+                        s.id === sprite.id
+                          ? {
+                              ...s,
+                              collisionBox: {
+                                width: s.collisionBox?.width ?? width,
+                                height: val,
+                                offsetX: s.collisionBox?.offsetX ?? 0,
+                                offsetY: s.collisionBox?.offsetY ?? 0
+                              }
+                            }
+                          : s
+                      )
+                    );
+                  }}
+                  className="h-8"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Offset X (px)</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  max={width}
+                  value={sprite.collisionBox?.offsetX ?? 0}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value) || 0;
+                    onSpritesChange(
+                      sprites.map(s =>
+                        s.id === sprite.id
+                          ? {
+                              ...s,
+                              collisionBox: {
+                                width: s.collisionBox?.width ?? width,
+                                height: s.collisionBox?.height ?? height,
+                                offsetX: val,
+                                offsetY: s.collisionBox?.offsetY ?? 0
+                              }
+                            }
+                          : s
+                      )
+                    );
+                  }}
+                  className="h-8"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Offset Y (px)</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  max={height}
+                  value={sprite.collisionBox?.offsetY ?? 0}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value) || 0;
+                    onSpritesChange(
+                      sprites.map(s =>
+                        s.id === sprite.id
+                          ? {
+                              ...s,
+                              collisionBox: {
+                                width: s.collisionBox?.width ?? width,
+                                height: s.collisionBox?.height ?? height,
+                                offsetX: s.collisionBox?.offsetX ?? 0,
+                                offsetY: val
+                              }
+                            }
+                          : s
+                      )
+                    );
+                  }}
+                  className="h-8"
+                />
+              </div>
+            </div>
+          </Card>
+
           <div className="flex gap-2">
             <Button
               variant={!isErasing ? "default" : "outline"}
