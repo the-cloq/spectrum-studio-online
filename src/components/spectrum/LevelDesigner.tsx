@@ -224,9 +224,9 @@ export const LevelDesigner = ({ levels, screens, blocks, objects, sprites, onLev
       return WORLD_HEIGHT - spriteHeight;
     };
 
-    // Player state
+    // Player state - use exact X,Y from Screen Designer
     let playerX = playerPlaced.x * TILE_SIZE;
-    let playerY = getGroundYForSpawn(playerPlaced.x * TILE_SIZE);
+    let playerY = playerPlaced.y * TILE_SIZE;
     let isJumping = false;
     let jumpFrameIndex = 0;
     let facingLeft = false;
@@ -409,6 +409,9 @@ export const LevelDesigner = ({ levels, screens, blocks, objects, sprites, onLev
       }
     };
 
+    // Render initial frame immediately
+    gameLoop();
+    
     // Fixed 12fps game loop
     gameLoopRef.current = window.setInterval(gameLoop, FRAME_INTERVAL);
 
