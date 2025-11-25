@@ -221,7 +221,9 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
     if (!selectedObject || selectedObject.type !== "player") return;
 
     const canvasSize = CANVAS_SIZES[canvasSizeIndex];
-    const groundY = 0;
+    // Ground is 2 tiles (16px) from bottom of 192px world = y position 176-192
+    // In canvas coordinates (centered at 0,0), groundY = 192/2 - 16 = 80
+    const groundY = (WORLD_HEIGHT / 2) - 16;
 
     const gameLoop = () => {
       const walkSpeed = selectedObject.properties.speed || 2;
@@ -483,6 +485,12 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
     // Clear canvas background
     ctx.fillStyle = "#000000";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Draw red floor (2 tiles high = 16px in game space) at bottom
+    const floorHeightInPixels = 16; // 2 tiles of 8px each
+    const floorStartY = canvas.height - (floorHeightInPixels * (canvas.height / WORLD_HEIGHT));
+    ctx.fillStyle = SPECTRUM_COLORS[2].value; // Red (index 2)
+    ctx.fillRect(0, floorStartY, canvas.width, canvas.height - floorStartY);
 
     // Each game pixel is 1×1 in 256×192 view and 2×2 in 512×384 view
     const pixelScaleX = canvas.width / WORLD_WIDTH;
