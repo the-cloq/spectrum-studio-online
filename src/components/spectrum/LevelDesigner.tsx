@@ -166,8 +166,10 @@ export const LevelDesigner = ({ levels, screens, blocks, objects, sprites, onLev
     const collisionBox = playerSprite.collisionBox || {
       width: spriteWidth,
       height: spriteHeight,
-      offsetX: 0,
-      offsetY: 0
+      offsetTop: 0,
+      offsetBottom: 0,
+      offsetLeft: 0,
+      offsetRight: 0
     };
 
     // World / grid constants (match ScreenDesigner/ObjectLibrary)
@@ -187,8 +189,8 @@ export const LevelDesigner = ({ levels, screens, blocks, objects, sprites, onLev
 
     const getGroundYForFall = (x: number, prevTopY: number) => {
       // Use collision box for accurate collision detection
-      const collisionX = x + collisionBox.offsetX;
-      const collisionBottom = prevTopY + collisionBox.offsetY + collisionBox.height;
+      const collisionX = x + collisionBox.offsetLeft;
+      const collisionBottom = prevTopY + collisionBox.offsetTop + collisionBox.height;
       
       const colStart = Math.max(0, Math.min(GRID_COLS - 1, Math.floor(collisionX / TILE_SIZE)));
       const colEnd = Math.max(
@@ -209,7 +211,7 @@ export const LevelDesigner = ({ levels, screens, blocks, objects, sprites, onLev
         if (hasSolid) {
           // Calculate sprite top Y from collision bottom
           const blockTopY = row * TILE_SIZE;
-          const spriteTopY = blockTopY - collisionBox.height - collisionBox.offsetY;
+          const spriteTopY = blockTopY - collisionBox.height - collisionBox.offsetTop;
           if (spriteTopY >= prevTopY && spriteTopY < groundY) {
             groundY = spriteTopY;
           }
@@ -221,7 +223,7 @@ export const LevelDesigner = ({ levels, screens, blocks, objects, sprites, onLev
 
     const getGroundYForSpawn = (x: number) => {
       // Use collision box for accurate spawn positioning
-      const collisionX = x + collisionBox.offsetX;
+      const collisionX = x + collisionBox.offsetLeft;
       
       const colStart = Math.max(0, Math.min(GRID_COLS - 1, Math.floor(collisionX / TILE_SIZE)));
       const colEnd = Math.max(
@@ -234,7 +236,7 @@ export const LevelDesigner = ({ levels, screens, blocks, objects, sprites, onLev
           if (isSolidBlockAt(row, col)) {
             // Calculate sprite top Y from collision bottom
             const blockTopY = row * TILE_SIZE;
-            return blockTopY - collisionBox.height - collisionBox.offsetY;
+            return blockTopY - collisionBox.height - collisionBox.offsetTop;
           }
         }
       }

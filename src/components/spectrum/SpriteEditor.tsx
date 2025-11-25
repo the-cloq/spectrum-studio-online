@@ -115,6 +115,51 @@ export const SpriteEditor = ({ sprites, onSpritesChange }: SpriteEditorProps) =>
         ctx.stroke();
       }
     }
+
+    // Draw collision box offset guides (dotted lines)
+    if (sprite.collisionBox) {
+      const { offsetTop, offsetBottom, offsetLeft, offsetRight } = sprite.collisionBox;
+      
+      ctx.strokeStyle = "rgba(255, 100, 100, 0.8)";
+      ctx.lineWidth = 2;
+      ctx.setLineDash([4, 4]);
+
+      // Top offset line
+      if (offsetTop > 0) {
+        ctx.beginPath();
+        ctx.moveTo(0, offsetTop * zoom);
+        ctx.lineTo(width * zoom, offsetTop * zoom);
+        ctx.stroke();
+      }
+
+      // Bottom offset line
+      if (offsetBottom > 0) {
+        const bottomY = (height - offsetBottom) * zoom;
+        ctx.beginPath();
+        ctx.moveTo(0, bottomY);
+        ctx.lineTo(width * zoom, bottomY);
+        ctx.stroke();
+      }
+
+      // Left offset line
+      if (offsetLeft > 0) {
+        ctx.beginPath();
+        ctx.moveTo(offsetLeft * zoom, 0);
+        ctx.lineTo(offsetLeft * zoom, height * zoom);
+        ctx.stroke();
+      }
+
+      // Right offset line
+      if (offsetRight > 0) {
+        const rightX = (width - offsetRight) * zoom;
+        ctx.beginPath();
+        ctx.moveTo(rightX, 0);
+        ctx.lineTo(rightX, height * zoom);
+        ctx.stroke();
+      }
+
+      ctx.setLineDash([]);
+    }
   };
 
   const drawPreview = () => {
@@ -389,7 +434,7 @@ export const SpriteEditor = ({ sprites, onSpritesChange }: SpriteEditorProps) =>
           <Card className="p-4 bg-muted/30">
             <h3 className="text-sm font-semibold mb-3">Collision Box (ZX Spectrum authentic)</h3>
             <p className="text-xs text-muted-foreground mb-3">
-              Define the collision area matching the visible sprite pixels. Default uses full sprite size.
+              Define the collision area with offsets from each edge. Dotted lines show offset boundaries.
             </p>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
@@ -409,8 +454,10 @@ export const SpriteEditor = ({ sprites, onSpritesChange }: SpriteEditorProps) =>
                               collisionBox: {
                                 width: val,
                                 height: s.collisionBox?.height ?? height,
-                                offsetX: s.collisionBox?.offsetX ?? 0,
-                                offsetY: s.collisionBox?.offsetY ?? 0
+                                offsetTop: s.collisionBox?.offsetTop ?? 0,
+                                offsetBottom: s.collisionBox?.offsetBottom ?? 0,
+                                offsetLeft: s.collisionBox?.offsetLeft ?? 0,
+                                offsetRight: s.collisionBox?.offsetRight ?? 0
                               }
                             }
                           : s
@@ -437,8 +484,10 @@ export const SpriteEditor = ({ sprites, onSpritesChange }: SpriteEditorProps) =>
                               collisionBox: {
                                 width: s.collisionBox?.width ?? width,
                                 height: val,
-                                offsetX: s.collisionBox?.offsetX ?? 0,
-                                offsetY: s.collisionBox?.offsetY ?? 0
+                                offsetTop: s.collisionBox?.offsetTop ?? 0,
+                                offsetBottom: s.collisionBox?.offsetBottom ?? 0,
+                                offsetLeft: s.collisionBox?.offsetLeft ?? 0,
+                                offsetRight: s.collisionBox?.offsetRight ?? 0
                               }
                             }
                           : s
@@ -449,40 +498,12 @@ export const SpriteEditor = ({ sprites, onSpritesChange }: SpriteEditorProps) =>
                 />
               </div>
               <div className="space-y-1">
-                <Label className="text-xs">Offset X (px)</Label>
-                <Input
-                  type="number"
-                  min={0}
-                  max={width}
-                  value={sprite.collisionBox?.offsetX ?? 0}
-                  onChange={(e) => {
-                    const val = parseInt(e.target.value) || 0;
-                    onSpritesChange(
-                      sprites.map(s =>
-                        s.id === sprite.id
-                          ? {
-                              ...s,
-                              collisionBox: {
-                                width: s.collisionBox?.width ?? width,
-                                height: s.collisionBox?.height ?? height,
-                                offsetX: val,
-                                offsetY: s.collisionBox?.offsetY ?? 0
-                              }
-                            }
-                          : s
-                      )
-                    );
-                  }}
-                  className="h-8"
-                />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">Offset Y (px)</Label>
+                <Label className="text-xs">Offset Top (px)</Label>
                 <Input
                   type="number"
                   min={0}
                   max={height}
-                  value={sprite.collisionBox?.offsetY ?? 0}
+                  value={sprite.collisionBox?.offsetTop ?? 0}
                   onChange={(e) => {
                     const val = parseInt(e.target.value) || 0;
                     onSpritesChange(
@@ -493,8 +514,100 @@ export const SpriteEditor = ({ sprites, onSpritesChange }: SpriteEditorProps) =>
                               collisionBox: {
                                 width: s.collisionBox?.width ?? width,
                                 height: s.collisionBox?.height ?? height,
-                                offsetX: s.collisionBox?.offsetX ?? 0,
-                                offsetY: val
+                                offsetTop: val,
+                                offsetBottom: s.collisionBox?.offsetBottom ?? 0,
+                                offsetLeft: s.collisionBox?.offsetLeft ?? 0,
+                                offsetRight: s.collisionBox?.offsetRight ?? 0
+                              }
+                            }
+                          : s
+                      )
+                    );
+                  }}
+                  className="h-8"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Offset Bottom (px)</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  max={height}
+                  value={sprite.collisionBox?.offsetBottom ?? 0}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value) || 0;
+                    onSpritesChange(
+                      sprites.map(s =>
+                        s.id === sprite.id
+                          ? {
+                              ...s,
+                              collisionBox: {
+                                width: s.collisionBox?.width ?? width,
+                                height: s.collisionBox?.height ?? height,
+                                offsetTop: s.collisionBox?.offsetTop ?? 0,
+                                offsetBottom: val,
+                                offsetLeft: s.collisionBox?.offsetLeft ?? 0,
+                                offsetRight: s.collisionBox?.offsetRight ?? 0
+                              }
+                            }
+                          : s
+                      )
+                    );
+                  }}
+                  className="h-8"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Offset Left (px)</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  max={width}
+                  value={sprite.collisionBox?.offsetLeft ?? 0}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value) || 0;
+                    onSpritesChange(
+                      sprites.map(s =>
+                        s.id === sprite.id
+                          ? {
+                              ...s,
+                              collisionBox: {
+                                width: s.collisionBox?.width ?? width,
+                                height: s.collisionBox?.height ?? height,
+                                offsetTop: s.collisionBox?.offsetTop ?? 0,
+                                offsetBottom: s.collisionBox?.offsetBottom ?? 0,
+                                offsetLeft: val,
+                                offsetRight: s.collisionBox?.offsetRight ?? 0
+                              }
+                            }
+                          : s
+                      )
+                    );
+                  }}
+                  className="h-8"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Offset Right (px)</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  max={width}
+                  value={sprite.collisionBox?.offsetRight ?? 0}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value) || 0;
+                    onSpritesChange(
+                      sprites.map(s =>
+                        s.id === sprite.id
+                          ? {
+                              ...s,
+                              collisionBox: {
+                                width: s.collisionBox?.width ?? width,
+                                height: s.collisionBox?.height ?? height,
+                                offsetTop: s.collisionBox?.offsetTop ?? 0,
+                                offsetBottom: s.collisionBox?.offsetBottom ?? 0,
+                                offsetLeft: s.collisionBox?.offsetLeft ?? 0,
+                                offsetRight: val
                               }
                             }
                           : s
