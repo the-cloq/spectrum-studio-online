@@ -35,6 +35,12 @@ export type Sprite = {
   frames: SpriteFrame[];
   animationSpeed: number; // fps (1-12)
   preview?: string; // Base64 data URL for preview
+  collisionBox?: {
+    width: number; // Visible sprite width for collision (pixels)
+    height: number; // Visible sprite height for collision (pixels)
+    offsetX: number; // X offset from sprite origin
+    offsetY: number; // Y offset from sprite origin
+  };
 };
 
 export type AnimationSet = {
