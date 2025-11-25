@@ -124,18 +124,39 @@ export const LevelDesigner = ({ levels, screens, blocks, objects, sprites, onLev
 
   // Game loop for playing level
   useEffect(() => {
-    if (!playingLevelId || !playCanvasRef.current) return;
+    if (!playingLevelId) {
+      console.log("No playing level ID");
+      return;
+    }
+    
+    if (!playCanvasRef.current) {
+      console.log("Canvas ref not ready yet");
+      return;
+    }
 
+    console.log("Starting game loop for level:", playingLevelId);
+    
     const canvas = playCanvasRef.current;
     const ctx = canvas.getContext("2d");
-    if (!ctx) return;
+    if (!ctx) {
+      console.log("Failed to get canvas context");
+      return;
+    }
 
     const level = levels.find(l => l.id === playingLevelId);
-    if (!level || level.screenIds.length === 0) return;
+    if (!level || level.screenIds.length === 0) {
+      console.log("Level not found or has no screens");
+      return;
+    }
 
     const currentScreenId = level.screenIds[0];
     const currentScreen = screens.find(s => s.id === currentScreenId);
-    if (!currentScreen) return;
+    if (!currentScreen) {
+      console.log("Screen not found:", currentScreenId);
+      return;
+    }
+    
+    console.log("Found screen:", currentScreen.name, "Type:", currentScreen.type);
 
     // Player state
     let playerX = 32;
@@ -153,13 +174,20 @@ export const LevelDesigner = ({ levels, screens, blocks, objects, sprites, onLev
       return obj?.type === "player";
     });
 
+    console.log("Player placed:", playerPlaced);
+    console.log("Total placed objects:", currentScreen.placedObjects?.length || 0);
+
     if (playerPlaced) {
       playerX = playerPlaced.x * 8;
       playerY = playerPlaced.y * 8;
+      console.log("Player starting position:", playerX, playerY);
     }
 
     const playerObj = playerPlaced ? objects.find(o => o.id === playerPlaced.objectId) : null;
     const playerSprite = playerObj ? sprites.find(s => s.id === playerObj.spriteId) : null;
+    
+    console.log("Player object:", playerObj?.name);
+    console.log("Player sprite:", playerSprite?.name);
 
     // Keyboard handlers
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -175,9 +203,14 @@ export const LevelDesigner = ({ levels, screens, blocks, objects, sprites, onLev
     const gameLoop = () => {
       frameCount++;
 
-      // Clear canvas
+      // Clear canvas with a visible color to confirm it's rendering
       ctx.fillStyle = "#000";
       ctx.fillRect(0, 0, 256, 192);
+      
+      // Draw a test border to confirm canvas is working
+      ctx.strokeStyle = "#ff0";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(1, 1, 254, 190);
 
       // Render screen tiles/blocks
       if (currentScreen.type === "game" && currentScreen.tiles) {
