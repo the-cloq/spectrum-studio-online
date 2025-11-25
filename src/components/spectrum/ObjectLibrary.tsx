@@ -221,9 +221,32 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
     if (!selectedObject || selectedObject.type !== "player") return;
 
     const canvasSize = CANVAS_SIZES[canvasSizeIndex];
-    // Ground is 2 tiles (16px) from bottom of 192px world = y position 176-192
-    // In canvas coordinates (centered at 0,0), groundY = 192/2 - 16 = 80
-    const groundY = (WORLD_HEIGHT / 2) - 16;
+
+    // Calculate ground position so the sprite stands exactly on the red floor
+    // 1) Get sprite height in game pixels (fallback to 16 if unknown)
+    let spriteHeight = 16;
+    const baseSprite = sprites.find((s) => s.id === selectedObject.spriteId);
+    if (baseSprite) {
+      const sizeParts = baseSprite.size.split("x").map(Number);
+      if (sizeParts.length === 2 && !Number.isNaN(sizeParts[1])) {
+        spriteHeight = sizeParts[1];
+      }
+    }
+
+    // 2) Each logical game pixel is scaled to canvas pixels
+    const pixelSize = canvasSize.height / WORLD_HEIGHT;
+
+    // 3) Floor is 2 tiles (16px) high at the very bottom of the 192px world
+    const floorHeightWorld = 16; // 2 × 8px tiles
+
+    // 4) World-space Y (centered at 0) where the sprite's feet touch the floor
+    const groundYWorld = WORLD_HEIGHT / 2 - floorHeightWorld - spriteHeight / 2;
+
+    // 5) Convert world-space ground to the canvas-space offset used by playerPosition.y
+    const groundY = groundYWorld * pixelSize;
+
+    // Ensure the player starts standing on the floor (not floating in space)
+    setPlayerPosition((prev) => ({ ...prev, y: groundY }));
 
     const gameLoop = () => {
       const walkSpeed = selectedObject.properties.speed || 2;
