@@ -170,14 +170,6 @@ export const LevelDesigner = ({ levels, screens, blocks, objects, sprites, onLev
       offsetBottom: 0,
       offsetLeft: 0,
       offsetRight: 0
-  };
-
-    // Effective collision box that respects all offsets
-    const effectiveCollisionBox = {
-      left: collisionBox.offsetLeft,
-      width: collisionBox.width - collisionBox.offsetLeft - collisionBox.offsetRight,
-      top: collisionBox.offsetTop,
-      height: collisionBox.height - collisionBox.offsetTop - collisionBox.offsetBottom
     };
 
     // World / grid constants (match ScreenDesigner/ObjectLibrary)
@@ -197,13 +189,13 @@ export const LevelDesigner = ({ levels, screens, blocks, objects, sprites, onLev
 
     const getGroundYForFall = (x: number, prevTopY: number) => {
       // Use collision box for accurate collision detection
-      const collisionX = x + effectiveCollisionBox.left;
-      const collisionBottom = prevTopY + effectiveCollisionBox.top + effectiveCollisionBox.height;
-
+      const collisionX = x + collisionBox.offsetLeft;
+      const collisionBottom = prevTopY + collisionBox.offsetTop + collisionBox.height;
+      
       const colStart = Math.max(0, Math.min(GRID_COLS - 1, Math.floor(collisionX / TILE_SIZE)));
       const colEnd = Math.max(
         0,
-        Math.min(GRID_COLS - 1, Math.floor((collisionX + effectiveCollisionBox.width - 1) / TILE_SIZE))
+        Math.min(GRID_COLS - 1, Math.floor((collisionX + collisionBox.width - 1) / TILE_SIZE))
       );
 
       let groundY = WORLD_HEIGHT - spriteHeight; // fallback to bottom of screen
@@ -231,12 +223,12 @@ export const LevelDesigner = ({ levels, screens, blocks, objects, sprites, onLev
 
     const getGroundYForSpawn = (x: number) => {
       // Use collision box for accurate spawn positioning
-      const collisionX = x + effectiveCollisionBox.left;
-
+      const collisionX = x + collisionBox.offsetLeft;
+      
       const colStart = Math.max(0, Math.min(GRID_COLS - 1, Math.floor(collisionX / TILE_SIZE)));
       const colEnd = Math.max(
         0,
-        Math.min(GRID_COLS - 1, Math.floor((collisionX + effectiveCollisionBox.width - 1) / TILE_SIZE))
+        Math.min(GRID_COLS - 1, Math.floor((collisionX + collisionBox.width - 1) / TILE_SIZE))
       );
 
       for (let row = GRID_ROWS - 1; row >= 0; row--) {
