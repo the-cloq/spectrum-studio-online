@@ -195,25 +195,34 @@ export const LevelDesigner = ({ levels, screens, blocks, objects, sprites, onLev
       ctx.fillStyle = "#000";
       ctx.fillRect(0, 0, 256, 192);
 
-      // Render screen tiles/blocks
+      // Render screen tiles/blocks (32x24 grid, each tile is 8x8 pixels)
       if (currentScreen.type === "game" && currentScreen.tiles) {
-        for (let row = 0; row < 12; row++) {
-          for (let col = 0; col < 16; col++) {
+        for (let row = 0; row < 24; row++) {
+          for (let col = 0; col < 32; col++) {
             const blockId = currentScreen.tiles[row]?.[col];
-            if (blockId) {
-              const block = blocks.find(b => b.id === blockId);
-              if (block?.sprite?.frames?.[0]?.pixels) {
-                for (let y = 0; y < 16; y++) {
-                  for (let x = 0; x < 16; x++) {
-                    const colorIndex = block.sprite.frames[0].pixels[y]?.[x];
-                    if (colorIndex !== undefined && colorIndex !== 0) {
-                      ctx.fillStyle = SPECTRUM_COLORS[colorIndex]?.value || "#fff";
-                      ctx.fillRect(col * 16 + x, row * 16 + y, 1, 1);
-                    }
-                  }
-                }
-              }
-            }
+            if (!blockId) continue;
+
+            const block = blocks.find(b => b.id === blockId);
+            if (!block?.sprite?.frames?.[0]?.pixels) continue;
+
+            const sprite = block.sprite;
+            const tileSize = 8; // Each grid cell is 8x8 pixels
+
+            // Render each pixel of the sprite
+            sprite.frames[0].pixels.forEach((pixelRow, py) => {
+              pixelRow.forEach((colorIndex, px) => {
+                if (!colorIndex || colorIndex === 0) return;
+
+                const color = SPECTRUM_COLORS[colorIndex]?.value || "#000";
+                ctx.fillStyle = color;
+                ctx.fillRect(
+                  col * tileSize + px,
+                  row * tileSize + py,
+                  1,
+                  1
+                );
+              });
+            });
           }
         }
       }
