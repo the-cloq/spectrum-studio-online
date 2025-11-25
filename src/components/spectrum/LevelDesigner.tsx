@@ -157,14 +157,76 @@ export const LevelDesigner = ({ levels, screens, blocks, objects, sprites, onLev
     const playerSprite = playerObj ? sprites.find(s => s.id === playerObj.spriteId) : null;
     if (!playerObj || !playerSprite) return;
 
-    // Calculate ground position (match ObjectLibrary.tsx logic)
-    const spriteHeight = playerSprite.size.split("x").map(Number)[1] || 16;
-    const floorHeightWorld = 16; // 2 tiles
-    let groundY = 192 - floorHeightWorld - spriteHeight;
+    // Sprite dimensions
+    const [spriteWidthRaw, spriteHeightRaw] = playerSprite.size.split("x").map(Number);
+    const spriteWidth = spriteWidthRaw || 16;
+    const spriteHeight = spriteHeightRaw || 16;
+
+    // World / grid constants (match ScreenDesigner/ObjectLibrary)
+    const WORLD_WIDTH = 256;
+    const WORLD_HEIGHT = 192;
+    const TILE_SIZE = 8;
+    const GRID_COLS = 32;
+    const GRID_ROWS = 24;
+
+    const isSolidBlockAt = (row: number, col: number) => {
+      const blockId = currentScreen.tiles?.[row]?.[col];
+      if (!blockId) return false;
+      const block = blocks.find(b => b.id === blockId);
+      if (!block) return false;
+      return block.type === "solid" || block.properties?.solid;
+    };
+
+    const getGroundYForFall = (x: number, prevTopY: number) => {
+      const colStart = Math.max(0, Math.min(GRID_COLS - 1, Math.floor(x / TILE_SIZE)));
+      const colEnd = Math.max(
+        0,
+        Math.min(GRID_COLS - 1, Math.floor((x + spriteWidth - 1) / TILE_SIZE))
+      );
+
+      let groundY = WORLD_HEIGHT - spriteHeight; // fallback to bottom of screen
+
+      for (let row = 0; row < GRID_ROWS; row++) {
+        let hasSolid = false;
+        for (let col = colStart; col <= colEnd; col++) {
+          if (isSolidBlockAt(row, col)) {
+            hasSolid = true;
+            break;
+          }
+        }
+        if (hasSolid) {
+          const topY = row * TILE_SIZE - spriteHeight;
+          if (topY >= prevTopY && topY < groundY) {
+            groundY = topY;
+          }
+        }
+      }
+
+      return groundY;
+    };
+
+    const getGroundYForSpawn = (x: number) => {
+      const colStart = Math.max(0, Math.min(GRID_COLS - 1, Math.floor(x / TILE_SIZE)));
+      const colEnd = Math.max(
+        0,
+        Math.min(GRID_COLS - 1, Math.floor((x + spriteWidth - 1) / TILE_SIZE))
+      );
+
+      for (let row = GRID_ROWS - 1; row >= 0; row--) {
+        for (let col = colStart; col <= colEnd; col++) {
+          if (isSolidBlockAt(row, col)) {
+            return row * TILE_SIZE - spriteHeight;
+          }
+        }
+      }
+
+      // No solid blocks under player — stand on absolute bottom
+      return WORLD_HEIGHT - spriteHeight;
+    };
 
     // Player state
-    let playerX = playerPlaced.x * 8;
-    let playerY = groundY;
+    let playerX = playerPlaced.x * TILE_SIZE;
+    let playerY = getGroundYForSpawn(playerPlaced.x * TILE_SIZE);
     let isJumping = false;
     let jumpFrameIndex = 0;
     let facingLeft = false;
@@ -242,8 +304,10 @@ export const LevelDesigner = ({ levels, screens, blocks, objects, sprites, onLev
         facingLeft = false;
       }
 
-      // Jump physics - variable height
+      // Jump / gravity - variable height with solid block collisions
       if (isJumping) {
+        const prevY = playerY;
+
         if (!keys["jump"] && jumpFrameIndex < JUMP_PEAK_FRAME) {
           // Released early - fast fall
           playerY += 3;
@@ -252,21 +316,28 @@ export const LevelDesigner = ({ levels, screens, blocks, objects, sprites, onLev
           playerY += JUMP_TRAJECTORY[jumpFrameIndex];
           jumpFrameIndex++;
         } else {
-          // Keep falling
+          // Past trajectory - keep falling
           playerY += 4;
         }
 
-        // Land on ground
+        // Land on nearest solid block or floor
+        const groundY = getGroundYForFall(playerX, prevY);
         if (playerY >= groundY) {
           playerY = groundY;
           isJumping = false;
           jumpFrameIndex = 0;
         }
+      } else {
+        // Not jumping — gently drop to ground if we walk off a ledge
+        const groundY = getGroundYForFall(playerX, playerY);
+        if (playerY < groundY) {
+          playerY = Math.min(playerY + 4, groundY);
+        }
       }
 
       // Clamp horizontal bounds
       if (playerX < 0) playerX = 0;
-      if (playerX > 256 - spriteHeight) playerX = 256 - spriteHeight;
+      if (playerX > WORLD_WIDTH - spriteWidth) playerX = WORLD_WIDTH - spriteWidth;
 
       // Animate sprite frames
       const isMoving = keys["left"] || keys["right"] || isJumping;
