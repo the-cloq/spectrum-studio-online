@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ColorPalette } from "@/components/spectrum/ColorPalette";
+import { LoadingScreenCreator } from "@/components/spectrum/LoadingScreenCreator";
 import { SPECTRUM_COLORS, type SpectrumColor, type Screen, type Block, type GameObject, type PlacedObject } from "@/types/spectrum";
 import { Plus, Trash2, Eraser, ZoomIn, ZoomOut, FlipHorizontal, Move } from "lucide-react";
 import { toast } from "sonner";
@@ -148,8 +149,8 @@ export const ScreenDesigner = ({ blocks, objects, sprites, screens, onScreensCha
       ctx.stroke();
     }
 
-    // TITLE SCREEN
-    if (selectedScreen.type === "title") {
+    // TITLE or LOADING SCREEN
+    if (selectedScreen.type === "title" || selectedScreen.type === "loading") {
       selectedScreen.pixels?.forEach((row, y) => {
         row.forEach((color, x) => {
           if (!color) return;
@@ -272,7 +273,7 @@ export const ScreenDesigner = ({ blocks, objects, sprites, screens, onScreensCha
     const x = Math.floor((e.clientX - rect.left) / blockSize);
     const y = Math.floor((e.clientY - rect.top) / blockSize);
 
-    if (selectedScreen.type === "title") {
+    if (selectedScreen.type === "title" || selectedScreen.type === "loading") {
       const newPixels = selectedScreen.pixels?.map(row => [...row]) || [];
       newPixels[y][x] = isErasing
         ? SPECTRUM_COLORS[0]
@@ -417,10 +418,10 @@ export const ScreenDesigner = ({ blocks, objects, sprites, screens, onScreensCha
       type: newScreenType as Screen["type"],
       width: 512,
       height: 384,
-      tiles: newScreenType === "title"
-        ? undefined
-        : Array(24).fill(null).map(() => Array(32).fill("")),
-      pixels: newScreenType === "title"
+      tiles: newScreenType === "game"
+        ? Array(24).fill(null).map(() => Array(32).fill(""))
+        : undefined,
+      pixels: (newScreenType === "title" || newScreenType === "loading")
         ? Array(192).fill(null).map(() =>
             Array(256).fill(SPECTRUM_COLORS[0]) // Black
           )
@@ -464,25 +465,36 @@ export const ScreenDesigner = ({ blocks, objects, sprites, screens, onScreensCha
       {/* MAIN */}
       <div className="lg:col-span-3 space-y-4">
 
-        <Card className="p-4">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-lg font-bold">Screen Designer</h2>
+        {/* Show Loading Screen Creator for loading type */}
+        {selectedScreen?.type === "loading" ? (
+          <LoadingScreenCreator 
+            screen={selectedScreen} 
+            onScreenChange={(updatedScreen) => {
+              onScreensChange(screens.map(s => s.id === updatedScreen.id ? updatedScreen : s));
+              setSelectedScreen(updatedScreen);
+            }} 
+          />
+        ) : (
+          <>
+            <Card className="p-4">
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-lg font-bold">Screen Designer</h2>
 
-            <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2">
 
-              <Button size="sm" variant="outline" onClick={() => setZoom(z => Math.max(MIN_ZOOM, z - 1))}>
-                <ZoomOut className="w-4 h-4" />
-              </Button>
+                  <Button size="sm" variant="outline" onClick={() => setZoom(z => Math.max(MIN_ZOOM, z - 1))}>
+                    <ZoomOut className="w-4 h-4" />
+                  </Button>
 
-              <Button size="sm" variant="outline" onClick={() => setZoom(z => Math.min(MAX_ZOOM, z + 1))}>
-                <ZoomIn className="w-4 h-4" />
-              </Button>
+                  <Button size="sm" variant="outline" onClick={() => setZoom(z => Math.min(MAX_ZOOM, z + 1))}>
+                    <ZoomIn className="w-4 h-4" />
+                  </Button>
 
-              <Button size="sm" variant={isErasing ? "default" : "outline"} onClick={() => setIsErasing(!isErasing)}>
-                <Eraser className="w-4 h-4 mr-2" />Erase
-              </Button>
-            </div>
-          </div>
+                  <Button size="sm" variant={isErasing ? "default" : "outline"} onClick={() => setIsErasing(!isErasing)}>
+                    <Eraser className="w-4 h-4 mr-2" />Erase
+                  </Button>
+                </div>
+              </div>
 
           <div className="flex justify-center p-4 bg-muted rounded border">
             <canvas
@@ -610,6 +622,8 @@ export const ScreenDesigner = ({ blocks, objects, sprites, screens, onScreensCha
             </Card>
           </>
         )}
+          </>
+        )}
       </div>
 
       {/* RIGHT SIDEBAR */}
@@ -656,11 +670,12 @@ export const ScreenDesigner = ({ blocks, objects, sprites, screens, onScreensCha
           <Input value={newScreenName} onChange={e => setNewScreenName(e.target.value)} placeholder="Enter name" />
 
           <Label>Screen Type</Label>
-          <Select value={newScreenType} onValueChange={(value) => setNewScreenType(value as "title" | "game" | "")}>
+          <Select value={newScreenType} onValueChange={(value) => setNewScreenType(value as "title" | "game" | "loading" | "")}>
             <SelectTrigger className="w-full">
               <SelectValue placeholder="Select Type" />
             </SelectTrigger>
             <SelectContent>
+              <SelectItem value="loading">Loading Screen</SelectItem>
               <SelectItem value="title">Title</SelectItem>
               <SelectItem value="game">Game</SelectItem>
             </SelectContent>
