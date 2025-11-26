@@ -132,9 +132,9 @@ export type PlacedObject = {
 export type Screen = {
   id: string;
   name: string;
-  type: "title" | "game"; // Screen type
+  type: "title" | "game" | "loading"; // Screen type
   tiles?: string[][]; // 2D array of block IDs (for game screens)
-  pixels?: SpectrumColor[][]; // 2D array of colors (for title screens)
+  pixels?: SpectrumColor[][]; // 2D array of colors (for title/loading screens)
   placedObjects?: PlacedObject[]; // Placed game objects
   width: number;
   height: number;

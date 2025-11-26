@@ -8,8 +8,14 @@ export function exportGameToTAP(project: GameProject): Blob {
   // Game data to export
   const gameData: number[] = [];
 
+  // Sort screens: loading screens first, then title screens, then game screens
+  const sortedScreens = [...project.screens].sort((a, b) => {
+    const typeOrder = { loading: 0, title: 1, game: 2 };
+    return typeOrder[a.type] - typeOrder[b.type];
+  });
+
   // Add screen data
-  project.screens.forEach((screen) => {
+  sortedScreens.forEach((screen) => {
     const screenData = encodeScreen(screen, project.blocks);
     gameData.push(...screenData);
   });
@@ -34,6 +40,39 @@ export function exportGameToTAP(project: GameProject): Blob {
 function encodeScreen(screen: Screen, blocks: Block[]): number[] {
   const data: number[] = [];
 
+  // For loading and title screens with pixel data
+  if (screen.type === "loading" || screen.type === "title") {
+    if (screen.pixels) {
+      // Mark as pixel screen
+      data.push(0xFF); // Special marker for pixel screen
+      
+      // Encode pixel data in ZX Spectrum screen format
+      // The ZX Spectrum screen is 256x192 pixels
+      // We'll encode it in 8x8 attribute blocks
+      for (let by = 0; by < 192; by += 8) {
+        for (let bx = 0; bx < 256; bx += 8) {
+          // Get the two colors used in this block
+          const colors = new Set<string>();
+          for (let y = 0; y < 8; y++) {
+            for (let x = 0; x < 8; x++) {
+              const px = bx + x;
+              const py = by + y;
+              if (py < 192 && px < 256 && screen.pixels[py]?.[px]) {
+                colors.add(screen.pixels[py][px].value);
+              }
+            }
+          }
+          
+          // TODO: Convert to proper ZX Spectrum bitmap + attribute format
+          // For now, just mark the presence of data
+          data.push(Array.from(colors).length);
+        }
+      }
+    }
+    return data;
+  }
+
+  // For game screens with tile data
   // Screen header
   data.push(screen.width); // Width in tiles
   data.push(screen.height); // Height in tiles
@@ -41,7 +80,7 @@ function encodeScreen(screen: Screen, blocks: Block[]): number[] {
   // Encode tile map
   for (let y = 0; y < screen.height; y++) {
     for (let x = 0; x < screen.width; x++) {
-      const blockId = screen.tiles[y]?.[x] || "";
+      const blockId = screen.tiles?.[y]?.[x] || "";
       const blockIndex = blocks.findIndex(b => b.id === blockId);
       data.push(blockIndex >= 0 ? blockIndex : 0); // 0 = empty
     }
