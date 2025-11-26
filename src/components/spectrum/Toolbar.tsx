@@ -7,7 +7,8 @@ import {
   Map, 
   Settings, 
   Gamepad2,
-  Layers
+  Layers,
+  Workflow
 } from "lucide-react";
 
 interface ToolbarProps {
@@ -22,6 +23,7 @@ export const Toolbar = ({ activeTab, onTabChange }: ToolbarProps) => {
     { value: "screens", label: "Screens", icon: Map },
     { value: "objects", label: "Objects", icon: Gamepad2 },
     { value: "levels", label: "Levels", icon: Layers },
+    { value: "gameflow", label: "Game Flow", icon: Workflow },
     { value: "settings", label: "Settings", icon: Settings },
   ];
 

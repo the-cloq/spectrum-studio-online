@@ -132,7 +132,7 @@ export type PlacedObject = {
 export type Screen = {
   id: string;
   name: string;
-  type: "title" | "game" | "loading"; // Screen type
+  type: "title" | "game" | "loading" | "instructions" | "controls" | "scoreboard" | "gameover"; // Screen type
   tiles?: string[][]; // 2D array of block IDs (for game screens)
   pixels?: SpectrumColor[][]; // 2D array of colors (for title/loading screens)
   placedObjects?: PlacedObject[]; // Placed game objects
@@ -146,6 +146,14 @@ export type Level = {
   screenIds: string[];
 };
 
+export type GameFlowScreen = {
+  screenId: string;
+  order: number;
+  accessKey?: string; // Key binding to access this screen (e.g., "I" for instructions, "K" for controls)
+  autoShow?: boolean; // Automatically show on game start
+  scrollText?: string; // Text for continuous loop menu
+};
+
 export type GameProject = {
   id: string;
   name: string;
@@ -154,6 +162,7 @@ export type GameProject = {
   blocks: Block[];
   screens: Screen[];
   levels: Level[];
+  gameFlow: GameFlowScreen[]; // Non-playable screen sequence
   settings: {
     lives: number;
     startEnergy: number;

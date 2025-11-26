@@ -4,9 +4,10 @@ import { Toolbar } from "@/components/spectrum/Toolbar";
 import { SpriteEditor } from "@/components/spectrum/SpriteEditor";
 import { BlockDesigner } from "@/components/spectrum/BlockDesigner";
 import { ScreenDesigner } from "@/components/spectrum/ScreenDesigner";
-import { type GameProject, type Sprite, type Block, type Screen, type Level, type GameObject } from "@/types/spectrum";
+import { type GameProject, type Sprite, type Block, type Screen, type Level, type GameObject, type GameFlowScreen } from "@/types/spectrum";
 import { ObjectLibrary } from "@/components/spectrum/ObjectLibrary";
 import { LevelDesigner } from "@/components/spectrum/LevelDesigner";
+import { GameFlowDesigner } from "@/components/spectrum/GameFlowDesigner";
 import { exportGameToTAP, downloadTAPFile } from "@/lib/tapExport";
 import { toast } from "sonner";
 
@@ -28,6 +29,7 @@ const Index = () => {
     blocks: [],
     screens: [],
     levels: [],
+    gameFlow: [],
     settings: {
       lives: 3,
       startEnergy: 100,
@@ -58,6 +60,7 @@ const Index = () => {
           sprites: migratedSprites,
           objects: loaded.objects ?? [],
           levels: loaded.levels ?? [],
+          gameFlow: loaded.gameFlow ?? [],
         };
         setProject(loadedWithDefaults);
         toast.success("Project loaded from browser storage");
@@ -81,6 +84,7 @@ const Index = () => {
   const handleScreensChange = (screens: Screen[]) => setProject({ ...project, screens });
   const handleLevelsChange = (levels: Level[]) => setProject({ ...project, levels });
   const handleObjectsChange = (objects: GameObject[]) => setProject({ ...project, objects });
+  const handleGameFlowChange = (gameFlow: GameFlowScreen[]) => setProject({ ...project, gameFlow });
 
   const handleExportTAP = () => {
     if (project.screens.length === 0) {
@@ -111,6 +115,7 @@ const Index = () => {
           ...loaded,
           objects: loaded.objects ?? [],
           levels: loaded.levels ?? [],
+          gameFlow: loaded.gameFlow ?? [],
         };
         setProject(loadedWithDefaults);
         toast.success("Project loaded!");
@@ -137,6 +142,7 @@ const Index = () => {
         {activeTab === "screens" && <ScreenDesigner blocks={project.blocks} objects={project.objects} sprites={project.sprites} screens={project.screens} onScreensChange={handleScreensChange} />}
         {activeTab === "objects" && <ObjectLibrary objects={project.objects} sprites={project.sprites} onObjectsChange={handleObjectsChange} />}
         {activeTab === "levels" && <LevelDesigner levels={project.levels} screens={project.screens} blocks={project.blocks} objects={project.objects} sprites={project.sprites} onLevelsChange={handleLevelsChange} />}
+        {activeTab === "gameflow" && <GameFlowDesigner screens={project.screens} gameFlow={project.gameFlow} onGameFlowChange={handleGameFlowChange} />}
         {activeTab === "settings" && (
           <div className="p-8 text-center text-muted-foreground">
             <h2 className="text-2xl font-bold text-primary mb-2">Game Settings</h2>
