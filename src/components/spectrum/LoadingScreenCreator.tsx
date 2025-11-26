@@ -5,8 +5,10 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { SPECTRUM_COLORS, type SpectrumColor, type Screen } from "@/types/spectrum";
 import { processImageForSpectrum, SPECTRUM_WIDTH, SPECTRUM_HEIGHT, ATTR_BLOCK } from "./spectrumImageTools";
+import { ColorPalette } from "./ColorPalette";
 import { toast } from "sonner";
 import { Upload, Check, AlertTriangle } from "lucide-react";
 
@@ -32,6 +34,7 @@ export const LoadingScreenCreator = ({ screen, onScreenChange }: LoadingScreenCr
   const [imageData, setImageData] = useState<ImageData | null>(null);
   const [blockErrors, setBlockErrors] = useState<BlockError[]>([]);
   const [selectedBlockError, setSelectedBlockError] = useState<BlockError | null>(null);
+  const [originalBlockPixels, setOriginalBlockPixels] = useState<SpectrumColor[][] | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [flashingBlocks, setFlashingBlocks] = useState(new Set<string>());
   const [activeTab, setActiveTab] = useState<"upload" | "final" | "stripped">("upload");
@@ -42,6 +45,8 @@ export const LoadingScreenCreator = ({ screen, onScreenChange }: LoadingScreenCr
     localY: number;
     color: SpectrumColor;
   } | null>(null);
+  const [selectedColor, setSelectedColor] = useState<SpectrumColor>(SPECTRUM_COLORS[7]);
+  const [extraColorMapping, setExtraColorMapping] = useState<Record<string, "ink" | "paper">>({});
   
   // Stripped preview options
   const [paperColor, setPaperColor] = useState<SpectrumColor>(SPECTRUM_COLORS[0]);
@@ -62,7 +67,7 @@ export const LoadingScreenCreator = ({ screen, onScreenChange }: LoadingScreenCr
     if (selectedBlockError) {
       drawZoomedBlock();
     }
-  }, [selectedBlockError, screen.pixels]);
+  }, [selectedBlockError, screen.pixels, selectedPixel]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -265,9 +270,9 @@ export const LoadingScreenCreator = ({ screen, onScreenChange }: LoadingScreenCr
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    const zoomScale = 6;
-    canvas.width = ATTR_BLOCK * zoomScale;
-    canvas.height = ATTR_BLOCK * zoomScale;
+    const pixelSize = 32; // 256px / 8px = 32
+    canvas.width = ATTR_BLOCK * pixelSize;
+    canvas.height = ATTR_BLOCK * pixelSize;
 
     ctx.imageSmoothingEnabled = false;
 
@@ -283,13 +288,22 @@ export const LoadingScreenCreator = ({ screen, onScreenChange }: LoadingScreenCr
 
         if (color) {
           ctx.fillStyle = color.value;
-          ctx.fillRect(x * zoomScale, y * zoomScale, zoomScale, zoomScale);
+          ctx.fillRect(x * pixelSize, y * pixelSize, pixelSize, pixelSize);
 
-          // Highlight pixels that are causing errors (beyond first 2 colors)
-          if (blockColors.length > 2 && blockColors.indexOf(color.value) >= 2) {
-            ctx.strokeStyle = "#FF0000";
-            ctx.lineWidth = 2;
-            ctx.strokeRect(x * zoomScale, y * zoomScale, zoomScale, zoomScale);
+          const isErrorPixel = blockColors.length > 2 && blockColors.indexOf(color.value) >= 2;
+          const isSelectedPixel = selectedPixel && selectedPixel.localX === x && selectedPixel.localY === y;
+
+          // Highlight error pixels with red fill (70% opacity)
+          if (isErrorPixel && !isSelectedPixel) {
+            ctx.fillStyle = "rgba(255, 0, 0, 0.7)";
+            ctx.fillRect(x * pixelSize, y * pixelSize, pixelSize, pixelSize);
+          }
+
+          // Selected pixel gets red border (70% opacity)
+          if (isSelectedPixel) {
+            ctx.strokeStyle = "rgba(255, 0, 0, 0.7)";
+            ctx.lineWidth = 3;
+            ctx.strokeRect(x * pixelSize, y * pixelSize, pixelSize, pixelSize);
           }
         }
       }
@@ -300,14 +314,14 @@ export const LoadingScreenCreator = ({ screen, onScreenChange }: LoadingScreenCr
     ctx.lineWidth = 1;
     for (let x = 0; x <= ATTR_BLOCK; x++) {
       ctx.beginPath();
-      ctx.moveTo(x * zoomScale, 0);
-      ctx.lineTo(x * zoomScale, ATTR_BLOCK * zoomScale);
+      ctx.moveTo(x * pixelSize, 0);
+      ctx.lineTo(x * pixelSize, ATTR_BLOCK * pixelSize);
       ctx.stroke();
     }
     for (let y = 0; y <= ATTR_BLOCK; y++) {
       ctx.beginPath();
-      ctx.moveTo(0, y * zoomScale);
-      ctx.lineTo(ATTR_BLOCK * zoomScale, y * zoomScale);
+      ctx.moveTo(0, y * pixelSize);
+      ctx.lineTo(ATTR_BLOCK * pixelSize, y * pixelSize);
       ctx.stroke();
     }
   };
@@ -364,6 +378,20 @@ export const LoadingScreenCreator = ({ screen, onScreenChange }: LoadingScreenCr
       return;
     }
 
+    // Store original block pixels for cancel functionality
+    if (screen.pixels) {
+      const blockPixels: SpectrumColor[][] = [];
+      for (let y = 0; y < ATTR_BLOCK; y++) {
+        blockPixels[y] = [];
+        for (let x = 0; x < ATTR_BLOCK; x++) {
+          const px = bx + x;
+          const py = by + y;
+          blockPixels[y][x] = screen.pixels[py][px];
+        }
+      }
+      setOriginalBlockPixels(blockPixels);
+    }
+
     const error = blockErrors.find(e => e.bx === bx && e.by === by);
 
     if (error) {
@@ -374,6 +402,7 @@ export const LoadingScreenCreator = ({ screen, onScreenChange }: LoadingScreenCr
     }
 
     setSelectedPixel(null);
+    setExtraColorMapping({});
   };
 
   const handlePixelClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -383,9 +412,9 @@ export const LoadingScreenCreator = ({ screen, onScreenChange }: LoadingScreenCr
     if (!canvas) return;
 
     const rect = canvas.getBoundingClientRect();
-    const zoomScale = 6;
-    const localX = Math.floor((e.clientX - rect.left) / zoomScale);
-    const localY = Math.floor((e.clientY - rect.top) / zoomScale);
+    const pixelSize = 32;
+    const localX = Math.floor((e.clientX - rect.left) / pixelSize);
+    const localY = Math.floor((e.clientY - rect.top) / pixelSize);
 
     if (
       localX < 0 ||
@@ -405,11 +434,8 @@ export const LoadingScreenCreator = ({ screen, onScreenChange }: LoadingScreenCr
     setSelectedPixel({ localX, localY, color: currentColor });
   };
 
-  const applyPixelColor = (targetColorValue: string) => {
+  const applyPixelColor = (targetColor: SpectrumColor) => {
     if (!screen.pixels || !selectedBlockError || !selectedPixel) return;
-
-    const targetColor =
-      SPECTRUM_COLORS.find(c => c.value === targetColorValue) || SPECTRUM_COLORS[0];
 
     const globalX = selectedBlockError.bx + selectedPixel.localX;
     const globalY = selectedBlockError.by + selectedPixel.localY;
@@ -421,22 +447,49 @@ export const LoadingScreenCreator = ({ screen, onScreenChange }: LoadingScreenCr
     onScreenChange({ ...screen, pixels: newPixels });
     setSelectedPixel({ ...selectedPixel, color: targetColor });
 
-    setTimeout(() => analyzeBlocks(newPixels), 0);
+    // Re-analyze the current block
+    const blockColors = getBlockColors(selectedBlockError.bx, selectedBlockError.by);
+    const updatedError = { ...selectedBlockError, colors: blockColors };
+    setSelectedBlockError(updatedError);
   };
 
-  const handleSetPixelToInk = () => {
-    if (!selectedBlockError) return;
+  const handleUpdateBlock = () => {
+    if (!screen.pixels || !selectedBlockError) return;
+
+    // Re-analyze all blocks
+    analyzeBlocks(screen.pixels);
+    
     const blockColors = getBlockColors(selectedBlockError.bx, selectedBlockError.by);
-    if (blockColors.length === 0) return;
-    applyPixelColor(blockColors[0]);
+    if (blockColors.length <= 2) {
+      toast.success("Block updated! Now compliant with ZX Spectrum rules.");
+      setSelectedBlockError(null);
+      setSelectedPixel(null);
+      setOriginalBlockPixels(null);
+      setExtraColorMapping({});
+    } else {
+      toast.warning("Block still has more than 2 colors. Keep editing.");
+    }
   };
 
-  const handleSetPixelToPaper = () => {
-    if (!selectedBlockError) return;
-    const blockColors = getBlockColors(selectedBlockError.bx, selectedBlockError.by);
-    if (blockColors.length === 0) return;
-    const target = blockColors[1] || blockColors[0];
-    applyPixelColor(target);
+  const handleCancelBlock = () => {
+    if (!originalBlockPixels || !selectedBlockError || !screen.pixels) return;
+
+    // Restore original pixels
+    const newPixels = screen.pixels.map((row, y) => [...row]);
+    for (let y = 0; y < ATTR_BLOCK; y++) {
+      for (let x = 0; x < ATTR_BLOCK; x++) {
+        const px = selectedBlockError.bx + x;
+        const py = selectedBlockError.by + y;
+        newPixels[py][px] = originalBlockPixels[y][x];
+      }
+    }
+
+    onScreenChange({ ...screen, pixels: newPixels });
+    setSelectedBlockError(null);
+    setSelectedPixel(null);
+    setOriginalBlockPixels(null);
+    setExtraColorMapping({});
+    toast.info("Changes cancelled. Block restored.");
   };
 
   const handleExportSCR = () => {
@@ -561,9 +614,9 @@ export const LoadingScreenCreator = ({ screen, onScreenChange }: LoadingScreenCr
               </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              <div>
-                <Label className="mb-2 block">Main Canvas</Label>
+            <div className="flex gap-4">
+              <div className="flex-1">
+                <Label className="mb-2 block">Main Canvas (512×384px)</Label>
                 <div className="border border-border rounded p-2 bg-black inline-block">
                   <canvas
                     ref={canvasRef}
@@ -575,19 +628,20 @@ export const LoadingScreenCreator = ({ screen, onScreenChange }: LoadingScreenCr
                   />
                 </div>
 
-                {blockErrors.length > 0 && (
+                {blockErrors.length > 0 && !selectedBlockError && (
                   <div className="mt-4 p-4 border border-border rounded">
                     <h3 className="font-semibold mb-2">Error Blocks</h3>
                     <div className="space-y-1 max-h-48 overflow-y-auto">
                       {blockErrors.map((error, i) => (
                         <button
                           key={i}
-                          onClick={() => setSelectedBlockError(error)}
-                          className={`w-full text-left text-sm p-2 rounded hover:bg-muted ${
-                            selectedBlockError === error ? "bg-muted" : ""
-                          }`}
+                          onClick={() => {
+                            setSelectedBlockError(error);
+                            setSelectedPixel(null);
+                          }}
+                          className="w-full text-left text-sm p-2 rounded hover:bg-muted"
                         >
-                          Block ({error.bx / 8}, {error.by / 8}) - {error.colors.length} colors
+                          Block [{error.bx / 8}, {error.by / 8}] - {error.colors.length} colors
                         </button>
                       ))}
                     </div>
@@ -596,21 +650,103 @@ export const LoadingScreenCreator = ({ screen, onScreenChange }: LoadingScreenCr
               </div>
 
               {selectedBlockError && (
-                <div>
-                  <Label className="mb-2 block">
-                    Block Editor ({selectedBlockError.bx / 8}, {selectedBlockError.by / 8})
-                  </Label>
-                  <div className="border border-border rounded p-2 bg-black inline-block">
-                    <canvas
-                      ref={zoomedCanvasRef}
-                      onClick={handlePixelClick}
-                      className="cursor-pointer"
-                      style={{ imageRendering: "pixelated" }}
-                    />
+                <div className="w-80 space-y-4">
+                  {/* Block/Pixel Details Panel */}
+                  <Card className="p-4">
+                    {!selectedPixel ? (
+                      <div className="space-y-3">
+                        <h3 className="font-semibold text-sm">Block Details</h3>
+                        <div className="space-y-1 text-sm">
+                          <p><strong>Block:</strong> [{selectedBlockError.bx / 8}, {selectedBlockError.by / 8}]</p>
+                          <p>
+                            <strong>Colours Used:</strong> {selectedBlockError.colors.length}
+                            {selectedBlockError.colors.length > 2 && (
+                              <span className="text-red-500 ml-1">(Error)</span>
+                            )}
+                          </p>
+                        </div>
+                        {selectedBlockError.colors.length > 2 && (
+                          <div className="space-y-2 pt-2 border-t">
+                            <p className="text-xs font-semibold">Detected Colours:</p>
+                            {selectedBlockError.colors.map((colorValue, idx) => {
+                              const specColor = SPECTRUM_COLORS.find(c => c.value === colorValue);
+                              const role = idx === 0 ? "Ink" : idx === 1 ? "Paper" : "Extra";
+                              return (
+                                <div key={idx} className="flex items-center gap-2">
+                                  <div
+                                    className="w-4 h-4 rounded border"
+                                    style={{ backgroundColor: colorValue }}
+                                  />
+                                  <span className="text-xs flex-1">
+                                    {specColor?.name || "Unknown"} ({role})
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        <h3 className="font-semibold text-sm">Pixel Details</h3>
+                        <div className="space-y-1 text-sm">
+                          <p><strong>Block:</strong> [{selectedBlockError.bx / 8}, {selectedBlockError.by / 8}]</p>
+                        </div>
+                        <div className="space-y-2 pt-2 border-t">
+                          <p className="text-xs font-semibold">Detected Colour:</p>
+                          <div className="flex items-center gap-2">
+                            <div
+                              className="w-4 h-4 rounded border"
+                              style={{ backgroundColor: selectedPixel.color.value }}
+                            />
+                            <span className="text-xs">{selectedPixel.color.name}</span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </Card>
+
+                  {/* Block Canvas Panel */}
+                  <Card className="p-4">
+                    <h3 className="font-semibold text-sm mb-2">Block (256×256px)</h3>
+                    <div className="border border-border rounded p-2 bg-black inline-block">
+                      <canvas
+                        ref={zoomedCanvasRef}
+                        onClick={handlePixelClick}
+                        className="cursor-pointer"
+                        style={{ imageRendering: "pixelated" }}
+                      />
+                    </div>
+                    {selectedBlockError.colors.length <= 2 && (
+                      <p className="text-xs text-green-600 mt-2">
+                        ✓ This block now follows the ZX Spectrum rules of two colours per block
+                      </p>
+                    )}
+                  </Card>
+
+                  {/* Color Palette Panel */}
+                  {selectedPixel && (
+                    <Card className="p-4">
+                      <ColorPalette
+                        selectedColor={selectedColor}
+                        onColorSelect={(color) => {
+                          setSelectedColor(color);
+                          applyPixelColor(color);
+                        }}
+                        className=""
+                      />
+                    </Card>
+                  )}
+
+                  {/* Update/Cancel Buttons */}
+                  <div className="flex gap-2">
+                    <Button onClick={handleUpdateBlock} className="flex-1">
+                      Update
+                    </Button>
+                    <Button onClick={handleCancelBlock} variant="outline" className="flex-1">
+                      Cancel
+                    </Button>
                   </div>
-                  <p className="text-sm text-muted-foreground mt-2">
-                    Click pixels highlighted in red to fix them. Target: ≤2 colors per block.
-                  </p>
                 </div>
               )}
             </div>
