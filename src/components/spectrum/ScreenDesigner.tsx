@@ -40,11 +40,13 @@ export const ScreenDesigner = ({ blocks, objects, sprites, screens, onScreensCha
   const [isDragging, setIsDragging] = useState(false);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [draggedObjectId, setDraggedObjectId] = useState<string | null>(null);
+  const [blockEditPanel, setBlockEditPanel] = useState<React.ReactNode>(null);
 
   // Load placed objects when screen changes
   useEffect(() => {
     setPlacedObjects(selectedScreen?.placedObjects || []);
     setSelectedPlacedObject(null);
+    setBlockEditPanel(null); // Clear block edit panel when changing screens
   }, [selectedScreen?.id]);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -472,7 +474,8 @@ export const ScreenDesigner = ({ blocks, objects, sprites, screens, onScreensCha
             onScreenChange={(updatedScreen) => {
               onScreensChange(screens.map(s => s.id === updatedScreen.id ? updatedScreen : s));
               setSelectedScreen(updatedScreen);
-            }} 
+            }}
+            onBlockEditPanelChange={(panel) => setBlockEditPanel(panel)}
           />
         ) : (
           <>
@@ -629,98 +632,105 @@ export const ScreenDesigner = ({ blocks, objects, sprites, screens, onScreensCha
       {/* RIGHT SIDEBAR */}
       <div className="space-y-4">
 
-        {/* EDIT PANEL - Selected Object */}
-        {selectedPlacedObject && selectedScreen?.type === "game" && (
-          <Card className="p-4 space-y-3">
-            <h3 className="text-sm font-bold text-primary mb-2">Edit Object</h3>
-            
-            <div className="space-y-2">
-              <Label>Position</Label>
-              <div className="text-sm text-muted-foreground">
-                X: {selectedPlacedObject.x}, Y: {selectedPlacedObject.y}
-              </div>
-              <div className="text-xs text-muted-foreground">Use arrow keys to nudge</div>
-            </div>
+        {/* Block Edit Panel (when editing loading screen blocks) */}
+        {blockEditPanel ? (
+          <>{blockEditPanel}</>
+        ) : (
+          <>
+            {/* EDIT PANEL - Selected Object */}
+            {selectedPlacedObject && selectedScreen?.type === "game" && (
+              <Card className="p-4 space-y-3">
+                <h3 className="text-sm font-bold text-primary mb-2">Edit Object</h3>
+                
+                <div className="space-y-2">
+                  <Label>Position</Label>
+                  <div className="text-sm text-muted-foreground">
+                    X: {selectedPlacedObject.x}, Y: {selectedPlacedObject.y}
+                  </div>
+                  <div className="text-xs text-muted-foreground">Use arrow keys to nudge</div>
+                </div>
 
-            <div className="flex gap-2">
-              <Button 
-                size="sm" 
-                variant="outline" 
-                className="flex-1"
-                onClick={handleFlipObject}
+                <div className="flex gap-2">
+                  <Button 
+                    size="sm" 
+                    variant="outline" 
+                    className="flex-1"
+                    onClick={handleFlipObject}
+                  >
+                    <FlipHorizontal className="w-4 h-4 mr-1" />
+                    Flip
+                  </Button>
+                  <Button 
+                    size="sm" 
+                    variant="destructive" 
+                    className="flex-1"
+                    onClick={handleDeleteObject}
+                  >
+                    <Trash2 className="w-4 h-4 mr-1" />
+                    Delete
+                  </Button>
+                </div>
+              </Card>
+            )}
+
+            <Card className="p-4 space-y-2">
+              <Label>Screen Name</Label>
+              <Input value={newScreenName} onChange={e => setNewScreenName(e.target.value)} placeholder="Enter name" />
+
+              <Label>Screen Type</Label>
+              <Select value={newScreenType} onValueChange={(value) => setNewScreenType(value as "title" | "game" | "loading" | "")}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select Type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="loading">Loading Screen</SelectItem>
+                  <SelectItem value="title">Title</SelectItem>
+                  <SelectItem value="game">Game</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <Button
+                className="w-full mt-2"
+                disabled={!newScreenName || !newScreenType}
+                onClick={handleCreateScreen}
               >
-                <FlipHorizontal className="w-4 h-4 mr-1" />
-                Flip
+                <Plus className="w-4 h-4 mr-2" />
+                Add Screen
               </Button>
-              <Button 
-                size="sm" 
-                variant="destructive" 
-                className="flex-1"
-                onClick={handleDeleteObject}
-              >
-                <Trash2 className="w-4 h-4 mr-1" />
-                Delete
-              </Button>
-            </div>
-          </Card>
+            </Card>
+
+            <Card className="p-4">
+              <h3 className="text-sm font-bold text-primary mb-2">Screens</h3>
+              <div className="space-y-2 overflow-auto">
+                {screens.map(screen => (
+                  <div
+                    key={screen.id}
+                    className={`flex items-center justify-between p-2 rounded border cursor-pointer transition-all
+                      ${selectedScreen?.id === screen.id ? "border-primary bg-primary/10" : "border-border hover:border-primary/50"}`}
+                    onClick={() => setSelectedScreen(screen)}
+                  >
+                    <span className="truncate">{screen.name}</span>
+
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-6 w-6 p-0"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onScreensChange(screens.filter(s => s.id !== screen.id));
+                        if (selectedScreen?.id === screen.id) {
+                          setSelectedScreen(screens.find(s => s.id !== screen.id) || null);
+                        }
+                      }}
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          </>
         )}
-
-        <Card className="p-4 space-y-2">
-          <Label>Screen Name</Label>
-          <Input value={newScreenName} onChange={e => setNewScreenName(e.target.value)} placeholder="Enter name" />
-
-          <Label>Screen Type</Label>
-          <Select value={newScreenType} onValueChange={(value) => setNewScreenType(value as "title" | "game" | "loading" | "")}>
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder="Select Type" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="loading">Loading Screen</SelectItem>
-              <SelectItem value="title">Title</SelectItem>
-              <SelectItem value="game">Game</SelectItem>
-            </SelectContent>
-          </Select>
-
-          <Button
-            className="w-full mt-2"
-            disabled={!newScreenName || !newScreenType}
-            onClick={handleCreateScreen}
-          >
-            <Plus className="w-4 h-4 mr-2" />
-            Add Screen
-          </Button>
-        </Card>
-
-        <Card className="p-4">
-          <h3 className="text-sm font-bold text-primary mb-2">Screens</h3>
-          <div className="space-y-2 overflow-auto">
-            {screens.map(screen => (
-              <div
-                key={screen.id}
-                className={`flex items-center justify-between p-2 rounded border cursor-pointer transition-all
-                  ${selectedScreen?.id === screen.id ? "border-primary bg-primary/10" : "border-border hover:border-primary/50"}`}
-                onClick={() => setSelectedScreen(screen)}
-              >
-                <span className="truncate">{screen.name}</span>
-
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="h-6 w-6 p-0"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onScreensChange(screens.filter(s => s.id !== screen.id));
-                    if (selectedScreen?.id === screen.id) {
-                      setSelectedScreen(screens.find(s => s.id !== screen.id) || null);
-                    }
-                  }}
-                >
-                  <Trash2 className="w-3 h-3" />
-                </Button>
-              </div>
-            ))}
-          </div>
-        </Card>
       </div>
     </div>
   );

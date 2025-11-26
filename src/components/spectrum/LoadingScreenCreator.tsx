@@ -15,6 +15,7 @@ import { Upload, Check, AlertTriangle } from "lucide-react";
 interface LoadingScreenCreatorProps {
   screen: Screen;
   onScreenChange: (screen: Screen) => void;
+  onBlockEditPanelChange?: (panel: React.ReactNode) => void;
 }
 
 type BlockError = {
@@ -30,14 +31,14 @@ type PixelEdit = {
   role: "ink" | "paper";
 };
 
-export const LoadingScreenCreator = ({ screen, onScreenChange }: LoadingScreenCreatorProps) => {
+export const LoadingScreenCreator = ({ screen, onScreenChange, onBlockEditPanelChange }: LoadingScreenCreatorProps) => {
   const [imageData, setImageData] = useState<ImageData | null>(null);
   const [blockErrors, setBlockErrors] = useState<BlockError[]>([]);
   const [selectedBlockError, setSelectedBlockError] = useState<BlockError | null>(null);
   const [originalBlockPixels, setOriginalBlockPixels] = useState<SpectrumColor[][] | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [flashingBlocks, setFlashingBlocks] = useState(new Set<string>());
-  const [activeTab, setActiveTab] = useState<"upload" | "final" | "stripped">("upload");
+  const [activeTab, setActiveTab] = useState<"upload" | "final" | "stripped">("final");
   const [inkPaperView, setInkPaperView] = useState<"both" | "ink" | "paper">("both");
   const [hoveredBlock, setHoveredBlock] = useState<{ bx: number; by: number } | null>(null);
   const [selectedPixel, setSelectedPixel] = useState<{
@@ -69,8 +70,18 @@ export const LoadingScreenCreator = ({ screen, onScreenChange }: LoadingScreenCr
   useEffect(() => {
     if (selectedBlockError) {
       drawZoomedBlock();
+      
+      // Render edit panel in sidebar
+      if (onBlockEditPanelChange) {
+        onBlockEditPanelChange(renderBlockEditPanel());
+      }
+    } else {
+      // Clear edit panel when no block selected
+      if (onBlockEditPanelChange) {
+        onBlockEditPanelChange(null);
+      }
     }
-  }, [selectedBlockError, screen.pixels, selectedPixel]);
+  }, [selectedBlockError, screen.pixels, selectedPixel, selectedColor, extraColorMapping]);
 
   useEffect(() => {
     if (activeTab === "stripped" && screen.pixels) {
@@ -475,6 +486,11 @@ export const LoadingScreenCreator = ({ screen, onScreenChange }: LoadingScreenCr
       setSelectedPixel(null);
       setOriginalBlockPixels(null);
       setExtraColorMapping({});
+      
+      // Clear sidebar panel
+      if (onBlockEditPanelChange) {
+        onBlockEditPanelChange(null);
+      }
     } else {
       toast.warning("Block still has more than 2 colors. Keep editing.");
     }
@@ -498,6 +514,12 @@ export const LoadingScreenCreator = ({ screen, onScreenChange }: LoadingScreenCr
     setSelectedPixel(null);
     setOriginalBlockPixels(null);
     setExtraColorMapping({});
+    
+    // Clear sidebar panel
+    if (onBlockEditPanelChange) {
+      onBlockEditPanelChange(null);
+    }
+    
     toast.info("Changes cancelled. Block restored.");
   };
 
@@ -786,6 +808,139 @@ export const LoadingScreenCreator = ({ screen, onScreenChange }: LoadingScreenCr
     setSelectedBlockError({ ...selectedBlockError, colors: updatedBlockColors });
   };
 
+  const renderBlockEditPanel = () => {
+    if (!selectedBlockError) return null;
+
+    return (
+      <div className="space-y-4">
+        {/* Block/Pixel Details Panel */}
+        <Card className="p-4">
+          {!selectedPixel ? (
+            <div className="space-y-3">
+              <h3 className="font-semibold text-sm">Block Details</h3>
+              <div className="space-y-1 text-sm">
+                <p><strong>Block:</strong> [{selectedBlockError.bx / 8}, {selectedBlockError.by / 8}]</p>
+                <p>
+                  <strong>Colours Used:</strong> {selectedBlockError.colors.length}
+                  {selectedBlockError.colors.length > 2 && (
+                    <span className="text-red-500 ml-1">(Error)</span>
+                  )}
+                </p>
+              </div>
+              {selectedBlockError.colors.length > 0 && (
+                <div className="space-y-2 pt-2 border-t">
+                  <p className="text-xs font-semibold">Detected Colours:</p>
+                  {selectedBlockError.colors.map((colorValue, idx) => {
+                    const specColor = SPECTRUM_COLORS.find(c => c.value === colorValue);
+                    const role = idx === 0 ? "Ink" : idx === 1 ? "Paper" : "Extra";
+                    return (
+                      <div key={idx} className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <div
+                            className="w-4 h-4 rounded border"
+                            style={{ backgroundColor: colorValue }}
+                          />
+                          <span className="text-xs flex-1">
+                            {specColor?.name || "Unknown"} ({role})
+                          </span>
+                        </div>
+                        {idx >= 2 && (
+                          <RadioGroup
+                            value={extraColorMapping[colorValue] || "ink"}
+                            onValueChange={(v) => {
+                              setExtraColorMapping({
+                                ...extraColorMapping,
+                                [colorValue]: v as "ink" | "paper"
+                              });
+                              mapExtraColorToInkOrPaper(colorValue, v as "ink" | "paper");
+                            }}
+                            className="ml-6 space-y-1"
+                          >
+                            <div className="flex items-center space-x-2">
+                              <RadioGroupItem value="ink" id={`${colorValue}-ink`} />
+                              <Label htmlFor={`${colorValue}-ink`} className="text-xs">
+                                Map to Ink
+                              </Label>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              <RadioGroupItem value="paper" id={`${colorValue}-paper`} />
+                              <Label htmlFor={`${colorValue}-paper`} className="text-xs">
+                                Map to Paper
+                              </Label>
+                            </div>
+                          </RadioGroup>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <h3 className="font-semibold text-sm">Pixel Details</h3>
+              <div className="space-y-1 text-sm">
+                <p><strong>Block:</strong> [{selectedBlockError.bx / 8}, {selectedBlockError.by / 8}]</p>
+              </div>
+              <div className="space-y-2 pt-2 border-t">
+                <p className="text-xs font-semibold">Detected Colour:</p>
+                <div className="flex items-center gap-2">
+                  <div
+                    className="w-4 h-4 rounded border"
+                    style={{ backgroundColor: selectedPixel.color.value }}
+                  />
+                  <span className="text-xs">{selectedPixel.color.name}</span>
+                </div>
+              </div>
+            </div>
+          )}
+        </Card>
+
+        {/* Block Canvas Panel */}
+        <Card className="p-4">
+          <h3 className="font-semibold text-sm mb-2">Block (256×256px)</h3>
+          <div className="border border-border rounded p-2 bg-black inline-block">
+            <canvas
+              ref={zoomedCanvasRef}
+              onClick={handlePixelClick}
+              className="cursor-pointer"
+              style={{ imageRendering: "pixelated", maxWidth: "100%" }}
+            />
+          </div>
+          {selectedBlockError.colors.length <= 2 && (
+            <p className="text-xs text-green-600 mt-2">
+              ✓ This block now follows the ZX Spectrum rules of two colours per block
+            </p>
+          )}
+        </Card>
+
+        {/* Color Palette Panel */}
+        {selectedPixel && (
+          <Card className="p-4">
+            <ColorPalette
+              selectedColor={selectedColor}
+              onColorSelect={(color) => {
+                setSelectedColor(color);
+                applyPixelColor(color);
+              }}
+              className=""
+            />
+          </Card>
+        )}
+
+        {/* Update/Cancel Buttons */}
+        <div className="flex gap-2">
+          <Button onClick={handleUpdateBlock} className="flex-1">
+            Update
+          </Button>
+          <Button onClick={handleCancelBlock} variant="outline" className="flex-1">
+            Cancel
+          </Button>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-4">
       <Card className="p-4">
@@ -900,135 +1055,6 @@ export const LoadingScreenCreator = ({ screen, onScreenChange }: LoadingScreenCr
                   </div>
                 )}
               </div>
-
-              {selectedBlockError && (
-                <div className="w-80 space-y-4">
-                  {/* Block/Pixel Details Panel */}
-                  <Card className="p-4">
-                    {!selectedPixel ? (
-                      <div className="space-y-3">
-                        <h3 className="font-semibold text-sm">Block Details</h3>
-                        <div className="space-y-1 text-sm">
-                          <p><strong>Block:</strong> [{selectedBlockError.bx / 8}, {selectedBlockError.by / 8}]</p>
-                          <p>
-                            <strong>Colours Used:</strong> {selectedBlockError.colors.length}
-                            {selectedBlockError.colors.length > 2 && (
-                              <span className="text-red-500 ml-1">(Error)</span>
-                            )}
-                          </p>
-                        </div>
-                        {selectedBlockError.colors.length > 0 && (
-                          <div className="space-y-2 pt-2 border-t">
-                            <p className="text-xs font-semibold">Detected Colours:</p>
-                            {selectedBlockError.colors.map((colorValue, idx) => {
-                              const specColor = SPECTRUM_COLORS.find(c => c.value === colorValue);
-                              const role = idx === 0 ? "Ink" : idx === 1 ? "Paper" : "Extra";
-                              return (
-                                <div key={idx} className="space-y-1">
-                                  <div className="flex items-center gap-2">
-                                    <div
-                                      className="w-4 h-4 rounded border"
-                                      style={{ backgroundColor: colorValue }}
-                                    />
-                                    <span className="text-xs flex-1">
-                                      {specColor?.name || "Unknown"} ({role})
-                                    </span>
-                                  </div>
-                                  {idx >= 2 && (
-                                    <RadioGroup
-                                      value={extraColorMapping[colorValue] || "ink"}
-                                      onValueChange={(v) => {
-                                        setExtraColorMapping({
-                                          ...extraColorMapping,
-                                          [colorValue]: v as "ink" | "paper"
-                                        });
-                                        mapExtraColorToInkOrPaper(colorValue, v as "ink" | "paper");
-                                      }}
-                                      className="ml-6 space-y-1"
-                                    >
-                                      <div className="flex items-center space-x-2">
-                                        <RadioGroupItem value="ink" id={`${colorValue}-ink`} />
-                                        <Label htmlFor={`${colorValue}-ink`} className="text-xs">
-                                          Map to Ink
-                                        </Label>
-                                      </div>
-                                      <div className="flex items-center space-x-2">
-                                        <RadioGroupItem value="paper" id={`${colorValue}-paper`} />
-                                        <Label htmlFor={`${colorValue}-paper`} className="text-xs">
-                                          Map to Paper
-                                        </Label>
-                                      </div>
-                                    </RadioGroup>
-                                  )}
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="space-y-3">
-                        <h3 className="font-semibold text-sm">Pixel Details</h3>
-                        <div className="space-y-1 text-sm">
-                          <p><strong>Block:</strong> [{selectedBlockError.bx / 8}, {selectedBlockError.by / 8}]</p>
-                        </div>
-                        <div className="space-y-2 pt-2 border-t">
-                          <p className="text-xs font-semibold">Detected Colour:</p>
-                          <div className="flex items-center gap-2">
-                            <div
-                              className="w-4 h-4 rounded border"
-                              style={{ backgroundColor: selectedPixel.color.value }}
-                            />
-                            <span className="text-xs">{selectedPixel.color.name}</span>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </Card>
-
-                  {/* Block Canvas Panel */}
-                  <Card className="p-4">
-                    <h3 className="font-semibold text-sm mb-2">Block (256×256px)</h3>
-                    <div className="border border-border rounded p-2 bg-black inline-block">
-                      <canvas
-                        ref={zoomedCanvasRef}
-                        onClick={handlePixelClick}
-                        className="cursor-pointer"
-                        style={{ imageRendering: "pixelated" }}
-                      />
-                    </div>
-                    {selectedBlockError.colors.length <= 2 && (
-                      <p className="text-xs text-green-600 mt-2">
-                        ✓ This block now follows the ZX Spectrum rules of two colours per block
-                      </p>
-                    )}
-                  </Card>
-
-                  {/* Color Palette Panel */}
-                  {selectedPixel && (
-                    <Card className="p-4">
-                      <ColorPalette
-                        selectedColor={selectedColor}
-                        onColorSelect={(color) => {
-                          setSelectedColor(color);
-                          applyPixelColor(color);
-                        }}
-                        className=""
-                      />
-                    </Card>
-                  )}
-
-                  {/* Update/Cancel Buttons */}
-                  <div className="flex gap-2">
-                    <Button onClick={handleUpdateBlock} className="flex-1">
-                      Update
-                    </Button>
-                    <Button onClick={handleCancelBlock} variant="outline" className="flex-1">
-                      Cancel
-                    </Button>
-                  </div>
-                </div>
-              )}
             </div>
           </TabsContent>
 
