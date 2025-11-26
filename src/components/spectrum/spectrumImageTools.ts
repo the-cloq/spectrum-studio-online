@@ -19,25 +19,12 @@ canvas.height = SPECTRUM_HEIGHT;
 const ctx = canvas.getContext("2d")!;
 
 
-// Scale + draw
+// Scale + draw to Spectrum resolution
 ctx.drawImage(img, 0, 0, SPECTRUM_WIDTH, SPECTRUM_HEIGHT);
 
 
+// Return raw image data (no per-block colour limiting)
 const imageData = ctx.getImageData(0, 0, SPECTRUM_WIDTH, SPECTRUM_HEIGHT);
-const data = imageData.data;
-
-
-// Process 8x8 attribute blocks
-for (let by = 0; by < SPECTRUM_HEIGHT; by += ATTR_BLOCK) {
-for (let bx = 0; bx < SPECTRUM_WIDTH; bx += ATTR_BLOCK) {
-enforceTwoColours(data, bx, by);
-}
-}
-
-
-ctx.putImageData(imageData, 0, 0);
-
-
 return imageData;
 }
 
