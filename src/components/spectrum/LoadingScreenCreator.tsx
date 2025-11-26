@@ -69,12 +69,15 @@ export const LoadingScreenCreator = ({ screen, onScreenChange, onBlockEditPanelC
 
   useEffect(() => {
     if (selectedBlockError) {
-      drawZoomedBlock();
-      
-      // Render edit panel in sidebar
+      // Render edit panel in sidebar first
       if (onBlockEditPanelChange) {
         onBlockEditPanelChange(renderBlockEditPanel());
       }
+      
+      // Draw the zoomed block after a brief delay to ensure canvas is mounted
+      requestAnimationFrame(() => {
+        drawZoomedBlock();
+      });
     } else {
       // Clear edit panel when no block selected
       if (onBlockEditPanelChange) {
@@ -85,7 +88,10 @@ export const LoadingScreenCreator = ({ screen, onScreenChange, onBlockEditPanelC
 
   useEffect(() => {
     if (activeTab === "stripped" && screen.pixels) {
-      generateStrippedPreview();
+      // Use requestAnimationFrame to ensure canvas is mounted
+      requestAnimationFrame(() => {
+        generateStrippedPreview();
+      });
     }
   }, [activeTab, screen.pixels, paperStrategy, singleColorAs, preserveNeighbors]);
 
@@ -806,6 +812,11 @@ export const LoadingScreenCreator = ({ screen, onScreenChange, onBlockEditPanelC
     // Re-analyze
     const updatedBlockColors = getBlockColors(selectedBlockError.bx, selectedBlockError.by);
     setSelectedBlockError({ ...selectedBlockError, colors: updatedBlockColors });
+    
+    // Check if block is now compliant and show success message
+    if (updatedBlockColors.length <= 2) {
+      toast.success("✓ This block now follows the ZX Spectrum rules of two colours per block");
+    }
   };
 
   const renderBlockEditPanel = () => {
@@ -846,7 +857,7 @@ export const LoadingScreenCreator = ({ screen, onScreenChange, onBlockEditPanelC
                         </div>
                         {idx >= 2 && (
                           <RadioGroup
-                            value={extraColorMapping[colorValue] || "ink"}
+                            value={extraColorMapping[colorValue]}
                             onValueChange={(v) => {
                               setExtraColorMapping({
                                 ...extraColorMapping,
