@@ -36,6 +36,12 @@ export const LoadingScreenCreator = ({ screen, onScreenChange }: LoadingScreenCr
   const [flashingBlocks, setFlashingBlocks] = useState(new Set<string>());
   const [activeTab, setActiveTab] = useState<"upload" | "final" | "stripped">("upload");
   const [inkPaperView, setInkPaperView] = useState<"both" | "ink" | "paper">("both");
+  const [hoveredBlock, setHoveredBlock] = useState<{ bx: number; by: number } | null>(null);
+  const [selectedPixel, setSelectedPixel] = useState<{
+    localX: number;
+    localY: number;
+    color: SpectrumColor;
+  } | null>(null);
   
   // Stripped preview options
   const [paperColor, setPaperColor] = useState<SpectrumColor>(SPECTRUM_COLORS[0]);
@@ -50,7 +56,7 @@ export const LoadingScreenCreator = ({ screen, onScreenChange }: LoadingScreenCr
     if (screen.pixels) {
       drawMainCanvas();
     }
-  }, [screen.pixels, flashingBlocks, inkPaperView]);
+  }, [screen.pixels, flashingBlocks, inkPaperView, selectedBlockError, hoveredBlock]);
 
   useEffect(() => {
     if (selectedBlockError) {
@@ -90,12 +96,7 @@ export const LoadingScreenCreator = ({ screen, onScreenChange }: LoadingScreenCr
             const g = processed.data[i + 1];
             const b = processed.data[i + 2];
 
-            const color = SPECTRUM_COLORS.find(
-              c => {
-                const rgb = hexToRgb(c.value);
-                return rgb.r === r && rgb.g === g && rgb.b === b;
-              }
-            ) || SPECTRUM_COLORS[0];
+            const color = getNearestSpectrumColor(r, g, b);
 
             pixels[y][x] = color;
           }
@@ -214,6 +215,18 @@ export const LoadingScreenCreator = ({ screen, onScreenChange }: LoadingScreenCr
       }
     });
 
+    // Highlight hovered block
+    if (hoveredBlock) {
+      ctx.strokeStyle = "#FFFF00";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(
+        hoveredBlock.bx * scale,
+        hoveredBlock.by * scale,
+        ATTR_BLOCK * scale,
+        ATTR_BLOCK * scale
+      );
+    }
+
     // Highlight selected block
     if (selectedBlockError) {
       ctx.strokeStyle = "#FFFF00";
@@ -315,19 +328,52 @@ export const LoadingScreenCreator = ({ screen, onScreenChange }: LoadingScreenCr
     return Array.from(colors);
   };
 
+  const handleCanvasMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const scale = 2;
+    const bx = Math.floor((e.clientX - rect.left) / scale / ATTR_BLOCK) * ATTR_BLOCK;
+    const by = Math.floor((e.clientY - rect.top) / scale / ATTR_BLOCK) * ATTR_BLOCK;
+
+    if (bx < 0 || by < 0 || bx >= SPECTRUM_WIDTH || by >= SPECTRUM_HEIGHT) {
+      setHoveredBlock(null);
+      return;
+    }
+
+    if (!hoveredBlock || hoveredBlock.bx !== bx || hoveredBlock.by !== by) {
+      setHoveredBlock({ bx, by });
+    }
+  };
+
+  const handleCanvasMouseLeave = () => {
+    setHoveredBlock(null);
+  };
+
   const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
     const rect = canvas.getBoundingClientRect();
     const scale = 2;
-    const x = Math.floor((e.clientX - rect.left) / scale / ATTR_BLOCK) * ATTR_BLOCK;
-    const y = Math.floor((e.clientY - rect.top) / scale / ATTR_BLOCK) * ATTR_BLOCK;
+    const bx = Math.floor((e.clientX - rect.left) / scale / ATTR_BLOCK) * ATTR_BLOCK;
+    const by = Math.floor((e.clientY - rect.top) / scale / ATTR_BLOCK) * ATTR_BLOCK;
 
-    const error = blockErrors.find(e => e.bx === x && e.by === y);
+    if (bx < 0 || by < 0 || bx >= SPECTRUM_WIDTH || by >= SPECTRUM_HEIGHT) {
+      return;
+    }
+
+    const error = blockErrors.find(e => e.bx === bx && e.by === by);
+
     if (error) {
       setSelectedBlockError(error);
+    } else {
+      const colors = getBlockColors(bx, by);
+      setSelectedBlockError({ bx, by, colors });
     }
+
+    setSelectedPixel(null);
   };
 
   const handlePixelClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -341,25 +387,56 @@ export const LoadingScreenCreator = ({ screen, onScreenChange }: LoadingScreenCr
     const localX = Math.floor((e.clientX - rect.left) / zoomScale);
     const localY = Math.floor((e.clientY - rect.top) / zoomScale);
 
+    if (
+      localX < 0 ||
+      localY < 0 ||
+      localX >= ATTR_BLOCK ||
+      localY >= ATTR_BLOCK
+    ) {
+      return;
+    }
+
     const px = selectedBlockError.bx + localX;
     const py = selectedBlockError.by + localY;
 
-    const currentColor = screen.pixels[py][px];
-    const blockColors = getBlockColors(selectedBlockError.bx, selectedBlockError.by);
+    const currentColor = screen.pixels[py]?.[px];
+    if (!currentColor) return;
 
-    // Find most common color to replace with
-    const targetColor = blockColors[0] === currentColor.value ? blockColors[1] : blockColors[0];
-    const newColor = SPECTRUM_COLORS.find(c => c.value === targetColor) || SPECTRUM_COLORS[0];
+    setSelectedPixel({ localX, localY, color: currentColor });
+  };
 
-    // Update pixel
+  const applyPixelColor = (targetColorValue: string) => {
+    if (!screen.pixels || !selectedBlockError || !selectedPixel) return;
+
+    const targetColor =
+      SPECTRUM_COLORS.find(c => c.value === targetColorValue) || SPECTRUM_COLORS[0];
+
+    const globalX = selectedBlockError.bx + selectedPixel.localX;
+    const globalY = selectedBlockError.by + selectedPixel.localY;
+
     const newPixels = screen.pixels.map((row, y) =>
-      y === py ? row.map((col, x) => (x === px ? newColor : col)) : row
+      y === globalY ? row.map((col, x) => (x === globalX ? targetColor : col)) : row
     );
 
     onScreenChange({ ...screen, pixels: newPixels });
+    setSelectedPixel({ ...selectedPixel, color: targetColor });
 
-    // Re-analyze block
-    setTimeout(() => analyzeBlocks(newPixels), 100);
+    setTimeout(() => analyzeBlocks(newPixels), 0);
+  };
+
+  const handleSetPixelToInk = () => {
+    if (!selectedBlockError) return;
+    const blockColors = getBlockColors(selectedBlockError.bx, selectedBlockError.by);
+    if (blockColors.length === 0) return;
+    applyPixelColor(blockColors[0]);
+  };
+
+  const handleSetPixelToPaper = () => {
+    if (!selectedBlockError) return;
+    const blockColors = getBlockColors(selectedBlockError.bx, selectedBlockError.by);
+    if (blockColors.length === 0) return;
+    const target = blockColors[1] || blockColors[0];
+    applyPixelColor(target);
   };
 
   const handleExportSCR = () => {
@@ -396,6 +473,26 @@ export const LoadingScreenCreator = ({ screen, onScreenChange }: LoadingScreenCr
           b: parseInt(result[3], 16)
         }
       : { r: 0, g: 0, b: 0 };
+  };
+
+  const getNearestSpectrumColor = (r: number, g: number, b: number): SpectrumColor => {
+    let closest = SPECTRUM_COLORS[0];
+    let minDist = Number.MAX_VALUE;
+
+    for (const color of SPECTRUM_COLORS) {
+      const rgb = hexToRgb(color.value);
+      const dr = rgb.r - r;
+      const dg = rgb.g - g;
+      const db = rgb.b - b;
+      const dist = dr * dr + dg * dg + db * db;
+
+      if (dist < minDist) {
+        minDist = dist;
+        closest = color;
+      }
+    }
+
+    return closest;
   };
 
   return (
@@ -471,6 +568,8 @@ export const LoadingScreenCreator = ({ screen, onScreenChange }: LoadingScreenCr
                   <canvas
                     ref={canvasRef}
                     onClick={handleCanvasClick}
+                    onMouseMove={handleCanvasMouseMove}
+                    onMouseLeave={handleCanvasMouseLeave}
                     className="cursor-pointer"
                     style={{ imageRendering: "pixelated" }}
                   />
