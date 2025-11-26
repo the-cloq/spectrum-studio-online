@@ -49,13 +49,16 @@ export const LoadingScreenCreator = ({ screen, onScreenChange }: LoadingScreenCr
   const [extraColorMapping, setExtraColorMapping] = useState<Record<string, "ink" | "paper">>({});
   
   // Stripped preview options
-  const [paperColor, setPaperColor] = useState<SpectrumColor>(SPECTRUM_COLORS[0]);
+  const [paperStrategy, setPaperStrategy] = useState<"lighter" | "darker" | "bigger" | "smaller">("lighter");
   const [singleColorAs, setSingleColorAs] = useState<"paper" | "ink">("paper");
   const [preserveNeighbors, setPreserveNeighbors] = useState<"no" | "left" | "up" | "match">("no");
+  const [strippedPixels, setStrippedPixels] = useState<SpectrumColor[][] | null>(null);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const zoomedCanvasRef = useRef<HTMLCanvasElement>(null);
+  const strippedCanvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const scrInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (screen.pixels) {
@@ -68,6 +71,12 @@ export const LoadingScreenCreator = ({ screen, onScreenChange }: LoadingScreenCr
       drawZoomedBlock();
     }
   }, [selectedBlockError, screen.pixels, selectedPixel]);
+
+  useEffect(() => {
+    if (activeTab === "stripped" && screen.pixels) {
+      generateStrippedPreview();
+    }
+  }, [activeTab, screen.pixels, paperStrategy, singleColorAs, preserveNeighbors]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -210,7 +219,7 @@ export const LoadingScreenCreator = ({ screen, onScreenChange }: LoadingScreenCr
       const key = `${error.bx},${error.by}`;
       if (flashingBlocks.has(key)) {
         ctx.strokeStyle = flashOn ? "#FF0000" : "#FFFFFF";
-        ctx.lineWidth = 3;
+        ctx.lineWidth = 2;
         ctx.strokeRect(
           error.bx * scale,
           error.by * scale,
@@ -235,7 +244,7 @@ export const LoadingScreenCreator = ({ screen, onScreenChange }: LoadingScreenCr
     // Highlight selected block
     if (selectedBlockError) {
       ctx.strokeStyle = "#FFFF00";
-      ctx.lineWidth = 4;
+      ctx.lineWidth = 2;
       ctx.strokeRect(
         selectedBlockError.bx * scale,
         selectedBlockError.by * scale,
@@ -498,13 +507,215 @@ export const LoadingScreenCreator = ({ screen, onScreenChange }: LoadingScreenCr
       return;
     }
 
-    // Create SCR file data
+    // Create SCR file data (6912 bytes: 6144 bitmap + 768 attributes)
     const scrData = new Uint8Array(6912);
-    let offset = 0;
+    
+    // Convert pixels to ZX Spectrum bitmap and attributes
+    for (let by = 0; by < SPECTRUM_HEIGHT; by += ATTR_BLOCK) {
+      for (let bx = 0; bx < SPECTRUM_WIDTH; bx += ATTR_BLOCK) {
+        const blockColors = getBlockColors(bx, by);
+        const inkColor = SPECTRUM_COLORS.findIndex(c => c.value === blockColors[0]);
+        const paperColor = SPECTRUM_COLORS.findIndex(c => c.value === blockColors[1] || blockColors[0]);
+        
+        // Set attribute byte
+        const attrIndex = 6144 + (by / 8) * 32 + (bx / 8);
+        scrData[attrIndex] = (paperColor << 3) | inkColor;
+        
+        // Set bitmap bytes
+        for (let y = 0; y < ATTR_BLOCK; y++) {
+          const py = by + y;
+          const scanline = Math.floor(py / 8) * 256 + (py % 8) * 32 + (bx / 8);
+          let byte = 0;
+          
+          for (let x = 0; x < ATTR_BLOCK; x++) {
+            const px = bx + x;
+            const color = screen.pixels[py]?.[px];
+            if (color && color.value === blockColors[0]) {
+              byte |= (1 << (7 - x));
+            }
+          }
+          scrData[scanline] = byte;
+        }
+      }
+    }
 
-    // TODO: Implement proper ZX Spectrum screen format
-    // For now, placeholder
-    toast.success("SCR export (placeholder - needs implementation)");
+    // Download SCR file
+    const blob = new Blob([scrData], { type: "application/octet-stream" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${screen.name || "loading"}.scr`;
+    a.click();
+    URL.revokeObjectURL(url);
+    
+    toast.success("SCR file exported successfully!");
+  };
+
+  const handleSCRUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size !== 6912) {
+      toast.error("Invalid SCR file: must be 6912 bytes");
+      return;
+    }
+
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      const scrData = new Uint8Array(arrayBuffer);
+      
+      // Convert SCR to pixels
+      const pixels: SpectrumColor[][] = Array(SPECTRUM_HEIGHT)
+        .fill(null)
+        .map(() => Array(SPECTRUM_WIDTH).fill(SPECTRUM_COLORS[0]));
+
+      for (let by = 0; by < SPECTRUM_HEIGHT; by += ATTR_BLOCK) {
+        for (let bx = 0; bx < SPECTRUM_WIDTH; bx += ATTR_BLOCK) {
+          const attrIndex = 6144 + (by / 8) * 32 + (bx / 8);
+          const attr = scrData[attrIndex];
+          const inkIdx = attr & 0x07;
+          const paperIdx = (attr >> 3) & 0x07;
+          
+          for (let y = 0; y < ATTR_BLOCK; y++) {
+            const py = by + y;
+            const scanline = Math.floor(py / 8) * 256 + (py % 8) * 32 + (bx / 8);
+            const byte = scrData[scanline];
+            
+            for (let x = 0; x < ATTR_BLOCK; x++) {
+              const px = bx + x;
+              const bit = (byte >> (7 - x)) & 1;
+              pixels[py][px] = bit ? SPECTRUM_COLORS[inkIdx] : SPECTRUM_COLORS[paperIdx];
+            }
+          }
+        }
+      }
+
+      onScreenChange({ ...screen, pixels });
+      analyzeBlocks(pixels);
+      setActiveTab("final");
+      toast.success("SCR file loaded successfully!");
+    } catch (error) {
+      toast.error("Failed to load SCR file");
+      console.error(error);
+    }
+  };
+
+  const generateStrippedPreview = () => {
+    if (!screen.pixels) return;
+
+    const stripped: SpectrumColor[][] = Array(SPECTRUM_HEIGHT)
+      .fill(null)
+      .map(() => Array(SPECTRUM_WIDTH).fill(SPECTRUM_COLORS[0]));
+
+    const black = SPECTRUM_COLORS[0];
+    const white = SPECTRUM_COLORS[7];
+
+    for (let by = 0; by < SPECTRUM_HEIGHT; by += ATTR_BLOCK) {
+      for (let bx = 0; bx < SPECTRUM_WIDTH; bx += ATTR_BLOCK) {
+        const blockColors = getBlockColors(bx, by);
+        
+        if (blockColors.length === 1) {
+          // Single color block
+          const targetColor = singleColorAs === "paper" ? black : white;
+          for (let y = 0; y < ATTR_BLOCK; y++) {
+            for (let x = 0; x < ATTR_BLOCK; x++) {
+              stripped[by + y][bx + x] = targetColor;
+            }
+          }
+        } else if (blockColors.length === 2) {
+          // Determine which color is ink and which is paper based on strategy
+          let paperColor: string;
+          let inkColor: string;
+
+          if (paperStrategy === "lighter") {
+            const brightness = (c: string) => {
+              const rgb = hexToRgb(c);
+              return rgb.r * 0.299 + rgb.g * 0.587 + rgb.b * 0.114;
+            };
+            paperColor = brightness(blockColors[0]) > brightness(blockColors[1]) ? blockColors[0] : blockColors[1];
+            inkColor = paperColor === blockColors[0] ? blockColors[1] : blockColors[0];
+          } else if (paperStrategy === "darker") {
+            const brightness = (c: string) => {
+              const rgb = hexToRgb(c);
+              return rgb.r * 0.299 + rgb.g * 0.587 + rgb.b * 0.114;
+            };
+            paperColor = brightness(blockColors[0]) < brightness(blockColors[1]) ? blockColors[0] : blockColors[1];
+            inkColor = paperColor === blockColors[0] ? blockColors[1] : blockColors[0];
+          } else if (paperStrategy === "bigger") {
+            let count0 = 0, count1 = 0;
+            for (let y = 0; y < ATTR_BLOCK; y++) {
+              for (let x = 0; x < ATTR_BLOCK; x++) {
+                const color = screen.pixels[by + y][bx + x].value;
+                if (color === blockColors[0]) count0++;
+                else if (color === blockColors[1]) count1++;
+              }
+            }
+            paperColor = count0 > count1 ? blockColors[0] : blockColors[1];
+            inkColor = paperColor === blockColors[0] ? blockColors[1] : blockColors[0];
+          } else {
+            let count0 = 0, count1 = 0;
+            for (let y = 0; y < ATTR_BLOCK; y++) {
+              for (let x = 0; x < ATTR_BLOCK; x++) {
+                const color = screen.pixels[by + y][bx + x].value;
+                if (color === blockColors[0]) count0++;
+                else if (color === blockColors[1]) count1++;
+              }
+            }
+            paperColor = count0 < count1 ? blockColors[0] : blockColors[1];
+            inkColor = paperColor === blockColors[0] ? blockColors[1] : blockColors[0];
+          }
+
+          // Apply to stripped preview
+          for (let y = 0; y < ATTR_BLOCK; y++) {
+            for (let x = 0; x < ATTR_BLOCK; x++) {
+              const originalColor = screen.pixels[by + y][bx + x].value;
+              stripped[by + y][bx + x] = originalColor === inkColor ? white : black;
+            }
+          }
+        }
+      }
+    }
+
+    setStrippedPixels(stripped);
+    drawStrippedCanvas(stripped);
+  };
+
+  const drawStrippedCanvas = (pixels: SpectrumColor[][]) => {
+    const canvas = strippedCanvasRef.current;
+    if (!canvas) return;
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const scale = 2;
+    canvas.width = SPECTRUM_WIDTH * scale;
+    canvas.height = SPECTRUM_HEIGHT * scale;
+
+    ctx.imageSmoothingEnabled = false;
+
+    // Draw pixels
+    pixels.forEach((row, y) => {
+      row.forEach((color, x) => {
+        ctx.fillStyle = color.value;
+        ctx.fillRect(x * scale, y * scale, scale, scale);
+      });
+    });
+
+    // Draw grid
+    ctx.strokeStyle = "rgba(255,255,255,0.1)";
+    ctx.lineWidth = 1;
+    for (let x = 0; x <= SPECTRUM_WIDTH; x += ATTR_BLOCK) {
+      ctx.beginPath();
+      ctx.moveTo(x * scale, 0);
+      ctx.lineTo(x * scale, SPECTRUM_HEIGHT * scale);
+      ctx.stroke();
+    }
+    for (let y = 0; y <= SPECTRUM_HEIGHT; y += ATTR_BLOCK) {
+      ctx.beginPath();
+      ctx.moveTo(0, y * scale);
+      ctx.lineTo(SPECTRUM_WIDTH * scale, y * scale);
+      ctx.stroke();
+    }
   };
 
   const handleUseAsLoadingScreen = () => {
@@ -548,40 +759,81 @@ export const LoadingScreenCreator = ({ screen, onScreenChange }: LoadingScreenCr
     return closest;
   };
 
+  const mapExtraColorToInkOrPaper = (extraColor: string, target: "ink" | "paper") => {
+    if (!screen.pixels || !selectedBlockError) return;
+
+    const blockColors = getBlockColors(selectedBlockError.bx, selectedBlockError.by);
+    const targetColor = target === "ink" ? blockColors[0] : blockColors[1];
+    const targetSpecColor = SPECTRUM_COLORS.find(c => c.value === targetColor);
+    if (!targetSpecColor) return;
+
+    const newPixels = screen.pixels.map((row, y) => [...row]);
+
+    for (let y = 0; y < ATTR_BLOCK; y++) {
+      for (let x = 0; x < ATTR_BLOCK; x++) {
+        const px = selectedBlockError.bx + x;
+        const py = selectedBlockError.by + y;
+        if (newPixels[py][px].value === extraColor) {
+          newPixels[py][px] = targetSpecColor;
+        }
+      }
+    }
+
+    onScreenChange({ ...screen, pixels: newPixels });
+
+    // Re-analyze
+    const updatedBlockColors = getBlockColors(selectedBlockError.bx, selectedBlockError.by);
+    setSelectedBlockError({ ...selectedBlockError, colors: updatedBlockColors });
+  };
+
   return (
     <div className="space-y-4">
       <Card className="p-4">
         <h2 className="text-lg font-bold mb-4">Loading Screen Creator</h2>
 
         <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)}>
-          <TabsList>
-            <TabsTrigger value="upload">Upload</TabsTrigger>
-            <TabsTrigger value="final" disabled={!screen.pixels}>
-              Final Artwork
-            </TabsTrigger>
-            <TabsTrigger value="stripped" disabled={blockErrors.length > 0}>
-              Stripped Preview
-            </TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="upload" className="space-y-4">
-            <div className="border-2 border-dashed border-border rounded-lg p-8 text-center">
+          <div className="flex items-center justify-between">
+            <TabsList>
+              <TabsTrigger value="final" disabled={!screen.pixels}>
+                Final Artwork
+              </TabsTrigger>
+              <TabsTrigger value="stripped" disabled={blockErrors.length > 0}>
+                Stripped Preview
+              </TabsTrigger>
+            </TabsList>
+            
+            <div className="flex gap-2">
               <input
                 ref={fileInputRef}
                 type="file"
-                accept="image/*"
+                accept="image/png,image/jpg,image/jpeg"
                 onChange={handleFileUpload}
                 className="hidden"
               />
-              <Upload className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
-              <p className="text-sm text-muted-foreground mb-4">
-                Upload a PNG to convert into a ZX Spectrum loading screen
-              </p>
-              <Button onClick={() => fileInputRef.current?.click()} disabled={analyzing}>
-                {analyzing ? "Processing..." : "Choose Image"}
+              <input
+                ref={scrInputRef}
+                type="file"
+                accept=".scr"
+                onChange={handleSCRUpload}
+                className="hidden"
+              />
+              <Button 
+                onClick={() => fileInputRef.current?.click()} 
+                disabled={analyzing}
+                size="sm"
+              >
+                {analyzing ? "Processing..." : "Upload PNG"}
+              </Button>
+              <Button 
+                onClick={() => scrInputRef.current?.click()}
+                variant="outline"
+                size="sm"
+              >
+                Upload SCR
               </Button>
             </div>
-          </TabsContent>
+          </div>
+
 
           <TabsContent value="final" className="space-y-4">
             <div className="flex items-center justify-between mb-4">
@@ -648,107 +900,6 @@ export const LoadingScreenCreator = ({ screen, onScreenChange }: LoadingScreenCr
                   </div>
                 )}
               </div>
-
-              {selectedBlockError && (
-                <div className="w-80 space-y-4">
-                  {/* Block/Pixel Details Panel */}
-                  <Card className="p-4">
-                    {!selectedPixel ? (
-                      <div className="space-y-3">
-                        <h3 className="font-semibold text-sm">Block Details</h3>
-                        <div className="space-y-1 text-sm">
-                          <p><strong>Block:</strong> [{selectedBlockError.bx / 8}, {selectedBlockError.by / 8}]</p>
-                          <p>
-                            <strong>Colours Used:</strong> {selectedBlockError.colors.length}
-                            {selectedBlockError.colors.length > 2 && (
-                              <span className="text-red-500 ml-1">(Error)</span>
-                            )}
-                          </p>
-                        </div>
-                        {selectedBlockError.colors.length > 2 && (
-                          <div className="space-y-2 pt-2 border-t">
-                            <p className="text-xs font-semibold">Detected Colours:</p>
-                            {selectedBlockError.colors.map((colorValue, idx) => {
-                              const specColor = SPECTRUM_COLORS.find(c => c.value === colorValue);
-                              const role = idx === 0 ? "Ink" : idx === 1 ? "Paper" : "Extra";
-                              return (
-                                <div key={idx} className="flex items-center gap-2">
-                                  <div
-                                    className="w-4 h-4 rounded border"
-                                    style={{ backgroundColor: colorValue }}
-                                  />
-                                  <span className="text-xs flex-1">
-                                    {specColor?.name || "Unknown"} ({role})
-                                  </span>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="space-y-3">
-                        <h3 className="font-semibold text-sm">Pixel Details</h3>
-                        <div className="space-y-1 text-sm">
-                          <p><strong>Block:</strong> [{selectedBlockError.bx / 8}, {selectedBlockError.by / 8}]</p>
-                        </div>
-                        <div className="space-y-2 pt-2 border-t">
-                          <p className="text-xs font-semibold">Detected Colour:</p>
-                          <div className="flex items-center gap-2">
-                            <div
-                              className="w-4 h-4 rounded border"
-                              style={{ backgroundColor: selectedPixel.color.value }}
-                            />
-                            <span className="text-xs">{selectedPixel.color.name}</span>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </Card>
-
-                  {/* Block Canvas Panel */}
-                  <Card className="p-4">
-                    <h3 className="font-semibold text-sm mb-2">Block (256×256px)</h3>
-                    <div className="border border-border rounded p-2 bg-black inline-block">
-                      <canvas
-                        ref={zoomedCanvasRef}
-                        onClick={handlePixelClick}
-                        className="cursor-pointer"
-                        style={{ imageRendering: "pixelated" }}
-                      />
-                    </div>
-                    {selectedBlockError.colors.length <= 2 && (
-                      <p className="text-xs text-green-600 mt-2">
-                        ✓ This block now follows the ZX Spectrum rules of two colours per block
-                      </p>
-                    )}
-                  </Card>
-
-                  {/* Color Palette Panel */}
-                  {selectedPixel && (
-                    <Card className="p-4">
-                      <ColorPalette
-                        selectedColor={selectedColor}
-                        onColorSelect={(color) => {
-                          setSelectedColor(color);
-                          applyPixelColor(color);
-                        }}
-                        className=""
-                      />
-                    </Card>
-                  )}
-
-                  {/* Update/Cancel Buttons */}
-                  <div className="flex gap-2">
-                    <Button onClick={handleUpdateBlock} className="flex-1">
-                      Update
-                    </Button>
-                    <Button onClick={handleCancelBlock} variant="outline" className="flex-1">
-                      Cancel
-                    </Button>
-                  </div>
-                </div>
-              )}
             </div>
           </TabsContent>
 
@@ -756,28 +907,24 @@ export const LoadingScreenCreator = ({ screen, onScreenChange }: LoadingScreenCr
             <div className="space-y-4">
               <h3 className="font-semibold">Conversion Options</h3>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
-                  <Label>Paper Color</Label>
-                  <Select
-                    value={paperColor.name}
-                    onValueChange={(v) => setPaperColor(SPECTRUM_COLORS.find(c => c.name === v)!)}
-                  >
+                  <Label>Color to use as paper</Label>
+                  <Select value={paperStrategy} onValueChange={(v) => setPaperStrategy(v as any)}>
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {SPECTRUM_COLORS.map(color => (
-                        <SelectItem key={color.name} value={color.name}>
-                          {color.name}
-                        </SelectItem>
-                      ))}
+                      <SelectItem value="lighter">Lighter</SelectItem>
+                      <SelectItem value="darker">Darker</SelectItem>
+                      <SelectItem value="bigger">Bigger area</SelectItem>
+                      <SelectItem value="smaller">Smaller area</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
 
                 <div>
-                  <Label>Single-color blocks as</Label>
+                  <Label>Single color blocks use</Label>
                   <Select value={singleColorAs} onValueChange={(v) => setSingleColorAs(v as any)}>
                     <SelectTrigger>
                       <SelectValue />
@@ -790,7 +937,7 @@ export const LoadingScreenCreator = ({ screen, onScreenChange }: LoadingScreenCr
                 </div>
 
                 <div>
-                  <Label>Preserve neighboring colors</Label>
+                  <Label>Preserve neighbor's colors</Label>
                   <Select value={preserveNeighbors} onValueChange={(v) => setPreserveNeighbors(v as any)}>
                     <SelectTrigger>
                       <SelectValue />
@@ -807,7 +954,7 @@ export const LoadingScreenCreator = ({ screen, onScreenChange }: LoadingScreenCr
 
               <div className="border border-border rounded p-4 bg-black">
                 <canvas
-                  ref={canvasRef}
+                  ref={strippedCanvasRef}
                   style={{ imageRendering: "pixelated" }}
                 />
               </div>
