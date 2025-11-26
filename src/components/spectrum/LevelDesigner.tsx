@@ -510,21 +510,22 @@ export const LevelDesigner = ({ levels, screens, blocks, objects, sprites, onLev
                               }
                             }
                           } else if (screen.type === "game" && screen.tiles) {
-                            // Render game screen tiles
-                            const blockSize = 16;
-                            for (let row = 0; row < 12; row++) {
-                              for (let col = 0; col < 16; col++) {
+                            // Render game screen tiles (32x24 grid, 8x8 blocks)
+                            const tileSize = 8;
+                            for (let row = 0; row < 24; row++) {
+                              for (let col = 0; col < 32; col++) {
                                 const blockId = screen.tiles[row]?.[col];
                                 if (blockId) {
                                   const block = blocks.find(b => b.id === blockId);
                                   if (block?.sprite?.frames?.[0]?.pixels) {
-                                    // Render block sprite
-                                    for (let y = 0; y < 16; y++) {
-                                      for (let x = 0; x < 16; x++) {
+                                    // Render block sprite (8x8 pixels)
+                                    for (let y = 0; y < 8; y++) {
+                                      for (let x = 0; x < 8; x++) {
                                         const colorIndex = block.sprite.frames[0].pixels[y]?.[x];
                                         if (colorIndex !== undefined && colorIndex !== 0) {
-                                          ctx.fillStyle = `hsl(${colorIndex * 30}, 70%, 50%)`;
-                                          ctx.fillRect(col * blockSize + x, row * blockSize + y, 1, 1);
+                                          const color = SPECTRUM_COLORS[colorIndex]?.value || "#fff";
+                                          ctx.fillStyle = color;
+                                          ctx.fillRect(col * tileSize + x, row * tileSize + y, 1, 1);
                                         }
                                       }
                                     }

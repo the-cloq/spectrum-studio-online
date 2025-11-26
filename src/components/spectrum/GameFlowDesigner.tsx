@@ -159,8 +159,39 @@ export const GameFlowDesigner = ({ screens, gameFlow, onGameFlowChange }: GameFl
                   <div className="flex items-center gap-2">
                     <Grip className="w-4 h-4 text-muted-foreground" />
                     <div className="flex-1">
-                      <p className="font-medium text-sm">{screen.name}</p>
-                      <p className="text-xs text-muted-foreground capitalize">{screen.type}</p>
+                      <p className="font-medium text-sm mb-1">{screen.name}</p>
+                      <p className="text-xs text-muted-foreground capitalize mb-2">{screen.type}</p>
+                      {/* Screen preview thumbnail */}
+                      <div className="w-full aspect-[4/3] bg-muted rounded overflow-hidden">
+                        <canvas
+                          width={256}
+                          height={192}
+                          className="w-full h-full"
+                          ref={canvas => {
+                            if (!canvas) return;
+                            const ctx = canvas.getContext("2d");
+                            if (!ctx) return;
+                            
+                            // Clear background
+                            ctx.fillStyle = "#000";
+                            ctx.fillRect(0, 0, 256, 192);
+                            
+                            // Render screen content
+                            if (screen.type === "title" && screen.pixels) {
+                              // Render title screen pixels
+                              for (let y = 0; y < 192; y++) {
+                                for (let x = 0; x < 256; x++) {
+                                  const color = screen.pixels[y]?.[x];
+                                  if (color) {
+                                    ctx.fillStyle = color.value;
+                                    ctx.fillRect(x, y, 1, 1);
+                                  }
+                                }
+                              }
+                            }
+                          }}
+                        />
+                      </div>
                     </div>
                   </div>
                 </Card>
@@ -221,6 +252,39 @@ export const GameFlowDesigner = ({ screens, gameFlow, onGameFlowChange }: GameFl
                       <p className="text-xs text-muted-foreground capitalize mb-2">
                         {screen.type}
                       </p>
+                      
+                      {/* Screen preview thumbnail */}
+                      <div className="w-full aspect-[4/3] bg-muted rounded overflow-hidden mb-2">
+                        <canvas
+                          width={256}
+                          height={192}
+                          className="w-full h-full"
+                          ref={canvas => {
+                            if (!canvas) return;
+                            const ctx = canvas.getContext("2d");
+                            if (!ctx) return;
+                            
+                            // Clear background
+                            ctx.fillStyle = "#000";
+                            ctx.fillRect(0, 0, 256, 192);
+                            
+                            // Render screen content
+                            if (screen.type === "title" && screen.pixels) {
+                              // Render title screen pixels
+                              for (let y = 0; y < 192; y++) {
+                                for (let x = 0; x < 256; x++) {
+                                  const color = screen.pixels[y]?.[x];
+                                  if (color) {
+                                    ctx.fillStyle = color.value;
+                                    ctx.fillRect(x, y, 1, 1);
+                                  }
+                                }
+                              }
+                            }
+                          }}
+                        />
+                      </div>
+                      
                       {flowScreen.accessKey && (
                         <p className="text-xs text-green-600">
                           Access key: <kbd className="px-1.5 py-0.5 bg-muted rounded">{flowScreen.accessKey}</kbd>
