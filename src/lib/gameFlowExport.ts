@@ -170,8 +170,8 @@ export function exportGameFlowToTAP(
   const playerXPixel = playerX * 8;
   const playerYPixel = playerY * 8;
 
-  // ===== PHASE 1: STATIC DISPLAY ONLY =====
-  // Copy background screen to display memory and halt
+  // ===== PHASE 2: KEYBOARD BORDER COLOR TEST =====
+  // Copy background screen to display memory
   
   // LD HL, <source address of background screen data> (patched below)
   engine.push(0x21);
@@ -187,12 +187,46 @@ export function exportGameFlowToTAP(
   // LDIR (copy all 6912 bytes from background to screen)
   engine.push(0xed, 0xb0);
 
-  // Infinite halt loop - just display the screen
-  const haltLoopAddr = engineStart + engine.length;
-  // HALT
-  engine.push(0x76);
-  // JR haltLoop (jump back to halt)
-  engine.push(0x18, 0xfd); // -3 offset (back 2 bytes to the HALT instruction)
+  // ===== GAME LOOP: Test keyboard with border color =====
+  const gameLoopAddr = engineStart + engine.length;
+
+  // Read keyboard port DFFE (YUIOP half-row: P=bit0, O=bit1)
+  // LD BC, 0xDFFE
+  engine.push(0x01, 0xfe, 0xdf);
+  // IN A, (C)
+  engine.push(0xed, 0x78);
+  
+  // Check O key (bit 1)
+  // BIT 1, A
+  engine.push(0xcb, 0x4f);
+  // JR NZ, check_p (if O not pressed, check P)
+  engine.push(0x20, 0x05);
+  
+  // O pressed - set border to RED (color 2)
+  // LD A, 2
+  engine.push(0x3e, 0x02);
+  // OUT (0xFE), A
+  engine.push(0xd3, 0xfe);
+  // JR loop (skip P check)
+  engine.push(0x18, 0x06);
+
+  // check_p:
+  // Check P key (bit 0)
+  // BIT 0, A
+  engine.push(0xcb, 0x47);
+  // JR NZ, loop (if P not pressed, just loop)
+  engine.push(0x20, 0x04);
+  
+  // P pressed - set border to CYAN (color 5)
+  // LD A, 5
+  engine.push(0x3e, 0x05);
+  // OUT (0xFE), A
+  engine.push(0xd3, 0xfe);
+
+  // loop:
+  // Jump back to game loop
+  const loopOffset = gameLoopAddr - (engineStart + engine.length + 2);
+  engine.push(0x18, loopOffset & 0xff);
 
   // ===== DATA SECTION =====
 
