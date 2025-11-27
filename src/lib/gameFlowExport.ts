@@ -140,35 +140,9 @@ export function exportGameFlowToTAP(
   const engine: number[] = [];
   const engineStart = 32768;
 
-  // Find player object position from targetScreen
-  let playerX = 16; // Default center position (tile coordinates)
-  let playerY = 12;
-  let playerSpriteWidth = 8;
-  let playerSpriteHeight = 8;
-  let playerPixels: number[][] = [];
-
-  if (targetScreen.placedObjects) {
-    for (const placed of targetScreen.placedObjects) {
-      const obj = objects.find(o => o.id === placed.objectId);
-      if (obj?.type === "player") {
-        playerX = placed.x;
-        playerY = placed.y;
-        
-        // Find player sprite
-        const sprite = sprites.find(s => s.id === obj.spriteId);
-        if (sprite?.frames?.[0]?.pixels) {
-          playerPixels = sprite.frames[0].pixels;
-          playerSpriteWidth = playerPixels[0]?.length || 8;
-          playerSpriteHeight = playerPixels.length || 8;
-        }
-        break;
-      }
-    }
-  }
-
-  // Convert tile coords to pixel coords
-  const playerXPixel = playerX * 8;
-  const playerYPixel = playerY * 8;
+  // Use fixed screen position for debugging (center of screen)
+  const playerXPixel = 128; // Middle of 256-pixel width
+  const playerYPixel = 96;  // Middle of 192-pixel height
 
   // ===== PHASE 2: KEYBOARD BORDER TEST (Q/W) + PIXEL MOVEMENT =====
   // First, display the game level screen, then run keyboard test loop with pixel movement.
