@@ -25,15 +25,16 @@ export const GameFlowDesigner = ({ screens, blocks, levels, gameFlow, onGameFlow
   const [selectedFlowScreen, setSelectedFlowScreen] = useState<GameFlowScreen | null>(null);
   const [draggedScreenId, setDraggedScreenId] = useState<string | null>(null);
   const [draggedFlowIndex, setDraggedFlowIndex] = useState<number | null>(null);
-  const [categoryFilter, setCategoryFilter] = useState<"all" | "loading" | "title" | "instructions" | "controls" | "scoreboard" | "gameover">("all");
+  const [categoryFilter, setCategoryFilter] = useState<"all" | "loading" | "title" | "instructions" | "controls" | "scoreboard" | "gameover" | "levels">("all");
+  const [flowFilter, setFlowFilter] = useState<"all" | "loading" | "system" | "levels">("all");
 
-  // Filter non-game screens
-  const nonGameScreens = screens.filter(s => s.type !== "game");
-
-  // Filter by category
-  const filteredScreens = categoryFilter === "all" 
-    ? nonGameScreens 
-    : nonGameScreens.filter(s => s.type === categoryFilter);
+  // Filter screens based on category
+  const filteredScreens = screens.filter(s => {
+    if (categoryFilter === "all") return true;
+    if (categoryFilter === "levels") return s.type === "game";
+    if (categoryFilter === "title") return ["title", "instructions", "controls", "gameover", "scoreboard"].includes(s.type);
+    return s.type === categoryFilter;
+  });
 
   // Screens already in game flow
   const flowScreenIds = new Set(gameFlow.map(f => f.screenId));
@@ -179,6 +180,18 @@ export const GameFlowDesigner = ({ screens, blocks, levels, gameFlow, onGameFlow
 
   // Sort game flow by order
   const sortedGameFlow = [...gameFlow].sort((a, b) => a.order - b.order);
+  
+  // Apply flow filter
+  const filteredGameFlow = sortedGameFlow.filter(flowScreen => {
+    if (flowFilter === "all") return true;
+    const screen = screens.find(s => s.id === flowScreen.screenId);
+    if (!screen) return false;
+    
+    if (flowFilter === "loading") return screen.type === "loading";
+    if (flowFilter === "system") return ["title", "instructions", "controls", "gameover"].includes(screen.type);
+    if (flowFilter === "levels") return screen.type === "game";
+    return true;
+  });
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
@@ -187,14 +200,11 @@ export const GameFlowDesigner = ({ screens, blocks, levels, gameFlow, onGameFlow
         <h3 className="font-bold text-lg mb-4">Screen Library</h3>
         
         <Tabs value={categoryFilter} onValueChange={(v) => setCategoryFilter(v as any)} className="mb-4">
-          <TabsList className="grid grid-cols-2 h-auto">
+          <TabsList className="grid grid-cols-4 h-auto">
             <TabsTrigger value="all" className="text-xs">All</TabsTrigger>
             <TabsTrigger value="loading" className="text-xs">Loading</TabsTrigger>
-          </TabsList>
-          <TabsList className="grid grid-cols-3 h-auto mt-1">
-            <TabsTrigger value="instructions" className="text-xs">Instructions</TabsTrigger>
-            <TabsTrigger value="controls" className="text-xs">Controls</TabsTrigger>
-            <TabsTrigger value="scoreboard" className="text-xs">Score</TabsTrigger>
+            <TabsTrigger value="title" className="text-xs">System</TabsTrigger>
+            <TabsTrigger value="levels" className="text-xs">Levels</TabsTrigger>
           </TabsList>
         </Tabs>
 
@@ -288,7 +298,30 @@ export const GameFlowDesigner = ({ screens, blocks, levels, gameFlow, onGameFlow
 
       {/* Main Area - Game Flow Grid */}
       <Card className="p-6 lg:col-span-2">
-        <h3 className="font-bold text-lg mb-4">Game Flow Sequence</h3>
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <h3 className="font-bold text-lg">Game Flow Sequence</h3>
+            <p className="text-xs text-muted-foreground">Organize screens and levels in your game</p>
+          </div>
+          <Button
+            onClick={handleExportTAP}
+            disabled={gameFlow.length === 0}
+            size="sm"
+            className="gap-2"
+          >
+            <Download className="w-4 h-4" />
+            Export TAP
+          </Button>
+        </div>
+
+        <Tabs value={flowFilter} onValueChange={(v) => setFlowFilter(v as any)} className="mb-4">
+          <TabsList className="grid grid-cols-4 h-auto">
+            <TabsTrigger value="all" className="text-xs">All</TabsTrigger>
+            <TabsTrigger value="loading" className="text-xs">Loading</TabsTrigger>
+            <TabsTrigger value="system" className="text-xs">System</TabsTrigger>
+            <TabsTrigger value="levels" className="text-xs">Levels</TabsTrigger>
+          </TabsList>
+        </Tabs>
         
         {gameFlow.length === 0 ? (
           <div
@@ -311,7 +344,8 @@ export const GameFlowDesigner = ({ screens, blocks, levels, gameFlow, onGameFlow
             onDrop={(e) => handleDrop(e)}
             className="grid grid-cols-1 md:grid-cols-2 gap-3 min-h-[200px]"
           >
-            {sortedGameFlow.map((flowScreen, index) => {
+            {filteredGameFlow.map((flowScreen) => {
+              const index = sortedGameFlow.findIndex(f => f.screenId === flowScreen.screenId);
               const screen = screens.find(s => s.id === flowScreen.screenId);
               if (!screen) return null;
 
