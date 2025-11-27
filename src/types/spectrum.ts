@@ -138,6 +138,12 @@ export type Screen = {
   placedObjects?: PlacedObject[]; // Placed game objects
   width: number;
   height: number;
+  // Loading screen conversion options
+  conversionOptions?: {
+    paperStrategy?: "lighter" | "darker" | "bigger" | "smaller";
+    singleColorAs?: "paper" | "ink";
+    preserveNeighbors?: "no" | "left" | "up" | "match";
+  };
 };
 
 export type Level = {
