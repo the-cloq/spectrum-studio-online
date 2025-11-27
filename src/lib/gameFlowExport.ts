@@ -170,231 +170,43 @@ export function exportGameFlowToTAP(
   const playerXPixel = playerX * 8;
   const playerYPixel = playerY * 8;
 
-  // ===== INITIALIZATION CODE =====
+  // ===== PHASE 1: STATIC DISPLAY ONLY =====
+  // Copy background screen to display memory and halt
   
-  // Copy background screen to display
-  // LD HL, <source address of background screen> (patched below)
+  // LD HL, <source address of background screen data> (patched below)
   engine.push(0x21);
   const bgAddrIdx = engine.length;
-  engine.push(0x00, 0x00); // placeholder
+  engine.push(0x00, 0x00); // placeholder - will be patched with bgScreenDataAddr
 
-  // LD DE, 16384 (screen memory)
+  // LD DE, 16384 (screen memory start)
   engine.push(0x11, 0x00, 0x40);
 
-  // LD BC, 0 (disable background copy from code for now)
-  engine.push(0x01, 0x00, 0x00);
+  // LD BC, 6912 (full screen size)
+  engine.push(0x01, 0x00, 0x1b);
   
-  // LDIR (no-op because BC=0)
+  // LDIR (copy all 6912 bytes from background to screen)
   engine.push(0xed, 0xb0);
 
-  // Initialize player position variables in memory
-  // LD HL, playerXAddr (patched below)
-  engine.push(0x21);
-  const playerXAddrIdx = engine.length;
-  engine.push(0x00, 0x00); // placeholder
-  
-  // LD (HL), playerXPixel
-  engine.push(0x36, playerXPixel & 0xff);
-  
-  // INC HL (now points to playerYAddr)
-  engine.push(0x23);
-  
-  // LD (HL), playerYPixel
-  engine.push(0x36, playerYPixel & 0xff);
-
-  // ===== GAME LOOP =====
-  const gameLoopAddr = engineStart + engine.length;
-
-  // Read keyboard (DFFE = YUIOP half-row: P=bit0, O=bit1)
-  // LD BC, 0xDFFE
-  engine.push(0x01, 0xfe, 0xdf);
-  // IN A, (C)
-  engine.push(0xed, 0x78);
-  
-  // Check O key (bit 1) for RIGHT
-  // BIT 1, A
-  engine.push(0xcb, 0x4f);
-  // JR NZ, skip_right
-  engine.push(0x20, 0x09);
-  
-  // O pressed - move right
-  // LD HL, (playerXAddr)
-  engine.push(0x2a);
-  const playerXReadIdx1 = engine.length;
-  engine.push(0x00, 0x00); // placeholder
-  // LD A, (HL)
-  engine.push(0x7e);
-  // INC A
-  engine.push(0x3c);
-  // LD (HL), A
-  engine.push(0x77);
-
-  // skip_right:
-  // Read keyboard again
-  // LD BC, 0xDFFE
-  engine.push(0x01, 0xfe, 0xdf);
-  // IN A, (C)
-  engine.push(0xed, 0x78);
-  
-  // Check P key (bit 0) for LEFT
-  // BIT 0, A
-  engine.push(0xcb, 0x47);
-  // JR NZ, skip_left
-  engine.push(0x20, 0x09);
-  
-  // P pressed - move left
-  // LD HL, (playerXAddr)
-  engine.push(0x2a);
-  const playerXReadIdx2 = engine.length;
-  engine.push(0x00, 0x00); // placeholder
-  // LD A, (HL)
-  engine.push(0x7e);
-  // DEC A
-  engine.push(0x3d);
-  // LD (HL), A
-  engine.push(0x77);
-
-  // skip_left:
-  // Redraw background
-  // LD HL, bgScreenDataAddr
-  engine.push(0x21);
-  const bgRedrawAddrIdx = engine.length;
-  engine.push(0x00, 0x00); // placeholder
-  // LD DE, 16384
-  engine.push(0x11, 0x00, 0x40);
-  // LD BC, 0 (disable background redraw from code for now)
-  engine.push(0x01, 0x00, 0x00);
-  // LDIR (no-op because BC=0)
-  engine.push(0xed, 0xb0);
-
-  // Draw player sprite at current position
-  // LD HL, (playerXAddr)
-  engine.push(0x2a);
-  const playerXReadIdx3 = engine.length;
-  engine.push(0x00, 0x00); // placeholder
-  
-  // LD A, (HL) - get X position
-  engine.push(0x7e);
-  // Save in C
-  engine.push(0x4f);
-  
-  // INC HL - point to Y position
-  engine.push(0x23);
-  // LD A, (HL) - get Y position
-  engine.push(0x7e);
-  
-  // Calculate screen address using proper Spectrum layout
-  // Y coordinate in A, X coordinate in C
-  
-  // Calculate Y line address (complex interleaving)
-  // Screen addr = 16384 + ((Y&192)<<5) + ((Y&7)<<8) + ((Y&56)<<2) + (X/8)
-  
-  // First get Y&192 (bits 7-6)
-  // LD L, A
-  engine.push(0x6f);
-  // AND 192
-  engine.push(0xe6, 0xc0);
-  // LD H, A
-  engine.push(0x67);
-  // SRL H (shift right)
-  engine.push(0xcb, 0x3c);
-  // SRL H
-  engine.push(0xcb, 0x3c);
-  // SRL H  
-  engine.push(0xcb, 0x3c);
-  // Now H = (Y&192)>>3
-  
-  // Get Y&7 (bits 2-0) and shift left into high byte
-  // LD A, L
-  engine.push(0x7d);
-  // AND 7
-  engine.push(0xe6, 0x07);
-  // OR H
-  engine.push(0xb4);
-  // LD H, A
-  engine.push(0x67);
-  
-  // Get Y&56 (bits 5-3) and shift into low byte
-  // LD A, L
-  engine.push(0x7d);
-  // AND 56
-  engine.push(0xe6, 0x38);
-  // ADD A, A (shift left 2)
-  engine.push(0x87);
-  // ADD A, A
-  engine.push(0x87);
-  // LD L, A
-  engine.push(0x6f);
-  
-  // Add X/8 to low byte
-  // LD A, C (X position)
-  engine.push(0x79);
-  // SRL A (divide by 8)
-  engine.push(0xcb, 0x3f);
-  // SRL A
-  engine.push(0xcb, 0x3f);
-  // SRL A
-  engine.push(0xcb, 0x3f);
-  // ADD A, L
-  engine.push(0x85);
-  // LD L, A
-  engine.push(0x6f);
-  
-  // Add screen base 16384 (0x4000)
-  // LD BC, 16384
-  engine.push(0x01, 0x00, 0x40);
-  // ADD HL, BC
-  engine.push(0x09);
-  
-  // Draw a bright pixel at this position
-  // LD (HL), 0xFF
-  engine.push(0x36, 0xff);
-
-  // Small delay
-  // LD B, 50
-  engine.push(0x06, 0x32);
-  const delayLoopAddr = engineStart + engine.length;
-  // DJNZ delay_loop
-  engine.push(0x10, 0xfe);
-
-  // Jump back to game loop
-  const loopJumpOffset = gameLoopAddr - (engineStart + engine.length + 2);
-  engine.push(0x18, loopJumpOffset & 0xff);
+  // Infinite halt loop - just display the screen
+  const haltLoopAddr = engineStart + engine.length;
+  // HALT
+  engine.push(0x76);
+  // JR haltLoop (jump back to halt)
+  engine.push(0x18, 0xfd); // -3 offset (back 2 bytes to the HALT instruction)
 
   // ===== DATA SECTION =====
 
   // Background screen data follows engine code
   const bgScreenDataAddr = engineStart + engine.length;
-  
-  // Player position variables (2 bytes each)
-  const playerXAddr = bgScreenDataAddr + targetScr.length;
-  const playerYAddr = playerXAddr + 1;
 
-  // Patch all address placeholders
+  // Patch the background screen address placeholder
   engine[bgAddrIdx] = bgScreenDataAddr & 0xff;
   engine[bgAddrIdx + 1] = (bgScreenDataAddr >> 8) & 0xff;
 
-  engine[playerXAddrIdx] = playerXAddr & 0xff;
-  engine[playerXAddrIdx + 1] = (playerXAddr >> 8) & 0xff;
-
-  engine[playerXReadIdx1] = playerXAddr & 0xff;
-  engine[playerXReadIdx1 + 1] = (playerXAddr >> 8) & 0xff;
-
-  engine[playerXReadIdx2] = playerXAddr & 0xff;
-  engine[playerXReadIdx2 + 1] = (playerXAddr >> 8) & 0xff;
-
-  engine[bgRedrawAddrIdx] = bgScreenDataAddr & 0xff;
-  engine[bgRedrawAddrIdx + 1] = (bgScreenDataAddr >> 8) & 0xff;
-
-  engine[playerXReadIdx3] = playerXAddr & 0xff;
-  engine[playerXReadIdx3 + 1] = (playerXAddr >> 8) & 0xff;
-
-  // Build final code data: engine + background screen + player vars
+  // Build final code data: engine + background screen data (Phase 1 only)
   const codeData = [
     ...engine, 
-    ...targetScr,
-    playerXPixel & 0xff,  // playerX variable
-    playerYPixel & 0xff   // playerY variable
+    ...targetScr
   ];
 
   const codeName = "GameFlow  ";
