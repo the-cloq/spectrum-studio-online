@@ -371,21 +371,9 @@ export function exportGameFlowToTAP(
   engine[drawSpriteCallIdx] = drawSpriteRoutine & 0xff;
   engine[drawSpriteCallIdx + 1] = (drawSpriteRoutine >> 8) & 0xff;
 
-  // Load player position
-  engine.push(0x2a, playerXAddr & 0xff, (playerXAddr >> 8) & 0xff); // LD HL, (playerXAddr)
-  engine.push(0x7d); // LD A, L (X in A)
-  engine.push(0xd9); // EXX (save)
-  engine.push(0x2a, playerYAddr & 0xff, (playerYAddr >> 8) & 0xff); // LD HL, (playerYAddr)
-  engine.push(0x7d); // LD A, L (Y in A)
-  
-  // Simple sprite draw: just draw a colored block at player position
-  // For now, just set a few pixels at the player position
-  // (Full sprite rendering would require sprite data and more complex routine)
-  
-  // Calculate screen address: Y*32 + X/8 + 16384
-  // Simplified: just draw at approximate position
-  engine.push(0xe1); // POP HL (dummy - just return for now)
+  // Draw sprite routine placeholder – currently no-op but keeps stack balanced
   engine.push(0xc9); // RET
+
 
   // ===== DATA SECTION =====
 
