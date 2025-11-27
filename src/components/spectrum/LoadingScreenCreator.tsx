@@ -516,6 +516,10 @@ export const LoadingScreenCreator = ({ screen, onScreenChange, onBlockEditPanelC
     }
 
     onScreenChange({ ...screen, pixels: newPixels });
+    
+    // Re-analyze blocks to update error list
+    analyzeBlocks(newPixels);
+    
     setSelectedBlockError(null);
     setSelectedPixel(null);
     setOriginalBlockPixels(null);
@@ -538,7 +542,7 @@ export const LoadingScreenCreator = ({ screen, onScreenChange, onBlockEditPanelC
     // Create SCR file data (6912 bytes: 6144 bitmap + 768 attributes)
     const scrData = new Uint8Array(6912);
     
-    // Convert pixels to ZX Spectrum bitmap and attributes
+    // Convert pixels to ZX Spectrum bitmap and attributes using correct scanline formula
     for (let by = 0; by < SPECTRUM_HEIGHT; by += ATTR_BLOCK) {
       for (let bx = 0; bx < SPECTRUM_WIDTH; bx += ATTR_BLOCK) {
         const blockColors = getBlockColors(bx, by);
@@ -549,10 +553,11 @@ export const LoadingScreenCreator = ({ screen, onScreenChange, onBlockEditPanelC
         const attrIndex = 6144 + (by / 8) * 32 + (bx / 8);
         scrData[attrIndex] = (paperColor << 3) | inkColor;
         
-        // Set bitmap bytes
+        // Set bitmap bytes using correct ZX Spectrum scanline formula
         for (let y = 0; y < ATTR_BLOCK; y++) {
           const py = by + y;
-          const scanline = Math.floor(py / 8) * 256 + (py % 8) * 32 + (bx / 8);
+          // ZX Spectrum scanline address formula: (y & 0xC0) << 5 | (y & 0x07) << 8 | (y & 0x38) << 2 | (x / 8)
+          const scanline = ((py & 0xC0) << 5) | ((py & 0x07) << 8) | ((py & 0x38) << 2) | (bx / 8);
           let byte = 0;
           
           for (let x = 0; x < ATTR_BLOCK; x++) {
@@ -606,7 +611,8 @@ export const LoadingScreenCreator = ({ screen, onScreenChange, onBlockEditPanelC
           
           for (let y = 0; y < ATTR_BLOCK; y++) {
             const py = by + y;
-            const scanline = Math.floor(py / 8) * 256 + (py % 8) * 32 + (bx / 8);
+            // Use correct ZX Spectrum scanline formula for reading
+            const scanline = ((py & 0xC0) << 5) | ((py & 0x07) << 8) | ((py & 0x38) << 2) | (bx / 8);
             const byte = scrData[scanline];
             
             for (let x = 0; x < ATTR_BLOCK; x++) {
@@ -752,7 +758,12 @@ export const LoadingScreenCreator = ({ screen, onScreenChange, onBlockEditPanelC
       return;
     }
 
-    toast.success("Loading screen set! This will appear first in TAP export.");
+    // Mark this screen as loading type if not already
+    if (screen.type !== "loading") {
+      onScreenChange({ ...screen, type: "loading" });
+    }
+    
+    toast.success("Screen marked as loading screen! It will appear first in TAP export.");
     setActiveTab("final");
   };
 

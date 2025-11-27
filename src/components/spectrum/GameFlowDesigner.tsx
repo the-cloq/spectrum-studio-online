@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
-import { type Screen, type GameFlowScreen } from "@/types/spectrum";
+import { type Screen, type GameFlowScreen, type Block, SPECTRUM_COLORS } from "@/types/spectrum";
 import { toast } from "sonner";
 import { Grip, X, Settings2, Plus, AlertCircle } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -13,11 +13,12 @@ import { Separator } from "@/components/ui/separator";
 
 interface GameFlowDesignerProps {
   screens: Screen[];
+  blocks: Block[];
   gameFlow: GameFlowScreen[];
   onGameFlowChange: (gameFlow: GameFlowScreen[]) => void;
 }
 
-export const GameFlowDesigner = ({ screens, gameFlow, onGameFlowChange }: GameFlowDesignerProps) => {
+export const GameFlowDesigner = ({ screens, blocks, gameFlow, onGameFlowChange }: GameFlowDesignerProps) => {
   const [selectedFlowScreen, setSelectedFlowScreen] = useState<GameFlowScreen | null>(null);
   const [draggedScreenId, setDraggedScreenId] = useState<string | null>(null);
   const [categoryFilter, setCategoryFilter] = useState<"all" | "loading" | "title" | "instructions" | "controls" | "scoreboard" | "gameover">("all");
@@ -268,15 +269,41 @@ export const GameFlowDesigner = ({ screens, gameFlow, onGameFlowChange }: GameFl
                             ctx.fillStyle = "#000";
                             ctx.fillRect(0, 0, 256, 192);
                             
-                            // Render screen content
-                            if (screen.type === "title" && screen.pixels) {
-                              // Render title screen pixels
+                            // Render screen content based on type
+                            if ((screen.type === "title" || screen.type === "loading") && screen.pixels) {
+                              // Render pixel-based screens (title/loading)
                               for (let y = 0; y < 192; y++) {
                                 for (let x = 0; x < 256; x++) {
                                   const color = screen.pixels[y]?.[x];
                                   if (color) {
                                     ctx.fillStyle = color.value;
                                     ctx.fillRect(x, y, 1, 1);
+                                  }
+                                }
+                              }
+                            } else if (screen.type === "game" && screen.tiles) {
+                              // Render game screen with blocks
+                              const GRID_WIDTH = 32;
+                              const GRID_HEIGHT = 24;
+                              const BLOCK_SIZE = 8;
+                              
+                              for (let gy = 0; gy < GRID_HEIGHT; gy++) {
+                                for (let gx = 0; gx < GRID_WIDTH; gx++) {
+                                  const blockId = screen.tiles[gy]?.[gx];
+                                  if (blockId) {
+                                    const block = blocks.find(b => b.id === blockId);
+                                    if (block?.sprite?.frames?.[0]?.pixels) {
+                                      for (let by = 0; by < BLOCK_SIZE; by++) {
+                                        for (let bx = 0; bx < BLOCK_SIZE; bx++) {
+                                          const colorIndex = block.sprite.frames[0].pixels[by]?.[bx];
+                                          if (colorIndex !== undefined && colorIndex !== 0) {
+                                            const color = SPECTRUM_COLORS[colorIndex]?.value || "#fff";
+                                            ctx.fillStyle = color;
+                                            ctx.fillRect(gx * BLOCK_SIZE + bx, gy * BLOCK_SIZE + by, 1, 1);
+                                          }
+                                        }
+                                      }
+                                    }
                                   }
                                 }
                               }
