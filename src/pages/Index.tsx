@@ -4,7 +4,7 @@ import { Toolbar } from "@/components/spectrum/Toolbar";
 import { SpriteEditor } from "@/components/spectrum/SpriteEditor";
 import { BlockDesigner } from "@/components/spectrum/BlockDesigner";
 import { ScreenDesigner } from "@/components/spectrum/ScreenDesigner";
-import { type GameProject, type Sprite, type Block, type Screen, type Level, type GameObject, type GameFlowScreen } from "@/types/spectrum";
+import { type GameProject, type Sprite, type Block, type Screen, type Level, type GameObject, type GameFlowScreen, SPECTRUM_COLORS } from "@/types/spectrum";
 import { ObjectLibrary } from "@/components/spectrum/ObjectLibrary";
 import { LevelDesigner } from "@/components/spectrum/LevelDesigner";
 import { GameFlowDesigner } from "@/components/spectrum/GameFlowDesigner";
@@ -12,6 +12,103 @@ import { exportGameToTAP, downloadTAPFile } from "@/lib/tapExport";
 import { toast } from "sonner";
 
 const STORAGE_KEY = "zx-spectrum-project";
+
+// Compress project before saving to localStorage
+const serializeProjectForStorage = (project: GameProject) => {
+  const serializedScreens = project.screens.map((screen) => {
+    let pixels: number[][] | undefined;
+
+    if (screen.pixels) {
+      pixels = screen.pixels.map((row) =>
+        row.map((color) => {
+          if (!color) return -1; // sentinel for "no pixel"
+          const idx = SPECTRUM_COLORS.findIndex(
+            (c) =>
+              c.value === color.value &&
+              c.ink === color.ink &&
+              c.bright === color.bright
+          );
+          return idx >= 0 ? idx : 0;
+        })
+      );
+    }
+
+    return {
+      ...screen,
+      pixels,
+    };
+  });
+
+  return {
+    ...project,
+    screens: serializedScreens,
+  };
+};
+
+// Expand project loaded from storage back into full runtime shape
+const hydrateProjectFromStorage = (loaded: any): GameProject => {
+  const migratedSprites =
+    loaded.sprites?.map((sprite: any) => {
+      if (sprite.pixels && !sprite.frames) {
+        return {
+          ...sprite,
+          frames: [{ pixels: sprite.pixels }],
+          animationSpeed: sprite.animationSpeed ?? 4,
+          pixels: undefined,
+        };
+      }
+      return sprite;
+    }) || [];
+
+  const migratedScreens: Screen[] = (loaded.screens ?? []).map((screen: any) => {
+    let pixels = screen.pixels;
+
+    if (pixels && Array.isArray(pixels) && pixels.length > 0 && Array.isArray(pixels[0])) {
+      const first = pixels[0][0];
+      if (typeof first === "number") {
+        // Compact numeric representation -> SpectrumColor[][]
+        pixels = pixels.map((row: number[]) =>
+          row.map((idx: number) => {
+            if (idx < 0 || idx >= SPECTRUM_COLORS.length) return undefined;
+            return SPECTRUM_COLORS[idx];
+          })
+        );
+      }
+      // else assume already SpectrumColor objects
+    }
+
+    return {
+      ...screen,
+      pixels,
+      tiles:
+        screen.tiles ||
+        (screen.type === "game"
+          ? Array(24)
+              .fill(null)
+              .map(() => Array(32).fill(""))
+          : undefined),
+      placedObjects: screen.placedObjects || [],
+    } as Screen;
+  });
+
+  const hydrated: GameProject = {
+    ...loaded,
+    sprites: migratedSprites,
+    screens: migratedScreens,
+    objects: loaded.objects ?? [],
+    levels: loaded.levels ?? [],
+    gameFlow: loaded.gameFlow ?? [],
+    settings:
+      loaded.settings ?? {
+        lives: 3,
+        startEnergy: 100,
+        showScore: true,
+        showEnergy: true,
+      },
+  };
+
+  return hydrated;
+};
 
 const Index = () => {
   const [activeTab, setActiveTab] = useState("sprites");
@@ -41,48 +138,21 @@ const Index = () => {
   // Load from localStorage
   useEffect(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-      try {
-        const loaded = JSON.parse(saved);
-        const migratedSprites = loaded.sprites?.map((sprite: any) => {
-          if (sprite.pixels && !sprite.frames) {
-            return {
-              ...sprite,
-              frames: [{ pixels: sprite.pixels }],
-              animationSpeed: sprite.animationSpeed ?? 4,
-              pixels: undefined,
-            };
-          }
-          return sprite;
-        }) || [];
-        
-        // Ensure screens array is properly loaded
-        const migratedScreens = loaded.screens?.map((screen: any) => ({
-          ...screen,
-          pixels: screen.pixels || undefined,
-          tiles: screen.tiles || undefined,
-          placedObjects: screen.placedObjects || []
-        })) || [];
-        
-        const loadedWithDefaults = {
-          ...loaded,
-          sprites: migratedSprites,
-          screens: migratedScreens,
-          objects: loaded.objects ?? [],
-          levels: loaded.levels ?? [],
-          gameFlow: loaded.gameFlow ?? [],
-        };
-        setProject(loadedWithDefaults);
-        
-        const screenCount = migratedScreens.length;
-        const loadingScreenCount = migratedScreens.filter((s: any) => s.type === "loading").length;
-        console.log(`Loaded ${screenCount} screens (${loadingScreenCount} loading screens)`);
-        
-        toast.success("Project loaded from browser storage");
-      } catch (e) {
-        console.error("Failed to load project:", e);
-        toast.error("Failed to load project from storage");
-      }
+    if (!saved) return;
+
+    try {
+      const loaded = JSON.parse(saved);
+      const hydrated = hydrateProjectFromStorage(loaded);
+      setProject(hydrated);
+
+      const screenCount = hydrated.screens.length;
+      const loadingScreenCount = hydrated.screens.filter((s) => s.type === "loading").length;
+      console.log(`Loaded ${screenCount} screens (${loadingScreenCount} loading screens)`);
+
+      toast.success("Project loaded from browser storage");
+    } catch (e) {
+      console.error("Failed to load project:", e);
+      toast.error("Failed to load project from storage");
     }
   }, []);
 
@@ -90,9 +160,14 @@ const Index = () => {
   useEffect(() => {
     const timer = setTimeout(() => {
       try {
-        const json = JSON.stringify(project);
+        const serialized = serializeProjectForStorage(project);
+        const json = JSON.stringify(serialized);
         localStorage.setItem(STORAGE_KEY, json);
-        console.log(`Auto-saved project with ${project.screens.length} screens (${project.screens.filter(s => s.type === "loading").length} loading screens)`);
+        console.log(
+          `Auto-saved project with ${project.screens.length} screens (${project.screens.filter(
+            (s) => s.type === "loading"
+          ).length} loading screens), json length=${json.length}`
+        );
       } catch (e) {
         console.error("Failed to save project to localStorage:", e);
         if (e instanceof DOMException && e.name === "QuotaExceededError") {
@@ -128,8 +203,14 @@ const Index = () => {
 
   const handleSave = () => {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(project));
-      console.log(`Manually saved project with ${project.screens.length} screens (${project.screens.filter(s => s.type === "loading").length} loading screens)`);
+      const serialized = serializeProjectForStorage(project);
+      const json = JSON.stringify(serialized);
+      localStorage.setItem(STORAGE_KEY, json);
+      console.log(
+        `Manually saved project with ${project.screens.length} screens (${project.screens.filter(
+          (s) => s.type === "loading"
+        ).length} loading screens), json length=${json.length}`
+      );
       toast.success("Project saved!");
     } catch (e) {
       console.error("Failed to save project:", e);
@@ -139,36 +220,21 @@ const Index = () => {
 
   const handleLoad = () => {
     const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-      try {
-        const loaded = JSON.parse(saved);
-        
-        // Ensure screens array is properly loaded
-        const migratedScreens = loaded.screens?.map((screen: any) => ({
-          ...screen,
-          pixels: screen.pixels || undefined,
-          tiles: screen.tiles || undefined,
-          placedObjects: screen.placedObjects || []
-        })) || [];
-        
-        const loadedWithDefaults = {
-          ...loaded,
-          screens: migratedScreens,
-          objects: loaded.objects ?? [],
-          levels: loaded.levels ?? [],
-          gameFlow: loaded.gameFlow ?? [],
-        };
-        setProject(loadedWithDefaults);
-        
-        const screenCount = migratedScreens.length;
-        const loadingScreenCount = migratedScreens.filter((s: any) => s.type === "loading").length;
-        console.log(`Loaded ${screenCount} screens (${loadingScreenCount} loading screens)`);
-        
-        toast.success("Project loaded!");
-      } catch (e) {
-        console.error("Failed to load project:", e);
-        toast.error("Failed to load project");
-      }
+    if (!saved) return;
+
+    try {
+      const loaded = JSON.parse(saved);
+      const hydrated = hydrateProjectFromStorage(loaded);
+      setProject(hydrated);
+
+      const screenCount = hydrated.screens.length;
+      const loadingScreenCount = hydrated.screens.filter((s) => s.type === "loading").length;
+      console.log(`Loaded ${screenCount} screens (${loadingScreenCount} loading screens)`);
+
+      toast.success("Project loaded!");
+    } catch (e) {
+      console.error("Failed to load project:", e);
+      toast.error("Failed to load project");
     }
   };
 
