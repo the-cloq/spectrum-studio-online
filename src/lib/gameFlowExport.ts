@@ -136,251 +136,42 @@ export function exportGameFlowToTAP(
   tap.addHeader(loadingName, 6912, 16384);
   tap.addDataBlock(loadingScr);
 
-  // Build Z80 game engine at 32768 with player movement, jumping, and collision detection
+  // Build a very simple Z80 routine at 32768 that just shows the target screen
+  // and then returns to BASIC. This restores the previously working behaviour
+  // where the level screen loads correctly (without live objects yet).
   const engine: number[] = [];
   const engineStart = 32768;
 
-  // Memory map:
-  // 32768-33000: Game engine code
-  // 33000: Game state variables (32 bytes)
-  // 33032: Background screen buffer (6912 bytes) = 39944
-  // 39944+: Player sprite data
+  // Routine:
+  //   LD HL, <source address of targetScr>
+  //   LD DE, 16384           ; screen memory
+  //   LD BC, 6912            ; size of SCR data
+  //   LDIR                   ; copy to screen
+  //   RET                    ; return to BASIC
 
-  const gameStateAddr = 33000;
-  const bgBufferAddr = 33032;
-  const playerXAddr = gameStateAddr;
-  const playerYAddr = gameStateAddr + 2;
-  const playerVXAddr = gameStateAddr + 4;
-  const playerVYAddr = gameStateAddr + 5;
-  const jumpStateAddr = gameStateAddr + 6;
-  const frameCountAddr = gameStateAddr + 7;
-  const facingDirAddr = gameStateAddr + 8;
+  // LD HL, <source address> (patched below once we know engine length)
+  engine.push(0x21);
+  const srcAddrIdx = engine.length;
+  engine.push(0x00, 0x00); // placeholder for source address
 
-  // Find player object in target screen
-  const playerObj = targetScreen.placedObjects?.find(obj => {
-    const gameObj = objects.find(o => o.id === obj.objectId);
-    return gameObj?.type === "player";
-  });
+  // LD DE, 16384 (0x4000)
+  engine.push(0x11, 0x00, 0x40);
 
-  const TILE_SIZE = 8; // 8×8 Spectrum pixel grid cells
-  const initialPlayerX = playerObj ? playerObj.x * TILE_SIZE : 128;
-  const initialPlayerY = playerObj ? playerObj.y * TILE_SIZE : 144;
+  // LD BC, 6912 (0x1B00)
+  engine.push(0x01, 0x00, 0x1b);
 
-  // Get player sprite
-  let playerSprite: Sprite | undefined;
-  if (playerObj) {
-    const gameObj = objects.find(o => o.id === playerObj.objectId);
-    if (gameObj) {
-      playerSprite = sprites.find(s => s.id === gameObj.spriteId);
-    }
-  }
+  // LDIR
+  engine.push(0xed, 0xb0);
 
-  // ===== INITIALIZATION =====
-  
-  // Copy background to buffer at bgBufferAddr
-  const bgCopyStart = engine.length;
-  engine.push(0x21); // LD HL, <bgScreenDataAddr>
-  const bgDataAddrIdx = engine.length;
-  engine.push(0x00, 0x00);
-  engine.push(0x11, bgBufferAddr & 0xff, (bgBufferAddr >> 8) & 0xff); // LD DE, bgBufferAddr
-  engine.push(0x01, 0x00, 0x1b); // LD BC, 6912
-  engine.push(0xed, 0xb0); // LDIR
-
-  // Initialize player position
-  engine.push(0x21, initialPlayerX & 0xff, (initialPlayerX >> 8) & 0xff); // LD HL, initialPlayerX
-  engine.push(0x22, playerXAddr & 0xff, (playerXAddr >> 8) & 0xff); // LD (playerXAddr), HL
-  engine.push(0x21, initialPlayerY & 0xff, (initialPlayerY >> 8) & 0xff); // LD HL, initialPlayerY
-  engine.push(0x22, playerYAddr & 0xff, (playerYAddr >> 8) & 0xff); // LD (playerYAddr), HL
-
-  // Initialize velocities to 0
-  engine.push(0x3e, 0x00); // LD A, 0
-  engine.push(0x32, playerVXAddr & 0xff, (playerVXAddr >> 8) & 0xff); // LD (playerVXAddr), A
-  engine.push(0x32, playerVYAddr & 0xff, (playerVYAddr >> 8) & 0xff); // LD (playerVYAddr), A
-  engine.push(0x32, jumpStateAddr & 0xff, (jumpStateAddr >> 8) & 0xff); // LD (jumpStateAddr), A
-  engine.push(0x32, frameCountAddr & 0xff, (frameCountAddr >> 8) & 0xff); // LD (frameCountAddr), A
-  engine.push(0x3e, 0x01); // LD A, 1 (facing right)
-  engine.push(0x32, facingDirAddr & 0xff, (facingDirAddr >> 8) & 0xff); // LD (facingDirAddr), A
-
-  // ===== MAIN GAME LOOP =====
-  const mainLoopStart = engine.length;
-
-  // Increment frame counter (for 12fps animation at 50fps interrupt)
-  engine.push(0x3a, frameCountAddr & 0xff, (frameCountAddr >> 8) & 0xff); // LD A, (frameCountAddr)
-  engine.push(0x3c); // INC A
-  engine.push(0xfe, 0x04); // CP 4 (50/4 ≈ 12fps)
-  engine.push(0x20, 0x02); // JR NZ, +2
-  engine.push(0x3e, 0x00); // LD A, 0 (reset counter)
-  engine.push(0x32, frameCountAddr & 0xff, (frameCountAddr >> 8) & 0xff); // LD (frameCountAddr), A
-
-  // ===== INPUT HANDLING =====
-  
-  // Reset horizontal velocity
-  engine.push(0x3e, 0x00); // LD A, 0
-  engine.push(0x32, playerVXAddr & 0xff, (playerVXAddr >> 8) & 0xff); // LD (playerVXAddr), A
-
-  // Check left arrow (CAPS SHIFT + 5)
-  engine.push(0x3e, 0xfe); // LD A, 0xFE (read keyboard half-row 0xFEFE)
-  engine.push(0xdb, 0xfe); // IN A, (0xFE)
-  engine.push(0xcb, 0x47); // BIT 0, A (check CAPS SHIFT)
-  engine.push(0x20, 0x09); // JR NZ, skip_left
-  // CAPS pressed, now check 5 key (in row 0xF7FE)
-  engine.push(0x3e, 0xf7); // LD A, 0xF7
-  engine.push(0xdb, 0xfe); // IN A, (0xFE)
-  engine.push(0xcb, 0x57); // BIT 2, A (5 key)
-  engine.push(0x20, 0x06); // JR NZ, skip_left
-  // Left pressed: set VX = -2
-  engine.push(0x3e, 0xfe); // LD A, -2
-  engine.push(0x32, playerVXAddr & 0xff, (playerVXAddr >> 8) & 0xff); // LD (playerVXAddr), A
-  engine.push(0x3e, 0x00); // LD A, 0 (facing left)
-  engine.push(0x32, facingDirAddr & 0xff, (facingDirAddr >> 8) & 0xff); // LD (facingDirAddr), A
-
-  // Check right arrow (CAPS SHIFT + 8)
-  engine.push(0x3e, 0xfe); // LD A, 0xFE
-  engine.push(0xdb, 0xfe); // IN A, (0xFE)
-  engine.push(0xcb, 0x47); // BIT 0, A (CAPS SHIFT)
-  engine.push(0x20, 0x09); // JR NZ, skip_right
-  engine.push(0x3e, 0xf7); // LD A, 0xF7
-  engine.push(0xdb, 0xfe); // IN A, (0xFE)
-  engine.push(0xcb, 0x67); // BIT 4, A (8 key)
-  engine.push(0x20, 0x06); // JR NZ, skip_right
-  // Right pressed: set VX = 2
-  engine.push(0x3e, 0x02); // LD A, 2
-  engine.push(0x32, playerVXAddr & 0xff, (playerVXAddr >> 8) & 0xff); // LD (playerVXAddr), A
-  engine.push(0x3e, 0x01); // LD A, 1 (facing right)
-  engine.push(0x32, facingDirAddr & 0xff, (facingDirAddr >> 8) & 0xff); // LD (facingDirAddr), A
-
-  // Check jump (CAPS SHIFT + 7)
-  engine.push(0x3a, jumpStateAddr & 0xff, (jumpStateAddr >> 8) & 0xff); // LD A, (jumpStateAddr)
-  engine.push(0xfe, 0x00); // CP 0
-  engine.push(0x20, 0x10); // JR NZ, skip_jump (already jumping)
-  engine.push(0x3e, 0xfe); // LD A, 0xFE
-  engine.push(0xdb, 0xfe); // IN A, (0xFE)
-  engine.push(0xcb, 0x47); // BIT 0, A (CAPS SHIFT)
-  engine.push(0x20, 0x0a); // JR NZ, skip_jump
-  engine.push(0x3e, 0xf7); // LD A, 0xF7
-  engine.push(0xdb, 0xfe); // IN A, (0xFE)
-  engine.push(0xcb, 0x5f); // BIT 3, A (7 key)
-  engine.push(0x20, 0x04); // JR NZ, skip_jump
-  // Jump pressed: initiate jump
-  engine.push(0x3e, 0x01); // LD A, 1
-  engine.push(0x32, jumpStateAddr & 0xff, (jumpStateAddr >> 8) & 0xff); // LD (jumpStateAddr), A
-
-  // ===== PHYSICS UPDATE =====
-
-  // Apply horizontal velocity
-  engine.push(0x2a, playerXAddr & 0xff, (playerXAddr >> 8) & 0xff); // LD HL, (playerXAddr)
-  engine.push(0x3a, playerVXAddr & 0xff, (playerVXAddr >> 8) & 0xff); // LD A, (playerVXAddr)
-  engine.push(0x87); // ADD A, A (sign extend to 16-bit via ADD HL, A simulation)
-  engine.push(0x6f); // LD L, A (simplified: just add to L)
-  engine.push(0x22, playerXAddr & 0xff, (playerXAddr >> 8) & 0xff); // LD (playerXAddr), HL
-
-  // Apply jump/gravity
-  engine.push(0x3a, jumpStateAddr & 0xff, (jumpStateAddr >> 8) & 0xff); // LD A, (jumpStateAddr)
-  engine.push(0xfe, 0x00); // CP 0
-  engine.push(0x28, 0x1c); // JR Z, apply_gravity (not jumping)
-  
-  // In jump: apply upward velocity based on jump frame
-  engine.push(0xfe, 0x0a); // CP 10 (jump duration)
-  engine.push(0x30, 0x04); // JR NC, end_jump
-  // Continue jump
-  engine.push(0x3e, 0xfc); // LD A, -4 (upward)
-  engine.push(0x32, playerVYAddr & 0xff, (playerVYAddr >> 8) & 0xff); // LD (playerVYAddr), A
-  engine.push(0x18, 0x0a); // JR apply_vy
-  // End jump
-  engine.push(0x3e, 0x00); // LD A, 0
-  engine.push(0x32, jumpStateAddr & 0xff, (jumpStateAddr >> 8) & 0xff); // LD (jumpStateAddr), A
-  engine.push(0x18, 0x04); // JR apply_gravity
-  
-  // Increment jump frame
-  engine.push(0x3a, jumpStateAddr & 0xff, (jumpStateAddr >> 8) & 0xff); // LD A, (jumpStateAddr)
-  engine.push(0x3c); // INC A
-  engine.push(0x32, jumpStateAddr & 0xff, (jumpStateAddr >> 8) & 0xff); // LD (jumpStateAddr), A
-  engine.push(0x18, 0x04); // JR apply_vy
-
-  // Apply gravity (not jumping)
-  engine.push(0x3e, 0x02); // LD A, 2 (downward)
-  engine.push(0x32, playerVYAddr & 0xff, (playerVYAddr >> 8) & 0xff); // LD (playerVYAddr), A
-
-  // Apply vertical velocity
-  engine.push(0x2a, playerYAddr & 0xff, (playerYAddr >> 8) & 0xff); // LD HL, (playerYAddr)
-  engine.push(0x3a, playerVYAddr & 0xff, (playerVYAddr >> 8) & 0xff); // LD A, (playerVYAddr)
-  engine.push(0x6f); // LD L, A (simplified add)
-  engine.push(0x22, playerYAddr & 0xff, (playerYAddr >> 8) & 0xff); // LD (playerYAddr), HL
-
-  // Simple bounds check (keep on screen)
-  // Check Y < 0
-  engine.push(0x2a, playerYAddr & 0xff, (playerYAddr >> 8) & 0xff); // LD HL, (playerYAddr)
-  engine.push(0x7c); // LD A, H
-  engine.push(0xfe, 0x80); // CP 0x80 (negative if >= 0x8000)
-  engine.push(0x38, 0x06); // JR C, check_y_max
-  engine.push(0x21, 0x00, 0x00); // LD HL, 0
-  engine.push(0x22, playerYAddr & 0xff, (playerYAddr >> 8) & 0xff); // LD (playerYAddr), HL
-  
-  // Check Y > 176 (keep player above bottom)
-  engine.push(0x2a, playerYAddr & 0xff, (playerYAddr >> 8) & 0xff); // LD HL, (playerYAddr)
-  engine.push(0x7d); // LD A, L
-  engine.push(0xfe, 0xb0); // CP 176
-  engine.push(0x38, 0x08); // JR C, check_x
-  engine.push(0x21, 0xb0, 0x00); // LD HL, 176
-  engine.push(0x22, playerYAddr & 0xff, (playerYAddr >> 8) & 0xff); // LD (playerYAddr), HL
-  engine.push(0xaf); // XOR A (reset jump state when hitting ground)
-  engine.push(0x32, jumpStateAddr & 0xff, (jumpStateAddr >> 8) & 0xff); // LD (jumpStateAddr), A
-
-  // Check X bounds (0 to 240)
-  engine.push(0x2a, playerXAddr & 0xff, (playerXAddr >> 8) & 0xff); // LD HL, (playerXAddr)
-  engine.push(0x7c); // LD A, H
-  engine.push(0xfe, 0x80); // CP 0x80
-  engine.push(0x38, 0x04); // JR C, check_x_max
-  engine.push(0x21, 0x00, 0x00); // LD HL, 0
-  engine.push(0x22, playerXAddr & 0xff, (playerXAddr >> 8) & 0xff); // LD (playerXAddr), HL
-  engine.push(0x2a, playerXAddr & 0xff, (playerXAddr >> 8) & 0xff); // LD HL, (playerXAddr)
-  engine.push(0x7d); // LD A, L
-  engine.push(0xfe, 0xf0); // CP 240
-  engine.push(0x38, 0x04); // JR C, render
-  engine.push(0x21, 0xf0, 0x00); // LD HL, 240
-  engine.push(0x22, playerXAddr & 0xff, (playerXAddr >> 8) & 0xff); // LD (playerXAddr), HL
-
-  // ===== RENDERING =====
-
-  // Copy background buffer to screen memory
-  engine.push(0x21, bgBufferAddr & 0xff, (bgBufferAddr >> 8) & 0xff); // LD HL, bgBufferAddr
-  engine.push(0x11, 0x00, 0x40); // LD DE, 16384
-  engine.push(0x01, 0x00, 0x1b); // LD BC, 6912
-  engine.push(0xed, 0xb0); // LDIR
-
-  // Draw player sprite (simplified: call sprite routine)
-  // We'll add sprite data and drawing routine after the main loop
-  engine.push(0xcd); // CALL <drawSpriteRoutine>
-  const drawSpriteCallIdx = engine.length;
-  engine.push(0x00, 0x00); // Address to be patched
-
-  // Small delay loop
-  engine.push(0x01, 0xff, 0x0f); // LD BC, 0x0FFF
-  const delayLoopStart = engine.length;
-  engine.push(0x0b); // DEC BC
-  engine.push(0x78); // LD A, B
-  engine.push(0xb1); // OR C
-  engine.push(0x20, 0xfb); // JR NZ, delay_loop
-
-  // Jump back to main loop
-  const jumpOffset = mainLoopStart - (engine.length + 2);
-  engine.push(0x18, jumpOffset & 0xff); // JR main_loop
-
-  // ===== DRAW SPRITE ROUTINE =====
-  const drawSpriteRoutine = engine.length + engineStart;
-  engine[drawSpriteCallIdx] = drawSpriteRoutine & 0xff;
-  engine[drawSpriteCallIdx + 1] = (drawSpriteRoutine >> 8) & 0xff;
-
-  // Draw sprite routine placeholder – currently no-op but keeps stack balanced
-  engine.push(0xc9); // RET
-
+  // RET
+  engine.push(0xc9);
 
   // ===== DATA SECTION =====
 
-  // Patch background data address
+  // Target screen data (SCR) is stored immediately after the engine bytes
   const bgScreenDataAddr = engineStart + engine.length;
-  engine[bgDataAddrIdx] = bgScreenDataAddr & 0xff;
-  engine[bgDataAddrIdx + 1] = (bgScreenDataAddr >> 8) & 0xff;
+  engine[srcAddrIdx] = bgScreenDataAddr & 0xff;
+  engine[srcAddrIdx + 1] = (bgScreenDataAddr >> 8) & 0xff;
 
   const codeData = [...engine, ...targetScr];
 
