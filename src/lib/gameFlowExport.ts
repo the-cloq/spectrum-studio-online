@@ -1,5 +1,5 @@
 import { TAPGenerator } from "./tapGenerator";
-import { type Screen, type GameFlowScreen, type Level, type Block, SPECTRUM_COLORS } from "@/types/spectrum";
+import { type Screen, type GameFlowScreen, type Level, type Block, type GameObject, type Sprite, SPECTRUM_COLORS } from "@/types/spectrum";
 
 /**
  * Export Game Flow to TAP file
@@ -10,6 +10,8 @@ export function exportGameFlowToTAP(
   screens: Screen[],
   levels: Level[],
   blocks: Block[],
+  objects: GameObject[],
+  sprites: Sprite[],
   projectName: string
 ): Blob {
   const tap = new TAPGenerator();
@@ -41,8 +43,8 @@ export function exportGameFlowToTAP(
   const loadingScreen = validFlowScreens[0];
   const targetScreen = validFlowScreens.length > 1 ? validFlowScreens[1] : loadingScreen;
 
-  const loadingScr = encodeScreenToSCR(loadingScreen, blocks);
-  const targetScr = encodeScreenToSCR(targetScreen, blocks);
+  const loadingScr = encodeScreenToSCR(loadingScreen, blocks, objects, sprites);
+  const targetScr = encodeScreenToSCR(targetScreen, blocks, objects, sprites);
 
   // Build BASIC loader:
   // 10 CLEAR 32767
@@ -173,7 +175,7 @@ export function exportGameFlowToTAP(
 /**
  * Encode a screen to ZX Spectrum SCR format (6912 bytes)
  */
-function encodeScreenToSCR(screen: Screen, blocks: Block[]): number[] {
+function encodeScreenToSCR(screen: Screen, blocks: Block[], objects: GameObject[], sprites: Sprite[]): number[] {
   const scrData = new Array(6912).fill(0);
 
   // Handle tile-based screens (game levels)
@@ -201,6 +203,42 @@ function encodeScreenToSCR(screen: Screen, blocks: Block[]): number[] {
             const px = tx * 8 + sx;
             const colorIndex = spritePixels[sy][sx];
             if (py < 192 && px < 256) {
+              pixels[py][px] = SPECTRUM_COLORS[colorIndex] || SPECTRUM_COLORS[0];
+            }
+          }
+        }
+      }
+    }
+
+    // Render placed objects on top of tiles
+    if (screen.placedObjects) {
+      for (const placedObj of screen.placedObjects) {
+        const gameObject = objects.find(o => o.id === placedObj.objectId);
+        if (!gameObject) continue;
+
+        // Find the sprite - use primary sprite or directional animation
+        let spriteId = gameObject.spriteId;
+        if (placedObj.direction === "left" && gameObject.animations?.moveLeft) {
+          spriteId = gameObject.animations.moveLeft;
+        } else if (placedObj.direction === "right" && gameObject.animations?.moveRight) {
+          spriteId = gameObject.animations.moveRight;
+        }
+
+        // Find the sprite in the sprites array
+        const objectSprite = sprites.find(s => s.id === spriteId);
+        if (!objectSprite || !objectSprite.frames[0]) continue;
+
+        const objPixels = objectSprite.frames[0].pixels;
+        
+        // Render object sprite at its placed position
+        for (let sy = 0; sy < objPixels.length; sy++) {
+          for (let sx = 0; sx < objPixels[sy].length; sx++) {
+            const py = placedObj.y + sy;
+            const px = placedObj.x + sx;
+            const colorIndex = objPixels[sy][sx];
+            
+            // Only render non-transparent pixels (colorIndex !== 0)
+            if (colorIndex !== 0 && py >= 0 && py < 192 && px >= 0 && px < 256) {
               pixels[py][px] = SPECTRUM_COLORS[colorIndex] || SPECTRUM_COLORS[0];
             }
           }
