@@ -244,8 +244,8 @@ function encodeScreenToSCR(screen: Screen, blocks: Block[], objects: GameObject[
         // Render object sprite at its placed position
         for (let sy = 0; sy < objPixels.length; sy++) {
           for (let sx = 0; sx < objPixels[sy].length; sx++) {
-            const py = placedObj.y + sy;
-            const px = placedObj.x + sx;
+            const py = placedObj.y * 8 + sy;
+            const px = placedObj.x * 8 + sx;
             const colorIndex = objPixels[sy][sx];
             
             // Only render non-transparent pixels (colorIndex !== 0)
