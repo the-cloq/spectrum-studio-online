@@ -58,6 +58,7 @@ const Index = () => {
         const loadedWithDefaults = {
           ...loaded,
           sprites: migratedSprites,
+          screens: loaded.screens ?? [],
           objects: loaded.objects ?? [],
           levels: loaded.levels ?? [],
           gameFlow: loaded.gameFlow ?? [],
@@ -113,6 +114,7 @@ const Index = () => {
         const loaded = JSON.parse(saved);
         const loadedWithDefaults = {
           ...loaded,
+          screens: loaded.screens ?? [],
           objects: loaded.objects ?? [],
           levels: loaded.levels ?? [],
           gameFlow: loaded.gameFlow ?? [],
