@@ -55,18 +55,33 @@ const Index = () => {
           }
           return sprite;
         }) || [];
+        
+        // Ensure screens array is properly loaded
+        const migratedScreens = loaded.screens?.map((screen: any) => ({
+          ...screen,
+          pixels: screen.pixels || undefined,
+          tiles: screen.tiles || undefined,
+          placedObjects: screen.placedObjects || []
+        })) || [];
+        
         const loadedWithDefaults = {
           ...loaded,
           sprites: migratedSprites,
-          screens: loaded.screens ?? [],
+          screens: migratedScreens,
           objects: loaded.objects ?? [],
           levels: loaded.levels ?? [],
           gameFlow: loaded.gameFlow ?? [],
         };
         setProject(loadedWithDefaults);
+        
+        const screenCount = migratedScreens.length;
+        const loadingScreenCount = migratedScreens.filter((s: any) => s.type === "loading").length;
+        console.log(`Loaded ${screenCount} screens (${loadingScreenCount} loading screens)`);
+        
         toast.success("Project loaded from browser storage");
       } catch (e) {
         console.error("Failed to load project:", e);
+        toast.error("Failed to load project from storage");
       }
     }
   }, []);
@@ -74,7 +89,16 @@ const Index = () => {
   // Auto-save to localStorage
   useEffect(() => {
     const timer = setTimeout(() => {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(project));
+      try {
+        const json = JSON.stringify(project);
+        localStorage.setItem(STORAGE_KEY, json);
+        console.log(`Auto-saved project with ${project.screens.length} screens (${project.screens.filter(s => s.type === "loading").length} loading screens)`);
+      } catch (e) {
+        console.error("Failed to save project to localStorage:", e);
+        if (e instanceof DOMException && e.name === "QuotaExceededError") {
+          toast.error("Storage quota exceeded. Consider reducing project size.");
+        }
+      }
     }, 1000);
     return () => clearTimeout(timer);
   }, [project]);
@@ -103,8 +127,14 @@ const Index = () => {
   };
 
   const handleSave = () => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(project));
-    toast.success("Project saved!");
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(project));
+      console.log(`Manually saved project with ${project.screens.length} screens (${project.screens.filter(s => s.type === "loading").length} loading screens)`);
+      toast.success("Project saved!");
+    } catch (e) {
+      console.error("Failed to save project:", e);
+      toast.error("Failed to save project");
+    }
   };
 
   const handleLoad = () => {
@@ -112,16 +142,31 @@ const Index = () => {
     if (saved) {
       try {
         const loaded = JSON.parse(saved);
+        
+        // Ensure screens array is properly loaded
+        const migratedScreens = loaded.screens?.map((screen: any) => ({
+          ...screen,
+          pixels: screen.pixels || undefined,
+          tiles: screen.tiles || undefined,
+          placedObjects: screen.placedObjects || []
+        })) || [];
+        
         const loadedWithDefaults = {
           ...loaded,
-          screens: loaded.screens ?? [],
+          screens: migratedScreens,
           objects: loaded.objects ?? [],
           levels: loaded.levels ?? [],
           gameFlow: loaded.gameFlow ?? [],
         };
         setProject(loadedWithDefaults);
+        
+        const screenCount = migratedScreens.length;
+        const loadingScreenCount = migratedScreens.filter((s: any) => s.type === "loading").length;
+        console.log(`Loaded ${screenCount} screens (${loadingScreenCount} loading screens)`);
+        
         toast.success("Project loaded!");
       } catch (e) {
+        console.error("Failed to load project:", e);
         toast.error("Failed to load project");
       }
     }
