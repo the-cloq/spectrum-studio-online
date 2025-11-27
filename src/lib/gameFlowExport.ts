@@ -36,45 +36,85 @@ export function exportGameFlowToTAP(
     return tap.toBlob(); // No valid screens to export
   }
 
-  // Create BASIC loader that loads all screens in sequence
+  // Use first valid screen as loading screen and second as the initial game screen
+  const loadingScreen = validFlowScreens[0];
+  const targetScreen = validFlowScreens.length > 1 ? validFlowScreens[1] : loadingScreen;
+
+  const loadingScr = encodeScreenToSCR(loadingScreen);
+  const targetScr = encodeScreenToSCR(targetScreen);
+
+  // Build BASIC loader:
+  // 10 CLEAR 32767
+  // 20 LOAD "" SCREEN$
+  // 30 LOAD "" CODE
+  // 40 RANDOMIZE USR 32768
   const basicProgram: number[] = [];
-  
-  validFlowScreens.forEach((_, index) => {
-    const lineNumber = 10 + (index * 10);
-    
-    // Line N: LOAD "" SCREEN$ (line numbers are big-endian)
-    basicProgram.push((lineNumber >> 8) & 0xff, lineNumber & 0xff);
-    const lineStart = basicProgram.length;
-    basicProgram.push(0x00, 0x00); // Length placeholder
-    basicProgram.push(0xef); // LOAD token
-    basicProgram.push(0x20); // Space
-    basicProgram.push(0x22, 0x22); // Empty string ""
-    basicProgram.push(0x20); // Space
-    basicProgram.push(0xaa); // SCREEN$ token
-    basicProgram.push(0x0d); // ENTER
-    const lineLength = basicProgram.length - lineStart - 2;
-    basicProgram[lineStart] = lineLength & 0xff;
-    basicProgram[lineStart + 1] = (lineLength >> 8) & 0xff;
 
-    // Add PAUSE between screens (except after last screen)
-    if (index < validFlowScreens.length - 1) {
-      const pauseLineNumber = lineNumber + 5;
-      basicProgram.push((pauseLineNumber >> 8) & 0xff, pauseLineNumber & 0xff);
-      const pauseLineStart = basicProgram.length;
-      basicProgram.push(0x00, 0x00); // Length placeholder
-      basicProgram.push(0xf2); // PAUSE token
-      basicProgram.push(0x20); // Space
-      basicProgram.push(0x35, 0x30); // "50" as ASCII
-      basicProgram.push(0x0e, 0x00, 0x00, 0x32, 0x00, 0x00); // Encoded number 50
-      basicProgram.push(0x0d); // ENTER
-      const pauseLineLength = basicProgram.length - pauseLineStart - 2;
-      basicProgram[pauseLineStart] = pauseLineLength & 0xff;
-      basicProgram[pauseLineStart + 1] = (pauseLineLength >> 8) & 0xff;
-    }
-  });
+  // Line 10: CLEAR 32767
+  basicProgram.push(0x00, 0x0a); // Line number 10
+  let lineStart = basicProgram.length;
+  basicProgram.push(0x00, 0x00); // Length placeholder
+  basicProgram.push(0xfd); // CLEAR token
+  basicProgram.push(0x20); // Space
+  // "32767" as ASCII
+  basicProgram.push(0x33, 0x32, 0x37, 0x36, 0x37);
+  // Encoded number 32767 (matches TAPGenerator.addBasicLoader)
+  basicProgram.push(0x0e, 0x00, 0x00, 0xff, 0x7f, 0x00);
+  basicProgram.push(0x0d); // ENTER
+  let lineLength = basicProgram.length - lineStart - 2;
+  basicProgram[lineStart] = lineLength & 0xff;
+  basicProgram[lineStart + 1] = (lineLength >> 8) & 0xff;
 
-  // BASIC program header
-  const headerData: number[] = [0x00, 0x00]; // Header flag, BASIC type
+  // Line 20: LOAD "" SCREEN$
+  basicProgram.push(0x00, 0x14); // Line number 20
+  lineStart = basicProgram.length;
+  basicProgram.push(0x00, 0x00); // Length placeholder
+  basicProgram.push(0xef); // LOAD token
+  basicProgram.push(0x20); // Space
+  basicProgram.push(0x22, 0x22); // Empty string ""
+  basicProgram.push(0x20); // Space
+  basicProgram.push(0xaa); // SCREEN$ token
+  basicProgram.push(0x0d); // ENTER
+  lineLength = basicProgram.length - lineStart - 2;
+  basicProgram[lineStart] = lineLength & 0xff;
+  basicProgram[lineStart + 1] = (lineLength >> 8) & 0xff;
+
+  // Line 30: LOAD "" CODE
+  basicProgram.push(0x00, 0x1e); // Line number 30
+  lineStart = basicProgram.length;
+  basicProgram.push(0x00, 0x00); // Length placeholder
+  basicProgram.push(0xef); // LOAD token
+  basicProgram.push(0x20); // Space
+  basicProgram.push(0x22, 0x22); // Empty string ""
+  basicProgram.push(0x20); // Space
+  basicProgram.push(0xaf); // CODE token
+  basicProgram.push(0x0d); // ENTER
+  lineLength = basicProgram.length - lineStart - 2;
+  basicProgram[lineStart] = lineLength & 0xff;
+  basicProgram[lineStart + 1] = (lineLength >> 8) & 0xff;
+
+  // Line 40: RANDOMIZE USR 32768
+  basicProgram.push(0x00, 0x28); // Line number 40
+  lineStart = basicProgram.length;
+  basicProgram.push(0x00, 0x00); // Length placeholder
+  basicProgram.push(0xf9); // RANDOMIZE token
+  basicProgram.push(0x20); // Space
+  basicProgram.push(0xc0); // USR token
+  basicProgram.push(0x20); // Space
+  // "32768" as ASCII
+  basicProgram.push(0x33, 0x32, 0x37, 0x36, 0x38);
+  // Encoded number 32768 (matches TAPGenerator.addBasicLoader)
+  basicProgram.push(0x0e, 0x00, 0x00, 0x00, 0x80, 0x00);
+  basicProgram.push(0x0d); // ENTER
+  lineLength = basicProgram.length - lineStart - 2;
+  basicProgram[lineStart] = lineLength & 0xff;
+  basicProgram[lineStart + 1] = (lineLength >> 8) & 0xff;
+
+  // BASIC program header (same layout as TAPGenerator.addBasicLoader)
+  const headerData: number[] = [
+    0x00, // Header block flag
+    0x00, // BASIC program type
+  ];
   const filename = "Loader    ";
   for (let i = 0; i < 10; i++) {
     headerData.push(filename.charCodeAt(i));
@@ -84,17 +124,47 @@ export function exportGameFlowToTAP(
   headerData.push(0x0a, 0x00); // Autostart line 10
   headerData.push(basicProgram.length & 0xff);
   headerData.push((basicProgram.length >> 8) & 0xff);
-  
+
   tap.addBlock(headerData);
   tap.addBlock([0xff, ...basicProgram]);
 
-  // Add each screen as a CODE block
-  validFlowScreens.forEach((screen, index) => {
-    const scrData = encodeScreenToSCR(screen);
-    const screenName = `Screen${index + 1}`.substring(0, 10).padEnd(10, ' ');
-    tap.addHeader(screenName, 6912, 16384);
-    tap.addDataBlock(scrData);
-  });
+  // Add loading screen as SCREEN$ block (CODE header with start 16384 and length 6912)
+  const loadingName = projectName.substring(0, 10).padEnd(10, " ");
+  tap.addHeader(loadingName, 6912, 16384);
+  tap.addDataBlock(loadingScr);
+
+  // Build simple Z80 engine at 32768 that copies the target screen into screen memory
+  // and then loops forever so control never returns to BASIC (no "0 OK" prompt).
+  const engine: number[] = [];
+  const engineStart = 32768;
+
+  // LD HL, <targetScreenAddress> (patched below)
+  const hlIndex = engine.length;
+  engine.push(0x21, 0x00, 0x00);
+
+  // LD DE, 16384 (screen memory)
+  engine.push(0x11, 0x00, 0x40);
+
+  // LD BC, 6912 (screen bytes)
+  engine.push(0x01, 0x00, 0x1b);
+
+  // LDIR
+  engine.push(0xed, 0xb0);
+
+  // Infinite loop: HALT : JR $
+  engine.push(0x76); // HALT
+  engine.push(0x18, 0xfe); // JR -2
+
+  // Patch HL with address of target screen data (immediately after engine)
+  const targetScreenAddress = engineStart + engine.length;
+  engine[hlIndex + 1] = targetScreenAddress & 0xff;
+  engine[hlIndex + 2] = (targetScreenAddress >> 8) & 0xff;
+
+  const codeData = [...engine, ...targetScr];
+
+  const codeName = "GameFlow  ";
+  tap.addHeader(codeName, codeData.length, engineStart);
+  tap.addDataBlock(codeData);
 
   return tap.toBlob();
 }
