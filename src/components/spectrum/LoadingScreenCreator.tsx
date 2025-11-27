@@ -49,10 +49,16 @@ export const LoadingScreenCreator = ({ screen, onScreenChange, onBlockEditPanelC
   const [selectedColor, setSelectedColor] = useState<SpectrumColor>(SPECTRUM_COLORS[7]);
   const [extraColorMapping, setExtraColorMapping] = useState<Record<string, "ink" | "paper">>({});
   
-  // Stripped preview options
-  const [paperStrategy, setPaperStrategy] = useState<"lighter" | "darker" | "bigger" | "smaller">("lighter");
-  const [singleColorAs, setSingleColorAs] = useState<"paper" | "ink">("paper");
-  const [preserveNeighbors, setPreserveNeighbors] = useState<"no" | "left" | "up" | "match">("no");
+  // Stripped preview options - initialize from screen or use defaults
+  const [paperStrategy, setPaperStrategy] = useState<"lighter" | "darker" | "bigger" | "smaller">(
+    screen.conversionOptions?.paperStrategy || "lighter"
+  );
+  const [singleColorAs, setSingleColorAs] = useState<"paper" | "ink">(
+    screen.conversionOptions?.singleColorAs || "paper"
+  );
+  const [preserveNeighbors, setPreserveNeighbors] = useState<"no" | "left" | "up" | "match">(
+    screen.conversionOptions?.preserveNeighbors || "no"
+  );
   const [strippedPixels, setStrippedPixels] = useState<SpectrumColor[][] | null>(null);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -88,6 +94,16 @@ export const LoadingScreenCreator = ({ screen, onScreenChange, onBlockEditPanelC
 
   useEffect(() => {
     if (activeTab === "stripped" && screen.pixels) {
+      // Save conversion options to screen
+      onScreenChange({
+        ...screen,
+        conversionOptions: {
+          paperStrategy,
+          singleColorAs,
+          preserveNeighbors,
+        },
+      });
+
       // Use requestAnimationFrame to ensure canvas is mounted
       requestAnimationFrame(() => {
         generateStrippedPreview();
@@ -546,12 +562,20 @@ export const LoadingScreenCreator = ({ screen, onScreenChange, onBlockEditPanelC
     for (let by = 0; by < SPECTRUM_HEIGHT; by += ATTR_BLOCK) {
       for (let bx = 0; bx < SPECTRUM_WIDTH; bx += ATTR_BLOCK) {
         const blockColors = getBlockColors(bx, by);
-        const inkColor = SPECTRUM_COLORS.findIndex(c => c.value === blockColors[0]);
-        const paperColor = SPECTRUM_COLORS.findIndex(c => c.value === blockColors[1] || blockColors[0]);
         
-        // Set attribute byte
+        // Find the spectrum colors for ink and paper
+        const inkSpectrumColor = SPECTRUM_COLORS.find(c => c.value === blockColors[0]) || SPECTRUM_COLORS[0];
+        const paperSpectrumColor = SPECTRUM_COLORS.find(c => c.value === (blockColors[1] || blockColors[0])) || SPECTRUM_COLORS[7];
+        
+        // Extract ink/paper color indices (0-7) and bright flag
+        const inkValue = inkSpectrumColor.ink; // 0-7
+        const paperValue = paperSpectrumColor.ink; // 0-7
+        const bright = inkSpectrumColor.bright || paperSpectrumColor.bright ? 1 : 0;
+        const flash = 0; // No flash support for now
+        
+        // Set attribute byte: FLASH(bit7) | BRIGHT(bit6) | PAPER(bits5-3) | INK(bits2-0)
         const attrIndex = 6144 + (by / 8) * 32 + (bx / 8);
-        scrData[attrIndex] = (paperColor << 3) | inkColor;
+        scrData[attrIndex] = (flash << 7) | (bright << 6) | (paperValue << 3) | inkValue;
         
         // Set bitmap bytes using correct ZX Spectrum scanline formula
         for (let y = 0; y < ATTR_BLOCK; y++) {
@@ -606,8 +630,16 @@ export const LoadingScreenCreator = ({ screen, onScreenChange, onBlockEditPanelC
         for (let bx = 0; bx < SPECTRUM_WIDTH; bx += ATTR_BLOCK) {
           const attrIndex = 6144 + (by / 8) * 32 + (bx / 8);
           const attr = scrData[attrIndex];
-          const inkIdx = attr & 0x07;
-          const paperIdx = (attr >> 3) & 0x07;
+          
+          // Decode attribute byte: FLASH(bit7) | BRIGHT(bit6) | PAPER(bits5-3) | INK(bits2-0)
+          const inkValue = attr & 0x07; // bits 0-2
+          const paperValue = (attr >> 3) & 0x07; // bits 3-5
+          const bright = (attr >> 6) & 0x01; // bit 6
+          // const flash = (attr >> 7) & 0x01; // bit 7 (not used)
+          
+          // Find the correct spectrum color based on ink value and bright flag
+          const inkColor = SPECTRUM_COLORS.find(c => c.ink === inkValue && c.bright === Boolean(bright)) || SPECTRUM_COLORS[inkValue];
+          const paperColor = SPECTRUM_COLORS.find(c => c.ink === paperValue && c.bright === Boolean(bright)) || SPECTRUM_COLORS[paperValue];
           
           for (let y = 0; y < ATTR_BLOCK; y++) {
             const py = by + y;
@@ -618,7 +650,7 @@ export const LoadingScreenCreator = ({ screen, onScreenChange, onBlockEditPanelC
             for (let x = 0; x < ATTR_BLOCK; x++) {
               const px = bx + x;
               const bit = (byte >> (7 - x)) & 1;
-              pixels[py][px] = bit ? SPECTRUM_COLORS[inkIdx] : SPECTRUM_COLORS[paperIdx];
+              pixels[py][px] = bit ? inkColor : paperColor;
             }
           }
         }
