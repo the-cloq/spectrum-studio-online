@@ -198,19 +198,19 @@ export function exportGameFlowToTAP(
   // ===== GAME LOOP: Read keyboard, update position, draw pixel =====
   const gameLoopAddr = engineStart + engine.length;
 
-  // Read keyboard port DFFE (YUIOP half-row: P=bit0, O=bit1)
-  // LD BC, 0xDFFE
-  engine.push(0x01, 0xfe, 0xdf);
+  // Read keyboard port FBFE (QWERT half-row: Q=bit0, W=bit1)
+  // LD BC, 0xFBFE
+  engine.push(0x01, 0xfe, 0xfb);
   // IN A, (C)
   engine.push(0xed, 0x78);
   
-  // Check O key (bit 1) - move RIGHT
+  // Check W key (bit 1) - move RIGHT
   // BIT 1, A
   engine.push(0xcb, 0x4f);
-  // JR NZ, check_p (if O not pressed, check P)
-  engine.push(0x20, 0x07);
+  // JR NZ, check_q (if W not pressed, check Q)
+  engine.push(0x20, 0x08);
   
-  // O pressed - increment X position in memory
+  // W pressed - increment X position in memory
   // LD HL, playerXAddr
   engine.push(0x21);
   const playerXReadIdx1 = engine.length;
@@ -218,14 +218,14 @@ export function exportGameFlowToTAP(
   // INC (HL)
   engine.push(0x34);
   
-  // check_p:
-  // Check P key (bit 0) - move LEFT
+  // check_q:
+  // Check Q key (bit 0) - move LEFT
   // BIT 0, A
   engine.push(0xcb, 0x47);
-  // JR NZ, draw_pixel (if P not pressed, skip to draw)
-  engine.push(0x20, 0x07);
+  // JR NZ, draw_pixel (if Q not pressed, skip to draw)
+  engine.push(0x20, 0x08);
   
-  // P pressed - decrement X position in memory
+  // Q pressed - decrement X position in memory
   // LD HL, playerXAddr
   engine.push(0x21);
   const playerXReadIdx2 = engine.length;
