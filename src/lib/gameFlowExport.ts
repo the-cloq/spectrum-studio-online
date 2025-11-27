@@ -29,7 +29,8 @@ export function exportGameFlowToTAP(
       }
       return screen;
     })
-    .filter(screen => screen && screen.pixels);
+    // Include any screen we can resolve (even if it's a tile-based game screen)
+    .filter((screen): screen is Screen => !!screen);
 
   if (validFlowScreens.length === 0) {
     return tap.toBlob(); // No valid screens to export
