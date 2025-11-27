@@ -41,8 +41,8 @@ export function exportGameFlowToTAP(
   validFlowScreens.forEach((_, index) => {
     const lineNumber = 10 + (index * 10);
     
-    // Line N: LOAD "" SCREEN$
-    basicProgram.push(lineNumber & 0xff, (lineNumber >> 8) & 0xff);
+    // Line N: LOAD "" SCREEN$ (line numbers are big-endian)
+    basicProgram.push((lineNumber >> 8) & 0xff, lineNumber & 0xff);
     const lineStart = basicProgram.length;
     basicProgram.push(0x00, 0x00); // Length placeholder
     basicProgram.push(0xef); // LOAD token
@@ -58,7 +58,7 @@ export function exportGameFlowToTAP(
     // Add PAUSE between screens (except after last screen)
     if (index < validFlowScreens.length - 1) {
       const pauseLineNumber = lineNumber + 5;
-      basicProgram.push(pauseLineNumber & 0xff, (pauseLineNumber >> 8) & 0xff);
+      basicProgram.push((pauseLineNumber >> 8) & 0xff, pauseLineNumber & 0xff);
       const pauseLineStart = basicProgram.length;
       basicProgram.push(0x00, 0x00); // Length placeholder
       basicProgram.push(0xf2); // PAUSE token
