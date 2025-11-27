@@ -162,6 +162,19 @@ export function exportGameFlowToTAP(
   // LDIR (copy all 6912 bytes from background to screen)
   engine.push(0xed, 0xb0);
 
+  // Force bright white ink on black paper for all attributes so debug pixel is visible
+  // Attribute memory starts at 22528 (16384 + 6144)
+  // LD HL, 22528
+  engine.push(0x21, 0x00, 0x58);
+  // LD (HL), 0x47 (BRIGHT 1, PAPER 0 (black), INK 7 (white))
+  engine.push(0x36, 0x47);
+  // LD DE, 22529 (next attribute byte)
+  engine.push(0x11, 0x01, 0x58);
+  // LD BC, 767 (remaining attribute bytes)
+  engine.push(0x01, 0xff, 0x02);
+  // LDIR - copy first attribute byte across entire attribute area
+  engine.push(0xed, 0xb0);
+
   // Initialize player X position at memory location (patched below)
   // LD HL, playerXAddr
   engine.push(0x21);
