@@ -24,6 +24,7 @@ interface GameFlowDesignerProps {
 export const GameFlowDesigner = ({ screens, blocks, levels, gameFlow, onGameFlowChange, projectName }: GameFlowDesignerProps) => {
   const [selectedFlowScreen, setSelectedFlowScreen] = useState<GameFlowScreen | null>(null);
   const [draggedScreenId, setDraggedScreenId] = useState<string | null>(null);
+  const [draggedFlowIndex, setDraggedFlowIndex] = useState<number | null>(null);
   const [categoryFilter, setCategoryFilter] = useState<"all" | "loading" | "title" | "instructions" | "controls" | "scoreboard" | "gameover">("all");
 
   // Filter non-game screens
@@ -104,10 +105,25 @@ export const GameFlowDesigner = ({ screens, blocks, levels, gameFlow, onGameFlow
     e.stopPropagation();
   };
 
-  const handleDrop = (e: React.DragEvent) => {
+  const handleDrop = (e: React.DragEvent, targetIndex?: number) => {
     e.preventDefault();
     e.stopPropagation();
 
+    // If we're reordering within the flow
+    if (draggedFlowIndex !== null && targetIndex !== undefined) {
+      const reordered = [...sortedGameFlow];
+      const [removed] = reordered.splice(draggedFlowIndex, 1);
+      reordered.splice(targetIndex, 0, removed);
+      
+      // Update order property
+      const updated = reordered.map((f, idx) => ({ ...f, order: idx }));
+      onGameFlowChange(updated);
+      setDraggedFlowIndex(null);
+      toast.success("Screen reordered");
+      return;
+    }
+
+    // Otherwise, adding from library
     let droppedId: string | null = null;
     try {
       const fromData = e.dataTransfer.getData("text/plain");
@@ -118,6 +134,7 @@ export const GameFlowDesigner = ({ screens, blocks, levels, gameFlow, onGameFlow
 
     if (!droppedId) return;
     addScreenToFlow(droppedId);
+    setDraggedFlowIndex(null);
   };
   const handleRemoveScreen = (screenId: string) => {
     const updatedFlow = gameFlow
@@ -276,13 +293,13 @@ export const GameFlowDesigner = ({ screens, blocks, levels, gameFlow, onGameFlow
         {gameFlow.length === 0 ? (
           <div
             onDragOver={handleDragOver}
-            onDrop={handleDrop}
-            className="border-2 border-dashed border-border rounded-lg p-12 text-center"
+            onDrop={(e) => handleDrop(e)}
+            className="border-2 border-dashed border-border rounded-lg p-12 text-center min-h-[400px] flex flex-col items-center justify-center"
           >
             <AlertCircle className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
             <h3 className="text-xl font-semibold mb-2">Create Your Game Flow</h3>
             <p className="text-muted-foreground mb-4">
-              Drag screens from the library to organize your game's non-playable screens
+              Drag or click screens from the library to organize your game's non-playable screens
             </p>
             <p className="text-sm text-muted-foreground">
               <strong>Note:</strong> Loading screens must always appear first
@@ -291,10 +308,10 @@ export const GameFlowDesigner = ({ screens, blocks, levels, gameFlow, onGameFlow
         ) : (
           <div
             onDragOver={handleDragOver}
-            onDrop={handleDrop}
-            className="grid grid-cols-1 md:grid-cols-2 gap-3"
+            onDrop={(e) => handleDrop(e)}
+            className="grid grid-cols-1 md:grid-cols-2 gap-3 min-h-[200px]"
           >
-            {sortedGameFlow.map((flowScreen) => {
+            {sortedGameFlow.map((flowScreen, index) => {
               const screen = screens.find(s => s.id === flowScreen.screenId);
               if (!screen) return null;
 
@@ -304,7 +321,20 @@ export const GameFlowDesigner = ({ screens, blocks, levels, gameFlow, onGameFlow
               return (
                 <Card
                   key={flowScreen.screenId}
-                  className={`p-4 transition-all ${
+                  draggable
+                  onDragStart={(e) => {
+                    setDraggedFlowIndex(index);
+                    e.dataTransfer.effectAllowed = "move";
+                  }}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                  }}
+                  onDrop={(e) => {
+                    e.stopPropagation();
+                    handleDrop(e, index);
+                  }}
+                  className={`p-4 transition-all cursor-move ${
                     isSelected ? "ring-2 ring-primary" : "hover:border-primary"
                   } ${isLoading ? "border-l-4 border-l-blue-500" : ""}`}
                   onClick={() => handleSelectFlowScreen(flowScreen)}
