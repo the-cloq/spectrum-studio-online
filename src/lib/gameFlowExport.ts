@@ -162,8 +162,9 @@ export function exportGameFlowToTAP(
     return gameObj?.type === "player";
   });
 
-  const initialPlayerX = playerObj?.x || 128;
-  const initialPlayerY = playerObj?.y || 144;
+  const TILE_SIZE = 8; // 8×8 Spectrum pixel grid cells
+  const initialPlayerX = playerObj ? playerObj.x * TILE_SIZE : 128;
+  const initialPlayerY = playerObj ? playerObj.y * TILE_SIZE : 144;
 
   // Get player sprite
   let playerSprite: Sprite | undefined;
@@ -197,7 +198,7 @@ export function exportGameFlowToTAP(
   engine.push(0x32, playerVYAddr & 0xff, (playerVYAddr >> 8) & 0xff); // LD (playerVYAddr), A
   engine.push(0x32, jumpStateAddr & 0xff, (jumpStateAddr >> 8) & 0xff); // LD (jumpStateAddr), A
   engine.push(0x32, frameCountAddr & 0xff, (frameCountAddr >> 8) & 0xff); // LD (frameCountAddr), A
-  engine.push(0x01); // LD A, 1 (facing right)
+  engine.push(0x3e, 0x01); // LD A, 1 (facing right)
   engine.push(0x32, facingDirAddr & 0xff, (facingDirAddr >> 8) & 0xff); // LD (facingDirAddr), A
 
   // ===== MAIN GAME LOOP =====
