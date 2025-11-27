@@ -204,13 +204,17 @@ export function exportGameFlowToTAP(
   // JR NZ, check_q (if W not pressed, check Q)
   engine.push(0x20, 0x0e);
   
-  // W pressed - increment X position in memory
+  // W pressed - add 8 to X position in memory (move one full byte right)
   // LD HL, playerXAddr
   engine.push(0x21);
   const playerXReadIdx1 = engine.length;
   engine.push(0x00, 0x00); // placeholder
-  // INC (HL)
-  engine.push(0x34);
+  // LD A, (HL) - load current X
+  engine.push(0x7e);
+  // ADD A, 8
+  engine.push(0xc6, 0x08);
+  // LD (HL), A - store back
+  engine.push(0x77);
   
   // Set border to RED (2)
   engine.push(
@@ -228,13 +232,17 @@ export function exportGameFlowToTAP(
   // JR NZ, draw_pixel (if Q not pressed, skip to draw)
   engine.push(0x20, 0x0e);
   
-  // Q pressed - decrement X position in memory
+  // Q pressed - subtract 8 from X position in memory (move one full byte left)
   // LD HL, playerXAddr
   engine.push(0x21);
   const playerXReadIdx2 = engine.length;
   engine.push(0x00, 0x00); // placeholder
-  // DEC (HL)
-  engine.push(0x35);
+  // LD A, (HL) - load current X
+  engine.push(0x7e);
+  // SUB 8
+  engine.push(0xd6, 0x08);
+  // LD (HL), A - store back
+  engine.push(0x77);
   
   // Set border to CYAN (5)
   engine.push(
