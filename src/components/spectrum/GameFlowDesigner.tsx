@@ -30,53 +30,39 @@ export const GameFlowDesigner = ({ screens, blocks, levels, gameFlow, onGameFlow
 
   // Filter screens based on category
   const filteredScreens = screens.filter(s => {
-    if (categoryFilter === "all") return true;
-    if (categoryFilter === "levels") return s.type === "game";
+    if (categoryFilter === "all") return s.type !== "game"; // Exclude game screens from "all"
+    if (categoryFilter === "levels") return false; // Don't show screens in levels tab
     if (categoryFilter === "title") return ["title", "instructions", "controls", "gameover", "scoreboard"].includes(s.type);
     return s.type === categoryFilter;
   });
 
   // Screens already in game flow
   const flowScreenIds = new Set(gameFlow.map(f => f.screenId));
+  const flowLevelIds = new Set(gameFlow.map(f => f.levelId).filter(Boolean));
   const availableScreens = filteredScreens.filter(s => !flowScreenIds.has(s.id));
+  const availableLevels = levels.filter(l => !flowLevelIds.has(l.id));
 
-  const handleDragStart = (e: React.DragEvent, screenId: string) => {
-    setDraggedScreenId(screenId);
+  const handleDragStart = (e: React.DragEvent, id: string, isLevel: boolean = false) => {
+    setDraggedScreenId(id);
     try {
       e.dataTransfer.effectAllowed = "move";
-      e.dataTransfer.setData("text/plain", screenId);
+      e.dataTransfer.setData("text/plain", isLevel ? `level:${id}` : id);
     } catch {
       // dataTransfer may not be available in some environments; ignore
     }
   };
 
-  const addScreenToFlow = (screenId: string) => {
-    const screen = screens.find(s => s.id === screenId);
-    if (!screen) return;
+  const addToFlow = (id: string, isLevel: boolean = false) => {
+    if (isLevel) {
+      const level = levels.find(l => l.id === id);
+      if (!level) return;
 
-    // Check if screen is already in flow
-    if (flowScreenIds.has(screenId)) {
-      toast.error("Screen is already in Game Flow");
-      setDraggedScreenId(null);
-      return;
-    }
+      if (flowLevelIds.has(id)) {
+        toast.error("Level is already in Game Flow");
+        setDraggedScreenId(null);
+        return;
+      }
 
-    // Loading screens must come first
-    if (screen.type === "loading") {
-      const loadingCount = gameFlow.filter(f => {
-        const s = screens.find(sc => sc.id === f.screenId);
-        return s?.type === "loading";
-      }).length;
-
-      const newFlow: GameFlowScreen = {
-        screenId,
-        order: loadingCount,
-        autoShow: true,
-      };
-
-      onGameFlowChange([...gameFlow, newFlow]);
-    } else {
-      // Non-loading screens go after all loading screens
       const maxLoadingOrder = Math.max(
         -1,
         ...gameFlow
@@ -88,17 +74,62 @@ export const GameFlowDesigner = ({ screens, blocks, levels, gameFlow, onGameFlow
       );
 
       const newFlow: GameFlowScreen = {
-        screenId,
+        levelId: id,
+        screenId: level.screenIds[0] || "",
         order: maxLoadingOrder + 1 + (gameFlow.length - (maxLoadingOrder + 1)),
-        accessKey: undefined,
-        scrollText: screen.name,
+        scrollText: level.name,
       };
 
       onGameFlowChange([...gameFlow, newFlow]);
-    }
+      setDraggedScreenId(null);
+      toast.success(`${level.name} added to Game Flow`);
+    } else {
+      const screen = screens.find(s => s.id === id);
+      if (!screen) return;
 
-    setDraggedScreenId(null);
-    toast.success(`${screen.name} added to Game Flow`);
+      if (flowScreenIds.has(id)) {
+        toast.error("Screen is already in Game Flow");
+        setDraggedScreenId(null);
+        return;
+      }
+
+      if (screen.type === "loading") {
+        const loadingCount = gameFlow.filter(f => {
+          const s = screens.find(sc => sc.id === f.screenId);
+          return s?.type === "loading";
+        }).length;
+
+        const newFlow: GameFlowScreen = {
+          screenId: id,
+          order: loadingCount,
+          autoShow: true,
+        };
+
+        onGameFlowChange([...gameFlow, newFlow]);
+      } else {
+        const maxLoadingOrder = Math.max(
+          -1,
+          ...gameFlow
+            .filter(f => {
+              const s = screens.find(sc => sc.id === f.screenId);
+              return s?.type === "loading";
+            })
+            .map(f => f.order)
+        );
+
+        const newFlow: GameFlowScreen = {
+          screenId: id,
+          order: maxLoadingOrder + 1 + (gameFlow.length - (maxLoadingOrder + 1)),
+          accessKey: undefined,
+          scrollText: screen.name,
+        };
+
+        onGameFlowChange([...gameFlow, newFlow]);
+      }
+
+      setDraggedScreenId(null);
+      toast.success(`${screen.name} added to Game Flow`);
+    }
   };
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -125,16 +156,19 @@ export const GameFlowDesigner = ({ screens, blocks, levels, gameFlow, onGameFlow
     }
 
     // Otherwise, adding from library
-    let droppedId: string | null = null;
+    let droppedData: string | null = null;
     try {
       const fromData = e.dataTransfer.getData("text/plain");
-      droppedId = fromData || draggedScreenId;
+      droppedData = fromData || draggedScreenId;
     } catch {
-      droppedId = draggedScreenId;
+      droppedData = draggedScreenId;
     }
 
-    if (!droppedId) return;
-    addScreenToFlow(droppedId);
+    if (!droppedData) return;
+    
+    const isLevel = droppedData.startsWith("level:");
+    const id = isLevel ? droppedData.replace("level:", "") : droppedData;
+    addToFlow(id, isLevel);
     setDraggedFlowIndex(null);
   };
   const handleRemoveScreen = (screenId: string) => {
@@ -184,12 +218,14 @@ export const GameFlowDesigner = ({ screens, blocks, levels, gameFlow, onGameFlow
   // Apply flow filter
   const filteredGameFlow = sortedGameFlow.filter(flowScreen => {
     if (flowFilter === "all") return true;
+    
+    if (flowFilter === "levels") return !!flowScreen.levelId;
+    
     const screen = screens.find(s => s.id === flowScreen.screenId);
     if (!screen) return false;
     
     if (flowFilter === "loading") return screen.type === "loading";
     if (flowFilter === "system") return ["title", "instructions", "controls", "gameover"].includes(screen.type);
-    if (flowFilter === "levels") return screen.type === "game";
     return true;
   });
 
@@ -210,87 +246,134 @@ export const GameFlowDesigner = ({ screens, blocks, levels, gameFlow, onGameFlow
 
         <ScrollArea className="h-[400px]">
           <div className="space-y-2">
-            {availableScreens.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-4">
-                {categoryFilter === "all" 
-                  ? "No available screens. All screens are in Game Flow or create new screens first." 
-                  : `No ${categoryFilter} screens available`}
-              </p>
-            ) : (
-              availableScreens.map(screen => (
-                <Card
-                  key={screen.id}
-                  draggable
-                  onDragStart={(e) => handleDragStart(e, screen.id)}
-                  onClick={() => addScreenToFlow(screen.id)}
-                  className="p-3 cursor-move hover:border-primary transition-colors"
-                >
-                  <div className="flex items-center gap-2">
-                    <Grip className="w-4 h-4 text-muted-foreground" />
-                    <div className="flex-1">
-                      <p className="font-medium text-sm mb-1">{screen.name}</p>
-                      <p className="text-xs text-muted-foreground capitalize mb-2">{screen.type}</p>
-                      {/* Screen preview thumbnail */}
-                      <div className="w-full aspect-[4/3] bg-muted rounded overflow-hidden">
-                        <canvas
-                          width={256}
-                          height={192}
-                          className="w-full h-full"
-                          ref={canvas => {
-                            if (!canvas) return;
-                            const ctx = canvas.getContext("2d");
-                            if (!ctx) return;
-                            
-                            // Clear background
-                            ctx.fillStyle = "#000";
-                            ctx.fillRect(0, 0, 256, 192);
-                            
-                            // Render screen content based on type
-                            if ((screen.type === "title" || screen.type === "loading") && screen.pixels) {
-                              // Render pixel-based screens (title/loading)
-                              for (let y = 0; y < 192; y++) {
-                                for (let x = 0; x < 256; x++) {
-                                  const color = screen.pixels[y]?.[x];
-                                  if (color) {
-                                    ctx.fillStyle = color.value;
-                                    ctx.fillRect(x, y, 1, 1);
-                                  }
-                                }
-                              }
-                            } else if (screen.type === "game" && screen.tiles) {
-                              // Render game screen with blocks
-                              const GRID_WIDTH = 32;
-                              const GRID_HEIGHT = 24;
-                              const BLOCK_SIZE = 8;
-                              
-                              for (let gy = 0; gy < GRID_HEIGHT; gy++) {
-                                for (let gx = 0; gx < GRID_WIDTH; gx++) {
-                                  const blockId = screen.tiles[gy]?.[gx];
-                                  if (blockId) {
-                                    const block = blocks.find(b => b.id === blockId);
-                                    if (block?.sprite?.frames?.[0]?.pixels) {
-                                      for (let by = 0; by < BLOCK_SIZE; by++) {
-                                        for (let bx = 0; bx < BLOCK_SIZE; bx++) {
-                                          const colorIndex = block.sprite.frames[0].pixels[by]?.[bx];
-                                          if (colorIndex !== undefined && colorIndex !== 0) {
-                                            const color = SPECTRUM_COLORS[colorIndex]?.value || "#fff";
-                                            ctx.fillStyle = color;
-                                            ctx.fillRect(gx * BLOCK_SIZE + bx, gy * BLOCK_SIZE + by, 1, 1);
+            {categoryFilter === "levels" ? (
+              // Show levels when Levels tab is active
+              availableLevels.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-4">
+                  No available levels. Create levels in the Levels section first.
+                </p>
+              ) : (
+                availableLevels.map(level => {
+                  const levelScreen = screens.find(s => s.id === level.screenIds[0]);
+                  return (
+                    <Card
+                      key={level.id}
+                      draggable
+                      onDragStart={(e) => handleDragStart(e, level.id, true)}
+                      onClick={() => addToFlow(level.id, true)}
+                      className="p-3 cursor-move hover:border-primary transition-colors"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Grip className="w-4 h-4 text-muted-foreground" />
+                        <div className="flex-1">
+                          <p className="font-medium text-sm mb-1">{level.name}</p>
+                          <p className="text-xs text-muted-foreground mb-2">Level</p>
+                          {/* Level preview thumbnail */}
+                          <div className="w-full aspect-[4/3] bg-muted rounded overflow-hidden">
+                            <canvas
+                              width={256}
+                              height={192}
+                              className="w-full h-full"
+                              ref={canvas => {
+                                if (!canvas) return;
+                                const ctx = canvas.getContext("2d");
+                                if (!ctx) return;
+                                const levelScreen = screens.find(s => s.id === level.screenIds[0]);
+                                if (!levelScreen) return;
+                                
+                                ctx.fillStyle = "#000";
+                                ctx.fillRect(0, 0, 256, 192);
+                                
+                                if (levelScreen.tiles) {
+                                  const GRID_WIDTH = 32;
+                                  const GRID_HEIGHT = 24;
+                                  const BLOCK_SIZE = 8;
+                                  
+                                  for (let gy = 0; gy < GRID_HEIGHT; gy++) {
+                                    for (let gx = 0; gx < GRID_WIDTH; gx++) {
+                                      const blockId = levelScreen.tiles[gy]?.[gx];
+                                      if (blockId) {
+                                        const block = blocks.find(b => b.id === blockId);
+                                        if (block?.sprite?.frames?.[0]?.pixels) {
+                                          for (let by = 0; by < BLOCK_SIZE; by++) {
+                                            for (let bx = 0; bx < BLOCK_SIZE; bx++) {
+                                              const colorIndex = block.sprite.frames[0].pixels[by]?.[bx];
+                                              if (colorIndex !== undefined && colorIndex !== 0) {
+                                                const color = SPECTRUM_COLORS[colorIndex]?.value || "#fff";
+                                                ctx.fillStyle = color;
+                                                ctx.fillRect(gx * BLOCK_SIZE + bx, gy * BLOCK_SIZE + by, 1, 1);
+                                              }
+                                            }
                                           }
                                         }
                                       }
                                     }
                                   }
                                 }
+                              }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </Card>
+                  );
+                })
+              )
+            ) : (
+              // Show screens for other tabs
+              availableScreens.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-4">
+                  {categoryFilter === "all" 
+                    ? "No available screens. All screens are in Game Flow or create new screens first." 
+                    : `No ${categoryFilter} screens available`}
+                </p>
+              ) : (
+                availableScreens.map(screen => (
+                  <Card
+                    key={screen.id}
+                    draggable
+                    onDragStart={(e) => handleDragStart(e, screen.id, false)}
+                    onClick={() => addToFlow(screen.id, false)}
+                    className="p-3 cursor-move hover:border-primary transition-colors"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Grip className="w-4 h-4 text-muted-foreground" />
+                      <div className="flex-1">
+                        <p className="font-medium text-sm mb-1">{screen.name}</p>
+                        <p className="text-xs text-muted-foreground capitalize mb-2">{screen.type}</p>
+                        {/* Screen preview thumbnail */}
+                        <div className="w-full aspect-[4/3] bg-muted rounded overflow-hidden">
+                          <canvas
+                            width={256}
+                            height={192}
+                            className="w-full h-full"
+                            ref={canvas => {
+                              if (!canvas) return;
+                              const ctx = canvas.getContext("2d");
+                              if (!ctx) return;
+                              
+                              ctx.fillStyle = "#000";
+                              ctx.fillRect(0, 0, 256, 192);
+                              
+                              if ((screen.type === "title" || screen.type === "loading") && screen.pixels) {
+                                for (let y = 0; y < 192; y++) {
+                                  for (let x = 0; x < 256; x++) {
+                                    const color = screen.pixels[y]?.[x];
+                                    if (color) {
+                                      ctx.fillStyle = color.value;
+                                      ctx.fillRect(x, y, 1, 1);
+                                    }
+                                  }
+                                }
                               }
-                            }
-                          }}
-                        />
+                            }}
+                          />
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </Card>
-              ))
+                  </Card>
+                ))
+              )
             )}
           </div>
         </ScrollArea>
@@ -345,12 +428,17 @@ export const GameFlowDesigner = ({ screens, blocks, levels, gameFlow, onGameFlow
             className="grid grid-cols-1 md:grid-cols-2 gap-3 min-h-[200px]"
           >
             {filteredGameFlow.map((flowScreen) => {
-              const index = sortedGameFlow.findIndex(f => f.screenId === flowScreen.screenId);
-              const screen = screens.find(s => s.id === flowScreen.screenId);
-              if (!screen) return null;
+              const index = sortedGameFlow.findIndex(f => f.screenId === flowScreen.screenId && f.levelId === flowScreen.levelId);
+              
+              const level = flowScreen.levelId ? levels.find(l => l.id === flowScreen.levelId) : null;
+              const screen = level ? screens.find(s => s.id === level.screenIds[0]) : screens.find(s => s.id === flowScreen.screenId);
+              if (!screen && !level) return null;
+              
+              const displayName = level ? level.name : screen?.name || "Unknown";
+              const displayType = level ? "level" : screen?.type || "unknown";
 
-              const isLoading = screen.type === "loading";
-              const isSelected = selectedFlowScreen?.screenId === flowScreen.screenId;
+              const isLoading = screen?.type === "loading";
+              const isSelected = selectedFlowScreen?.screenId === flowScreen.screenId && selectedFlowScreen?.levelId === flowScreen.levelId;
 
               return (
                 <Card
@@ -379,10 +467,10 @@ export const GameFlowDesigner = ({ screens, blocks, levels, gameFlow, onGameFlow
                         <span className="text-xs font-mono bg-muted px-2 py-0.5 rounded">
                           #{flowScreen.order + 1}
                         </span>
-                        <h4 className="font-semibold text-sm">{screen.name}</h4>
+                        <h4 className="font-semibold text-sm">{displayName}</h4>
                       </div>
                       <p className="text-xs text-muted-foreground capitalize mb-2">
-                        {screen.type}
+                        {displayType}
                       </p>
                       
                       {/* Screen preview thumbnail */}
@@ -401,7 +489,7 @@ export const GameFlowDesigner = ({ screens, blocks, levels, gameFlow, onGameFlow
                             ctx.fillRect(0, 0, 256, 192);
                             
                             // Render screen content based on type
-                            if ((screen.type === "title" || screen.type === "loading") && screen.pixels) {
+                            if ((screen?.type === "title" || screen?.type === "loading") && screen.pixels) {
                               // Render pixel-based screens (title/loading)
                               for (let y = 0; y < 192; y++) {
                                 for (let x = 0; x < 256; x++) {
@@ -412,7 +500,7 @@ export const GameFlowDesigner = ({ screens, blocks, levels, gameFlow, onGameFlow
                                   }
                                 }
                               }
-                            } else if (screen.type === "game" && screen.tiles) {
+                            } else if (screen?.tiles || (screen?.type === "game" && screen.tiles)) {
                               // Render game screen with blocks
                               const GRID_WIDTH = 32;
                               const GRID_HEIGHT = 24;

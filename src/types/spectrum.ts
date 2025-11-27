@@ -154,6 +154,7 @@ export type Level = {
 
 export type GameFlowScreen = {
   screenId: string;
+  levelId?: string; // Optional level reference (for level-based flow entries)
   order: number;
   accessKey?: string; // Key binding to access this screen (e.g., "I" for instructions, "K" for controls)
   autoShow?: boolean; // Automatically show on game start
