@@ -172,6 +172,7 @@ export function exportGameFlowToTAP(
 
   // ===== INITIALIZATION CODE =====
   
+  // Copy background screen to display
   // LD HL, <source address of background screen> (patched below)
   engine.push(0x21);
   const bgAddrIdx = engine.length;
@@ -186,26 +187,25 @@ export function exportGameFlowToTAP(
   // LDIR (copy background to screen)
   engine.push(0xed, 0xb0);
 
-  // Initialize player X position in memory
-  // LD A, playerXPixel
-  engine.push(0x3e, playerXPixel & 0xff);
-  // LD (playerXAddr), A (patched below)
-  engine.push(0x32);
+  // Initialize player position variables in memory
+  // LD HL, playerXAddr (patched below)
+  engine.push(0x21);
   const playerXAddrIdx = engine.length;
   engine.push(0x00, 0x00); // placeholder
-
-  // Initialize player Y position
-  // LD A, playerYPixel
-  engine.push(0x3e, playerYPixel & 0xff);
-  // LD (playerYAddr), A (patched below)
-  engine.push(0x32);
-  const playerYAddrIdx = engine.length;
-  engine.push(0x00, 0x00); // placeholder
+  
+  // LD (HL), playerXPixel
+  engine.push(0x36, playerXPixel & 0xff);
+  
+  // INC HL (now points to playerYAddr)
+  engine.push(0x23);
+  
+  // LD (HL), playerYPixel
+  engine.push(0x36, playerYPixel & 0xff);
 
   // ===== GAME LOOP =====
   const gameLoopAddr = engineStart + engine.length;
 
-  // Read keyboard (YUIOP half-row for O and P keys)
+  // Read keyboard (DFFE = YUIOP half-row: P=bit0, O=bit1)
   // LD BC, 0xDFFE
   engine.push(0x01, 0xfe, 0xdf);
   // IN A, (C)
@@ -214,20 +214,20 @@ export function exportGameFlowToTAP(
   // Check O key (bit 1) for RIGHT
   // BIT 1, A
   engine.push(0xcb, 0x4f);
-  // JR NZ, skip_right (jump +4 bytes if bit is set = key NOT pressed)
-  engine.push(0x20, 0x0a);
+  // JR NZ, skip_right
+  engine.push(0x20, 0x09);
   
   // O pressed - move right
-  // LD A, (playerXAddr)
-  engine.push(0x3a);
+  // LD HL, (playerXAddr)
+  engine.push(0x2a);
   const playerXReadIdx1 = engine.length;
   engine.push(0x00, 0x00); // placeholder
+  // LD A, (HL)
+  engine.push(0x7e);
   // INC A
   engine.push(0x3c);
-  // LD (playerXAddr), A
-  engine.push(0x32);
-  const playerXWriteIdx1 = engine.length;
-  engine.push(0x00, 0x00); // placeholder
+  // LD (HL), A
+  engine.push(0x77);
 
   // skip_right:
   // Read keyboard again
@@ -239,20 +239,20 @@ export function exportGameFlowToTAP(
   // Check P key (bit 0) for LEFT
   // BIT 0, A
   engine.push(0xcb, 0x47);
-  // JR NZ, skip_left (jump +4 bytes if bit is set = key NOT pressed)
-  engine.push(0x20, 0x0a);
+  // JR NZ, skip_left
+  engine.push(0x20, 0x09);
   
   // P pressed - move left
-  // LD A, (playerXAddr)
-  engine.push(0x3a);
+  // LD HL, (playerXAddr)
+  engine.push(0x2a);
   const playerXReadIdx2 = engine.length;
   engine.push(0x00, 0x00); // placeholder
+  // LD A, (HL)
+  engine.push(0x7e);
   // DEC A
   engine.push(0x3d);
-  // LD (playerXAddr), A
-  engine.push(0x32);
-  const playerXWriteIdx2 = engine.length;
-  engine.push(0x00, 0x00); // placeholder
+  // LD (HL), A
+  engine.push(0x77);
 
   // skip_left:
   // Redraw background
@@ -268,56 +268,79 @@ export function exportGameFlowToTAP(
   engine.push(0xed, 0xb0);
 
   // Draw player sprite at current position
-  // For simplicity, just draw a small colored block at playerX, playerY
-  // Calculate screen address: 16384 + (playerY * 32) + (playerX / 8)
-  // This is simplified - we'll draw a single bright pixel
-  
-  // LD A, (playerXAddr)
-  engine.push(0x3a);
+  // LD HL, (playerXAddr)
+  engine.push(0x2a);
   const playerXReadIdx3 = engine.length;
   engine.push(0x00, 0x00); // placeholder
   
-  // Convert X pixel to byte position (divide by 8)
-  // SRL A
-  engine.push(0xcb, 0x3f);
-  // SRL A  
-  engine.push(0xcb, 0x3f);
-  // SRL A
-  engine.push(0xcb, 0x3f);
-  
-  // Save X byte in C
-  // LD C, A
+  // LD A, (HL) - get X position
+  engine.push(0x7e);
+  // Save in C
   engine.push(0x4f);
   
-  // LD A, (playerYAddr)
-  engine.push(0x3a);
-  const playerYReadIdx = engine.length;
-  engine.push(0x00, 0x00); // placeholder
+  // INC HL - point to Y position
+  engine.push(0x23);
+  // LD A, (HL) - get Y position
+  engine.push(0x7e);
   
-  // Calculate Y * 32: shift left 5 times
-  // Store result in HL
+  // Calculate screen address using proper Spectrum layout
+  // Y coordinate in A, X coordinate in C
+  
+  // Calculate Y line address (complex interleaving)
+  // Screen addr = 16384 + ((Y&192)<<5) + ((Y&7)<<8) + ((Y&56)<<2) + (X/8)
+  
+  // First get Y&192 (bits 7-6)
   // LD L, A
   engine.push(0x6f);
-  // LD H, 0
-  engine.push(0x26, 0x00);
-  // ADD HL, HL (×2)
-  engine.push(0x29);
-  // ADD HL, HL (×4)
-  engine.push(0x29);
-  // ADD HL, HL (×8)
-  engine.push(0x29);
-  // ADD HL, HL (×16)
-  engine.push(0x29);
-  // ADD HL, HL (×32)
-  engine.push(0x29);
+  // AND 192
+  engine.push(0xe6, 0xc0);
+  // LD H, A
+  engine.push(0x67);
+  // SRL H (shift right)
+  engine.push(0xcb, 0x3c);
+  // SRL H
+  engine.push(0xcb, 0x3c);
+  // SRL H  
+  engine.push(0xcb, 0x3c);
+  // Now H = (Y&192)>>3
   
-  // Add X byte offset (in C)
-  // LD B, 0
-  engine.push(0x06, 0x00);
-  // ADD HL, BC
-  engine.push(0x09);
+  // Get Y&7 (bits 2-0) and shift left into high byte
+  // LD A, L
+  engine.push(0x7d);
+  // AND 7
+  engine.push(0xe6, 0x07);
+  // OR H
+  engine.push(0xb4);
+  // LD H, A
+  engine.push(0x67);
   
-  // Add screen base (16384 = 0x4000)
+  // Get Y&56 (bits 5-3) and shift into low byte
+  // LD A, L
+  engine.push(0x7d);
+  // AND 56
+  engine.push(0xe6, 0x38);
+  // ADD A, A (shift left 2)
+  engine.push(0x87);
+  // ADD A, A
+  engine.push(0x87);
+  // LD L, A
+  engine.push(0x6f);
+  
+  // Add X/8 to low byte
+  // LD A, C (X position)
+  engine.push(0x79);
+  // SRL A (divide by 8)
+  engine.push(0xcb, 0x3f);
+  // SRL A
+  engine.push(0xcb, 0x3f);
+  // SRL A
+  engine.push(0xcb, 0x3f);
+  // ADD A, L
+  engine.push(0x85);
+  // LD L, A
+  engine.push(0x6f);
+  
+  // Add screen base 16384 (0x4000)
   // LD BC, 16384
   engine.push(0x01, 0x00, 0x40);
   // ADD HL, BC
@@ -328,15 +351,15 @@ export function exportGameFlowToTAP(
   engine.push(0x36, 0xff);
 
   // Small delay
-  // LD B, 20
-  engine.push(0x06, 0x14);
+  // LD B, 50
+  engine.push(0x06, 0x32);
   const delayLoopAddr = engineStart + engine.length;
-  // DJNZ delay_loop (jump back -2 bytes)
+  // DJNZ delay_loop
   engine.push(0x10, 0xfe);
 
   // Jump back to game loop
   const loopJumpOffset = gameLoopAddr - (engineStart + engine.length + 2);
-  engine.push(0x18, loopJumpOffset & 0xff); // JR gameLoop
+  engine.push(0x18, loopJumpOffset & 0xff);
 
   // ===== DATA SECTION =====
 
@@ -354,29 +377,17 @@ export function exportGameFlowToTAP(
   engine[playerXAddrIdx] = playerXAddr & 0xff;
   engine[playerXAddrIdx + 1] = (playerXAddr >> 8) & 0xff;
 
-  engine[playerYAddrIdx] = playerYAddr & 0xff;
-  engine[playerYAddrIdx + 1] = (playerYAddr >> 8) & 0xff;
-
   engine[playerXReadIdx1] = playerXAddr & 0xff;
   engine[playerXReadIdx1 + 1] = (playerXAddr >> 8) & 0xff;
 
-  engine[playerXWriteIdx1] = playerXAddr & 0xff;
-  engine[playerXWriteIdx1 + 1] = (playerXAddr >> 8) & 0xff;
-
   engine[playerXReadIdx2] = playerXAddr & 0xff;
   engine[playerXReadIdx2 + 1] = (playerXAddr >> 8) & 0xff;
-
-  engine[playerXWriteIdx2] = playerXAddr & 0xff;
-  engine[playerXWriteIdx2 + 1] = (playerXAddr >> 8) & 0xff;
 
   engine[bgRedrawAddrIdx] = bgScreenDataAddr & 0xff;
   engine[bgRedrawAddrIdx + 1] = (bgScreenDataAddr >> 8) & 0xff;
 
   engine[playerXReadIdx3] = playerXAddr & 0xff;
   engine[playerXReadIdx3 + 1] = (playerXAddr >> 8) & 0xff;
-
-  engine[playerYReadIdx] = playerYAddr & 0xff;
-  engine[playerYReadIdx + 1] = (playerYAddr >> 8) & 0xff;
 
   // Build final code data: engine + background screen + player vars
   const codeData = [
