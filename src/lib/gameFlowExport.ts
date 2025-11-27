@@ -170,32 +170,17 @@ export function exportGameFlowToTAP(
   const playerXPixel = playerX * 8;
   const playerYPixel = playerY * 8;
 
-  // ===== PHASE 3: PLAYER MOVEMENT (IMPROVED) =====
-  // Copy background screen to display memory
-  
-  // LD HL, <source address of background screen data> (patched below)
-  engine.push(0x21);
-  const bgAddrIdx = engine.length;
-  engine.push(0x00, 0x00); // placeholder - will be patched with bgScreenDataAddr
+  // ===== PHASE 2: KEYBOARD BORDER TEST (Q/W) =====
+  // For now, keep things ultra-simple to verify keyboard input works reliably.
+  // This engine just changes the border color when Q or W is pressed, and loops forever.
 
-  // LD DE, 16384 (screen memory start)
-  engine.push(0x11, 0x00, 0x40);
+  // Set initial border color to black
+  engine.push(
+    0x3e, 0x00, // LD A, 0
+    0xd3, 0xfe  // OUT (254), A
+  );
 
-  // LD BC, 6912 (full screen size)
-  engine.push(0x01, 0x00, 0x1b);
-  
-  // LDIR (copy all 6912 bytes from background to screen)
-  engine.push(0xed, 0xb0);
-
-  // Initialize player X position at memory location (patched below)
-  // LD HL, playerXAddr
-  engine.push(0x21);
-  const playerXAddrIdx = engine.length;
-  engine.push(0x00, 0x00); // placeholder
-  // LD (HL), playerXPixel
-  engine.push(0x36, playerXPixel & 0xff);
-
-  // ===== GAME LOOP: Read keyboard, update position, draw pixel =====
+  // Main game loop address (start of keyboard scan)
   const gameLoopAddr = engineStart + engine.length;
 
   // Read keyboard port FBFE (QWERT half-row: Q=bit0, W=bit1)
@@ -204,148 +189,56 @@ export function exportGameFlowToTAP(
   // IN A, (C)
   engine.push(0xed, 0x78);
   
-  // Check W key (bit 1) - move RIGHT
+  // Check W key (bit 1) - set RED border when pressed
   // BIT 1, A
   engine.push(0xcb, 0x4f);
   // JR NZ, check_q (if W not pressed, check Q)
-  engine.push(0x20, 0x08);
+  engine.push(0x20, 0x06);
   
-  // W pressed - increment X position in memory
-  // LD HL, playerXAddr
-  engine.push(0x21);
-  const playerXReadIdx1 = engine.length;
-  engine.push(0x00, 0x00); // placeholder
-  // INC (HL)
-  engine.push(0x34);
+  // W pressed - set border to RED (2)
+  engine.push(
+    0x3e, 0x02, // LD A, 2 (red)
+    0xd3, 0xfe  // OUT (254), A
+  );
+  
+  // Jump back to game loop
+  let loopOffset = gameLoopAddr - (engineStart + engine.length + 2);
+  engine.push(0x18, loopOffset & 0xff);
   
   // check_q:
-  // Check Q key (bit 0) - move LEFT
+  // Check Q key (bit 0) - set CYAN border when pressed
   // BIT 0, A
   engine.push(0xcb, 0x47);
-  // JR NZ, draw_pixel (if Q not pressed, skip to draw)
-  engine.push(0x20, 0x08);
+  // JR NZ, no_key (if Q not pressed, just wait briefly)
+  engine.push(0x20, 0x06);
   
-  // Q pressed - decrement X position in memory
-  // LD HL, playerXAddr
-  engine.push(0x21);
-  const playerXReadIdx2 = engine.length;
-  engine.push(0x00, 0x00); // placeholder
-  // DEC (HL)
-  engine.push(0x35);
-
-  // draw_pixel:
-  // Load player X position from memory
-  // LD HL, playerXAddr
-  engine.push(0x21);
-  const playerXReadIdx3 = engine.length;
-  engine.push(0x00, 0x00); // placeholder
-  // LD A, (HL) - X position in pixels
-  engine.push(0x7e);
-  // Save X in C register
-  engine.push(0x4f);
+  // Q pressed - set border to CYAN (5)
+  engine.push(
+    0x3e, 0x05, // LD A, 5 (cyan)
+    0xd3, 0xfe  // OUT (254), A
+  );
   
-  // Calculate screen address using proper Spectrum interleaved layout
-  // Y is fixed at playerYPixel for now
-  // Screen address = 16384 + ((Y&192)<<5) + ((Y&7)<<8) + ((Y&56)<<2) + (X>>3)
+  // Jump back to game loop
+  loopOffset = gameLoopAddr - (engineStart + engine.length + 2);
+  engine.push(0x18, loopOffset & 0xff);
   
-  // Calculate Y component (using fixed Y = playerYPixel)
-  // LD A, playerYPixel
-  engine.push(0x3e, playerYPixel & 0xff);
-  
-  // Calculate ((Y&192)>>3) for high byte contribution
-  // AND 192
-  engine.push(0xe6, 0xc0);
-  // SRL A
-  engine.push(0xcb, 0x3f);
-  // SRL A
-  engine.push(0xcb, 0x3f);
-  // SRL A
-  engine.push(0xcb, 0x3f);
-  // Save in H temporarily
-  engine.push(0x67);
-  
-  // Calculate (Y&7) for high byte
-  // LD A, playerYPixel
-  engine.push(0x3e, playerYPixel & 0xff);
-  // AND 7
-  engine.push(0xe6, 0x07);
-  // OR H
-  engine.push(0xb4);
-  // Add 0x40 for screen base high byte
-  engine.push(0xc6, 0x40);
-  // LD H, A (high byte done)
-  engine.push(0x67);
-  
-  // Calculate ((Y&56)<<2) for low byte
-  // LD A, playerYPixel
-  engine.push(0x3e, playerYPixel & 0xff);
-  // AND 56
-  engine.push(0xe6, 0x38);
-  // SLA A
-  engine.push(0xcb, 0x27);
-  // SLA A
-  engine.push(0xcb, 0x27);
-  // LD L, A
-  engine.push(0x6f);
-  
-  // Add X>>3 to low byte
-  // LD A, C (X position from earlier)
-  engine.push(0x79);
-  // SRL A (divide by 8)
-  engine.push(0xcb, 0x3f);
-  // SRL A
-  engine.push(0xcb, 0x3f);
-  // SRL A
-  engine.push(0xcb, 0x3f);
-  // ADD A, L
-  engine.push(0x85);
-  // LD L, A
-  engine.push(0x6f);
-  
-  // HL now contains screen address - draw pixel
-  // LD (HL), 0xFF (white pixel)
-  engine.push(0x36, 0xff);
-  
-  // Small delay
-  // LD B, 30
-  engine.push(0x06, 0x1e);
+  // no_key:
+  // Small delay loop to slow down border flicker
+  engine.push(
+    0x06, 0x20 // LD B, 32
+  );
   const delayLoopAddr = engineStart + engine.length;
   // DJNZ delay_loop
-  engine.push(0x10, 0xfe);
-
+  engine.push(0x10, 0xfe); // JR back two bytes while B != 0
+  
   // Jump back to game loop
-  const loopOffset = gameLoopAddr - (engineStart + engine.length + 2);
+  loopOffset = gameLoopAddr - (engineStart + engine.length + 2);
   engine.push(0x18, loopOffset & 0xff);
 
   // ===== DATA SECTION =====
-
-  // Background screen data follows engine code
-  const bgScreenDataAddr = engineStart + engine.length;
-  
-  // Player X position variable (1 byte) follows background data
-  const playerXAddr = bgScreenDataAddr + targetScr.length;
-
-  // Patch all address placeholders
-  engine[bgAddrIdx] = bgScreenDataAddr & 0xff;
-  engine[bgAddrIdx + 1] = (bgScreenDataAddr >> 8) & 0xff;
-  
-  engine[playerXAddrIdx] = playerXAddr & 0xff;
-  engine[playerXAddrIdx + 1] = (playerXAddr >> 8) & 0xff;
-  
-  engine[playerXReadIdx1] = playerXAddr & 0xff;
-  engine[playerXReadIdx1 + 1] = (playerXAddr >> 8) & 0xff;
-  
-  engine[playerXReadIdx2] = playerXAddr & 0xff;
-  engine[playerXReadIdx2 + 1] = (playerXAddr >> 8) & 0xff;
-  
-  engine[playerXReadIdx3] = playerXAddr & 0xff;
-  engine[playerXReadIdx3 + 1] = (playerXAddr >> 8) & 0xff;
-
-  // Build final code data: engine + background screen + player X variable
+  // For this phase, the engine has no extra data; code block is engine only.
   const codeData = [
-    ...engine, 
-    ...targetScr,
-    playerXPixel & 0xff  // playerX variable initialized
+    ...engine
   ];
 
   const codeName = "GameFlow  ";
