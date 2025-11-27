@@ -207,8 +207,8 @@ export function exportGameFlowToTAP(
   engine.push(0x3e, 0x02);
   // OUT (0xFE), A
   engine.push(0xd3, 0xfe);
-  // JR loop (skip P check)
-  engine.push(0x18, 0x06);
+  // JR loop (skip P check - need to skip 8 bytes: BIT+JR+LD+OUT)
+  engine.push(0x18, 0x08);
 
   // check_p:
   // Check P key (bit 0)
