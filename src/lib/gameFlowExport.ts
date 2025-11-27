@@ -181,10 +181,10 @@ export function exportGameFlowToTAP(
   // LD DE, 16384 (screen memory)
   engine.push(0x11, 0x00, 0x40);
 
-  // LD BC, 6912
-  engine.push(0x01, 0x00, 0x1b);
+  // LD BC, 0 (disable background copy from code for now)
+  engine.push(0x01, 0x00, 0x00);
   
-  // LDIR (copy background to screen)
+  // LDIR (no-op because BC=0)
   engine.push(0xed, 0xb0);
 
   // Initialize player position variables in memory
@@ -262,9 +262,9 @@ export function exportGameFlowToTAP(
   engine.push(0x00, 0x00); // placeholder
   // LD DE, 16384
   engine.push(0x11, 0x00, 0x40);
-  // LD BC, 6912
-  engine.push(0x01, 0x00, 0x1b);
-  // LDIR
+  // LD BC, 0 (disable background redraw from code for now)
+  engine.push(0x01, 0x00, 0x00);
+  // LDIR (no-op because BC=0)
   engine.push(0xed, 0xb0);
 
   // Draw player sprite at current position
