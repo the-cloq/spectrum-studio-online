@@ -676,6 +676,9 @@ export const LoadingScreenCreator = ({ screen, onScreenChange, onBlockEditPanelC
     const black = SPECTRUM_COLORS[0];
     const white = SPECTRUM_COLORS[7];
 
+    // Track paper color choices per block for neighbor preservation
+    const blockPaperColors = new Map<string, string>();
+
     for (let by = 0; by < SPECTRUM_HEIGHT; by += ATTR_BLOCK) {
       for (let bx = 0; bx < SPECTRUM_WIDTH; bx += ATTR_BLOCK) {
         const blockColors = getBlockColors(bx, by);
@@ -689,10 +692,49 @@ export const LoadingScreenCreator = ({ screen, onScreenChange, onBlockEditPanelC
             }
           }
         } else if (blockColors.length === 2) {
-          // Determine which color is ink and which is paper based on strategy
           let paperColor: string;
           let inkColor: string;
 
+          // Check if we should preserve neighbor's paper color
+          if (preserveNeighbors !== "no") {
+            let neighborPaper: string | undefined;
+
+            if (preserveNeighbors === "left" && bx > 0) {
+              const leftKey = `${bx - ATTR_BLOCK},${by}`;
+              neighborPaper = blockPaperColors.get(leftKey);
+            } else if (preserveNeighbors === "up" && by > 0) {
+              const upKey = `${bx},${by - ATTR_BLOCK}`;
+              neighborPaper = blockPaperColors.get(upKey);
+            } else if (preserveNeighbors === "match") {
+              // Try left first, then up
+              if (bx > 0) {
+                const leftKey = `${bx - ATTR_BLOCK},${by}`;
+                neighborPaper = blockPaperColors.get(leftKey);
+              }
+              if (!neighborPaper && by > 0) {
+                const upKey = `${bx},${by - ATTR_BLOCK}`;
+                neighborPaper = blockPaperColors.get(upKey);
+              }
+            }
+
+            // If neighbor has a matching color, use it as paper
+            if (neighborPaper && blockColors.includes(neighborPaper)) {
+              paperColor = neighborPaper;
+              inkColor = blockColors[0] === paperColor ? blockColors[1] : blockColors[0];
+              blockPaperColors.set(`${bx},${by}`, paperColor);
+              
+              // Apply to stripped preview
+              for (let y = 0; y < ATTR_BLOCK; y++) {
+                for (let x = 0; x < ATTR_BLOCK; x++) {
+                  const originalColor = screen.pixels[by + y][bx + x].value;
+                  stripped[by + y][bx + x] = originalColor === inkColor ? white : black;
+                }
+              }
+              continue;
+            }
+          }
+
+          // No neighbor match or preserveNeighbors is "no" - use strategy
           if (paperStrategy === "lighter") {
             const brightness = (c: string) => {
               const rgb = hexToRgb(c);
@@ -730,6 +772,9 @@ export const LoadingScreenCreator = ({ screen, onScreenChange, onBlockEditPanelC
             paperColor = count0 < count1 ? blockColors[0] : blockColors[1];
             inkColor = paperColor === blockColors[0] ? blockColors[1] : blockColors[0];
           }
+
+          // Store this block's paper color for future neighbors
+          blockPaperColors.set(`${bx},${by}`, paperColor);
 
           // Apply to stripped preview
           for (let y = 0; y < ATTR_BLOCK; y++) {
