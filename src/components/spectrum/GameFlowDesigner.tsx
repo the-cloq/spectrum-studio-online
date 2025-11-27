@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
-import { type Screen, type GameFlowScreen, type Block, type Level, SPECTRUM_COLORS } from "@/types/spectrum";
+import { type Screen, type GameFlowScreen, type Block, type Level, type GameObject, type Sprite, SPECTRUM_COLORS } from "@/types/spectrum";
 import { toast } from "sonner";
 import { Grip, X, Settings2, Plus, AlertCircle, Download } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -16,12 +16,14 @@ interface GameFlowDesignerProps {
   screens: Screen[];
   blocks: Block[];
   levels: Level[];
+  objects: GameObject[];
+  sprites: Sprite[];
   gameFlow: GameFlowScreen[];
   onGameFlowChange: (gameFlow: GameFlowScreen[]) => void;
   projectName: string;
 }
 
-export const GameFlowDesigner = ({ screens, blocks, levels, gameFlow, onGameFlowChange, projectName }: GameFlowDesignerProps) => {
+export const GameFlowDesigner = ({ screens, blocks, levels, objects, sprites, gameFlow, onGameFlowChange, projectName }: GameFlowDesignerProps) => {
   const [selectedFlowScreen, setSelectedFlowScreen] = useState<GameFlowScreen | null>(null);
   const [draggedScreenId, setDraggedScreenId] = useState<string | null>(null);
   const [draggedFlowIndex, setDraggedFlowIndex] = useState<number | null>(null);
@@ -203,7 +205,7 @@ export const GameFlowDesigner = ({ screens, blocks, levels, gameFlow, onGameFlow
 
   const handleExportTAP = () => {
     try {
-      const blob = exportGameFlowToTAP(gameFlow, screens, levels, blocks, projectName);
+      const blob = exportGameFlowToTAP(gameFlow, screens, levels, blocks, objects, sprites, projectName);
       downloadGameFlowTAP(blob, projectName);
       toast.success("Game Flow exported to TAP file successfully!");
     } catch (error) {
