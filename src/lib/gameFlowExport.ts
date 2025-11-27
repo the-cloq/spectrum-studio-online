@@ -16,55 +16,84 @@ export function exportGameFlowToTAP(
   // Sort game flow by order
   const sortedFlow = [...gameFlow].sort((a, b) => a.order - b.order);
 
-  // Find first loading screen to display
-  const firstLoadingFlow = sortedFlow.find(flow => {
-    const screen = screens.find(s => s.id === flow.screenId);
-    return screen?.type === "loading";
+  // Get all screens that have pixel data
+  const validFlowScreens = sortedFlow
+    .map(flow => {
+      const screen = screens.find(s => s.id === flow.screenId);
+      // For levels, find the level and get its first screen
+      if (!screen) {
+        const level = levels.find(l => l.id === flow.screenId);
+        if (level && level.screenIds.length > 0) {
+          return screens.find(s => s.id === level.screenIds[0]);
+        }
+      }
+      return screen;
+    })
+    .filter(screen => screen && screen.pixels);
+
+  if (validFlowScreens.length === 0) {
+    return tap.toBlob(); // No valid screens to export
+  }
+
+  // Create BASIC loader that loads all screens in sequence
+  const basicProgram: number[] = [];
+  
+  validFlowScreens.forEach((_, index) => {
+    const lineNumber = 10 + (index * 10);
+    
+    // Line N: LOAD "" SCREEN$
+    basicProgram.push(lineNumber & 0xff, (lineNumber >> 8) & 0xff);
+    const lineStart = basicProgram.length;
+    basicProgram.push(0x00, 0x00); // Length placeholder
+    basicProgram.push(0xef); // LOAD token
+    basicProgram.push(0x20); // Space
+    basicProgram.push(0x22, 0x22); // Empty string ""
+    basicProgram.push(0x20); // Space
+    basicProgram.push(0xaa); // SCREEN$ token
+    basicProgram.push(0x0d); // ENTER
+    const lineLength = basicProgram.length - lineStart - 2;
+    basicProgram[lineStart] = lineLength & 0xff;
+    basicProgram[lineStart + 1] = (lineLength >> 8) & 0xff;
+
+    // Add PAUSE between screens (except after last screen)
+    if (index < validFlowScreens.length - 1) {
+      const pauseLineNumber = lineNumber + 5;
+      basicProgram.push(pauseLineNumber & 0xff, (pauseLineNumber >> 8) & 0xff);
+      const pauseLineStart = basicProgram.length;
+      basicProgram.push(0x00, 0x00); // Length placeholder
+      basicProgram.push(0xf2); // PAUSE token
+      basicProgram.push(0x20); // Space
+      basicProgram.push(0x35, 0x30); // "50" as ASCII
+      basicProgram.push(0x0e, 0x00, 0x00, 0x32, 0x00, 0x00); // Encoded number 50
+      basicProgram.push(0x0d); // ENTER
+      const pauseLineLength = basicProgram.length - pauseLineStart - 2;
+      basicProgram[pauseLineStart] = pauseLineLength & 0xff;
+      basicProgram[pauseLineStart + 1] = (pauseLineLength >> 8) & 0xff;
+    }
   });
 
-  if (firstLoadingFlow) {
-    const screen = screens.find(s => s.id === firstLoadingFlow.screenId);
-    if (screen && screen.pixels) {
-      // Encode screen to SCR format (6912 bytes)
-      const scrData = encodeScreenToSCR(screen);
-
-      // Create BASIC loader that loads screen directly to display memory
-      const basicProgram: number[] = [];
-      
-      // Line 10: LOAD "" SCREEN$
-      basicProgram.push(0x00, 0x0a); // Line number 10
-      const line10Start = basicProgram.length;
-      basicProgram.push(0x00, 0x00); // Length placeholder
-      basicProgram.push(0xef); // LOAD token
-      basicProgram.push(0x20); // Space
-      basicProgram.push(0x22, 0x22); // Empty string ""
-      basicProgram.push(0x20); // Space
-      basicProgram.push(0xaa); // SCREEN$ token
-      basicProgram.push(0x0d); // ENTER
-      const line10Length = basicProgram.length - line10Start - 2;
-      basicProgram[line10Start] = line10Length & 0xff;
-      basicProgram[line10Start + 1] = (line10Length >> 8) & 0xff;
-
-      // BASIC program header
-      const headerData: number[] = [0x00, 0x00]; // Header flag, BASIC type
-      const filename = "Loader    ";
-      for (let i = 0; i < 10; i++) {
-        headerData.push(filename.charCodeAt(i));
-      }
-      headerData.push(basicProgram.length & 0xff);
-      headerData.push((basicProgram.length >> 8) & 0xff);
-      headerData.push(0x0a, 0x00); // Autostart line 10
-      headerData.push(basicProgram.length & 0xff);
-      headerData.push((basicProgram.length >> 8) & 0xff);
-      
-      tap.addBlock(headerData);
-      tap.addBlock([0xff, ...basicProgram]);
-
-      // Add screen data as CODE block at address 16384
-      tap.addHeader(projectName.substring(0, 10), 6912, 16384);
-      tap.addDataBlock(scrData);
-    }
+  // BASIC program header
+  const headerData: number[] = [0x00, 0x00]; // Header flag, BASIC type
+  const filename = "Loader    ";
+  for (let i = 0; i < 10; i++) {
+    headerData.push(filename.charCodeAt(i));
   }
+  headerData.push(basicProgram.length & 0xff);
+  headerData.push((basicProgram.length >> 8) & 0xff);
+  headerData.push(0x0a, 0x00); // Autostart line 10
+  headerData.push(basicProgram.length & 0xff);
+  headerData.push((basicProgram.length >> 8) & 0xff);
+  
+  tap.addBlock(headerData);
+  tap.addBlock([0xff, ...basicProgram]);
+
+  // Add each screen as a CODE block
+  validFlowScreens.forEach((screen, index) => {
+    const scrData = encodeScreenToSCR(screen);
+    const screenName = `Screen${index + 1}`.substring(0, 10).padEnd(10, ' ');
+    tap.addHeader(screenName, 6912, 16384);
+    tap.addDataBlock(scrData);
+  });
 
   return tap.toBlob();
 }
