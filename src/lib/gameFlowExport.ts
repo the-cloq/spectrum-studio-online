@@ -16,58 +16,55 @@ export function exportGameFlowToTAP(
   // Sort game flow by order
   const sortedFlow = [...gameFlow].sort((a, b) => a.order - b.order);
 
-  // Collect all screen data
-  const screenData: number[] = [];
-  
-  // Header: number of screens in flow
-  screenData.push(sortedFlow.length);
-
-  // Process each screen in the flow
-  sortedFlow.forEach((flowScreen, index) => {
-    const screen = screens.find(s => s.id === flowScreen.screenId);
-    if (!screen) return;
-
-    // Screen header
-    screenData.push(screen.type === "loading" ? 0x01 : 0x02); // Type: 1=loading, 2=title/menu
-    screenData.push(flowScreen.autoShow ? 1 : 0); // Auto-show flag
-    screenData.push(flowScreen.accessKey ? flowScreen.accessKey.charCodeAt(0) : 0); // Access key ASCII
-
-    // Encode screen pixels as SCR data (6912 bytes)
-    if (screen.pixels) {
-      const scrData = encodeScreenToSCR(screen);
-      screenData.push(...scrData);
-    } else {
-      // Empty screen - fill with zeros
-      screenData.push(...new Array(6912).fill(0));
-    }
-
-    // Menu text for title screens (max 64 chars)
-    if (screen.type === "title" && flowScreen.scrollText) {
-      const menuText = flowScreen.scrollText.substring(0, 64);
-      screenData.push(menuText.length);
-      for (let i = 0; i < menuText.length; i++) {
-        screenData.push(menuText.charCodeAt(i));
-      }
-    } else {
-      screenData.push(0); // No menu text
-    }
+  // Find first loading screen to display
+  const firstLoadingFlow = sortedFlow.find(flow => {
+    const screen = screens.find(s => s.id === flow.screenId);
+    return screen?.type === "loading";
   });
 
-  // Add level data reference
-  screenData.push(levels.length); // Number of levels
+  if (firstLoadingFlow) {
+    const screen = screens.find(s => s.id === firstLoadingFlow.screenId);
+    if (screen && screen.pixels) {
+      // Encode screen to SCR format (6912 bytes)
+      const scrData = encodeScreenToSCR(screen);
 
-  // Create the game engine that handles screen flow
-  const gameEngine = createGameFlowEngine(sortedFlow, screens, levels);
+      // Create BASIC loader that loads screen directly to display memory
+      const basicProgram: number[] = [];
+      
+      // Line 10: LOAD "" SCREEN$
+      basicProgram.push(0x00, 0x0a); // Line number 10
+      const line10Start = basicProgram.length;
+      basicProgram.push(0x00, 0x00); // Length placeholder
+      basicProgram.push(0xef); // LOAD token
+      basicProgram.push(0x20); // Space
+      basicProgram.push(0x22, 0x22); // Empty string ""
+      basicProgram.push(0x20); // Space
+      basicProgram.push(0xaa); // SCREEN$ token
+      basicProgram.push(0x0d); // ENTER
+      const line10Length = basicProgram.length - line10Start - 2;
+      basicProgram[line10Start] = line10Length & 0xff;
+      basicProgram[line10Start + 1] = (line10Length >> 8) & 0xff;
 
-  // Combine screen data + game engine
-  const fullGameData = [...screenData, ...gameEngine];
+      // BASIC program header
+      const headerData: number[] = [0x00, 0x00]; // Header flag, BASIC type
+      const filename = "Loader    ";
+      for (let i = 0; i < 10; i++) {
+        headerData.push(filename.charCodeAt(i));
+      }
+      headerData.push(basicProgram.length & 0xff);
+      headerData.push((basicProgram.length >> 8) & 0xff);
+      headerData.push(0x0a, 0x00); // Autostart line 10
+      headerData.push(basicProgram.length & 0xff);
+      headerData.push((basicProgram.length >> 8) & 0xff);
+      
+      tap.addBlock(headerData);
+      tap.addBlock([0xff, ...basicProgram]);
 
-  // Add BASIC loader
-  tap.addBasicLoader(fullGameData.length, 32768);
-
-  // Add game data as CODE block
-  tap.addHeader(projectName.substring(0, 10), fullGameData.length);
-  tap.addDataBlock(fullGameData);
+      // Add screen data as CODE block at address 16384
+      tap.addHeader(projectName.substring(0, 10), 6912, 16384);
+      tap.addDataBlock(scrData);
+    }
+  }
 
   return tap.toBlob();
 }
