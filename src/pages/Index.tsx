@@ -142,7 +142,7 @@ const Index = () => {
         {activeTab === "screens" && <ScreenDesigner blocks={project.blocks} objects={project.objects} sprites={project.sprites} screens={project.screens} onScreensChange={handleScreensChange} />}
         {activeTab === "objects" && <ObjectLibrary objects={project.objects} sprites={project.sprites} onObjectsChange={handleObjectsChange} />}
         {activeTab === "levels" && <LevelDesigner levels={project.levels} screens={project.screens} blocks={project.blocks} objects={project.objects} sprites={project.sprites} onLevelsChange={handleLevelsChange} />}
-        {activeTab === "gameflow" && <GameFlowDesigner screens={project.screens} gameFlow={project.gameFlow} onGameFlowChange={handleGameFlowChange} />}
+        {activeTab === "gameflow" && <GameFlowDesigner screens={project.screens} blocks={project.blocks} gameFlow={project.gameFlow} onGameFlowChange={handleGameFlowChange} />}
         {activeTab === "settings" && (
           <div className="p-8 text-center text-muted-foreground">
             <h2 className="text-2xl font-bold text-primary mb-2">Game Settings</h2>
