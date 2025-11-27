@@ -169,7 +169,7 @@ export const GameFlowDesigner = ({ screens, blocks, levels, gameFlow, onGameFlow
 
   const handleExportTAP = () => {
     try {
-      const blob = exportGameFlowToTAP(gameFlow, screens, levels, projectName);
+      const blob = exportGameFlowToTAP(gameFlow, screens, levels, blocks, projectName);
       downloadGameFlowTAP(blob, projectName);
       toast.success("Game Flow exported to TAP file successfully!");
     } catch (error) {

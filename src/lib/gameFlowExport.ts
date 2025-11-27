@@ -1,5 +1,5 @@
 import { TAPGenerator } from "./tapGenerator";
-import { type Screen, type GameFlowScreen, type Level, SPECTRUM_COLORS } from "@/types/spectrum";
+import { type Screen, type GameFlowScreen, type Level, type Block, SPECTRUM_COLORS } from "@/types/spectrum";
 
 /**
  * Export Game Flow to TAP file
@@ -9,6 +9,7 @@ export function exportGameFlowToTAP(
   gameFlow: GameFlowScreen[],
   screens: Screen[],
   levels: Level[],
+  blocks: Block[],
   projectName: string
 ): Blob {
   const tap = new TAPGenerator();
@@ -40,8 +41,8 @@ export function exportGameFlowToTAP(
   const loadingScreen = validFlowScreens[0];
   const targetScreen = validFlowScreens.length > 1 ? validFlowScreens[1] : loadingScreen;
 
-  const loadingScr = encodeScreenToSCR(loadingScreen);
-  const targetScr = encodeScreenToSCR(targetScreen);
+  const loadingScr = encodeScreenToSCR(loadingScreen, blocks);
+  const targetScr = encodeScreenToSCR(targetScreen, blocks);
 
   // Build BASIC loader:
   // 10 CLEAR 32767
@@ -172,12 +173,57 @@ export function exportGameFlowToTAP(
 /**
  * Encode a screen to ZX Spectrum SCR format (6912 bytes)
  */
-function encodeScreenToSCR(screen: Screen): number[] {
+function encodeScreenToSCR(screen: Screen, blocks: Block[]): number[] {
   const scrData = new Array(6912).fill(0);
+
+  // Handle tile-based screens (game levels)
+  if (screen.tiles && !screen.pixels) {
+    // Create a pixel array by rendering tiles
+    const pixels: (typeof SPECTRUM_COLORS[0])[][] = Array.from({ length: 192 }, () => 
+      Array(256).fill(SPECTRUM_COLORS[0])
+    );
+
+    // Render each tile (8x8 blocks)
+    for (let ty = 0; ty < screen.tiles.length && ty < 24; ty++) {
+      for (let tx = 0; tx < screen.tiles[ty].length && tx < 32; tx++) {
+        const blockId = screen.tiles[ty][tx];
+        if (!blockId) continue;
+
+        const block = blocks.find(b => b.id === blockId);
+        if (!block || !block.sprite.frames[0]) continue;
+
+        const spritePixels = block.sprite.frames[0].pixels;
+        
+        // Render the 8x8 sprite into the pixel array
+        for (let sy = 0; sy < 8 && sy < spritePixels.length; sy++) {
+          for (let sx = 0; sx < 8 && sx < spritePixels[sy].length; sx++) {
+            const py = ty * 8 + sy;
+            const px = tx * 8 + sx;
+            const colorIndex = spritePixels[sy][sx];
+            if (py < 192 && px < 256) {
+              pixels[py][px] = SPECTRUM_COLORS[colorIndex] || SPECTRUM_COLORS[0];
+            }
+          }
+        }
+      }
+    }
+
+    // Now encode this pixel array to SCR
+    return encodePixelsToSCR(pixels);
+  }
 
   if (!screen.pixels) return scrData;
 
   // Encode screen in ZX Spectrum format
+  return encodePixelsToSCR(screen.pixels);
+}
+
+/**
+ * Encode a pixel array to ZX Spectrum SCR format (6912 bytes)
+ */
+function encodePixelsToSCR(pixels: (typeof SPECTRUM_COLORS[0])[][]): number[] {
+  const scrData = new Array(6912).fill(0);
+
   for (let by = 0; by < 192; by += 8) {
     for (let bx = 0; bx < 256; bx += 8) {
       // Find the two colors in this 8x8 block
@@ -186,8 +232,8 @@ function encodeScreenToSCR(screen: Screen): number[] {
         for (let x = 0; x < 8; x++) {
           const px = bx + x;
           const py = by + y;
-          if (py < 192 && px < 256 && screen.pixels[py]?.[px]) {
-            colors.add(screen.pixels[py][px].value);
+          if (py < 192 && px < 256 && pixels[py]?.[px]) {
+            colors.add(pixels[py][px].value);
           }
         }
       }
@@ -211,7 +257,7 @@ function encodeScreenToSCR(screen: Screen): number[] {
 
         for (let x = 0; x < 8; x++) {
           const px = bx + x;
-          const color = screen.pixels[py]?.[px];
+          const color = pixels[py]?.[px];
           if (color && color.value === blockColors[0]) {
             byte |= (1 << (7 - x));
           }
