@@ -201,8 +201,9 @@ export function exportGameFlowToTAP(
   // Check W key (bit 1) - move RIGHT and set RED border
   // BIT 1, A
   engine.push(0xcb, 0x4f);
+  const jrNoWPos = engine.length;
   // JR NZ, check_q (if W not pressed, check Q)
-  engine.push(0x20, 0x0e);
+  engine.push(0x20, 0x00); // offset patched later
   
   // W pressed - add 8 to X position in memory (move one full byte right)
   // LD HL, playerXAddr
@@ -223,14 +224,17 @@ export function exportGameFlowToTAP(
   );
   
   // Jump to draw_pixel
-  engine.push(0x18, 0x0c); // JR forward 12 bytes
+  const jrToDrawFromWPos = engine.length;
+  engine.push(0x18, 0x00); // JR draw_pixel (offset patched later)
   
   // check_q:
+  const checkQPos = engine.length;
   // Check Q key (bit 0) - move LEFT and set CYAN border
   // BIT 0, A
   engine.push(0xcb, 0x47);
-  // JR NZ, draw_pixel (if Q not pressed, skip to draw)
-  engine.push(0x20, 0x0e);
+  const jrNoQPos = engine.length;
+  // JR NZ, no_key (if Q not pressed, skip movement)
+  engine.push(0x20, 0x00); // offset patched later
   
   // Q pressed - subtract 8 from X position in memory (move one full byte left)
   // LD HL, playerXAddr
@@ -250,7 +254,11 @@ export function exportGameFlowToTAP(
     0xd3, 0xfe  // OUT (254), A
   );
 
+  // no_key:
+  const noKeyPos = engine.length;
+
   // draw_pixel:
+  const drawPixelPos = engine.length;
   // Load player X position from memory
   // LD HL, playerXAddr
   engine.push(0x21);
@@ -356,6 +364,20 @@ export function exportGameFlowToTAP(
   
   engine[playerXReadIdx3] = playerXAddr & 0xff;
   engine[playerXReadIdx3 + 1] = (playerXAddr >> 8) & 0xff;
+
+  // Patch JR offsets for keyboard handling
+  const checkQAddr = engineStart + checkQPos;
+  const drawPixelAddr = engineStart + drawPixelPos;
+  const noKeyAddr = engineStart + noKeyPos;
+
+  let disp = checkQAddr - (engineStart + jrNoWPos + 2);
+  engine[jrNoWPos + 1] = disp & 0xff;
+
+  disp = drawPixelAddr - (engineStart + jrToDrawFromWPos + 2);
+  engine[jrToDrawFromWPos + 1] = disp & 0xff;
+
+  disp = noKeyAddr - (engineStart + jrNoQPos + 2);
+  engine[jrNoQPos + 1] = disp & 0xff;
 
   // Build final code data: engine + background screen data + player X variable
   const codeData = [
