@@ -170,7 +170,7 @@ export function exportGameFlowToTAP(
   const playerXPixel = playerX * 8;
   const playerYPixel = playerY * 8;
 
-  // ===== PHASE 2: KEYBOARD BORDER COLOR TEST =====
+  // ===== PHASE 3: SINGLE PIXEL PLAYER MOVEMENT =====
   // Copy background screen to display memory
   
   // LD HL, <source address of background screen data> (patched below)
@@ -187,7 +187,15 @@ export function exportGameFlowToTAP(
   // LDIR (copy all 6912 bytes from background to screen)
   engine.push(0xed, 0xb0);
 
-  // ===== GAME LOOP: Test keyboard with border color =====
+  // Initialize player X position in register D
+  // LD D, playerXPixel
+  engine.push(0x16, playerXPixel & 0xff);
+  
+  // Initialize player Y position in register E
+  // LD E, playerYPixel
+  engine.push(0x1e, playerYPixel & 0xff);
+
+  // ===== GAME LOOP: Read keyboard and move pixel =====
   const gameLoopAddr = engineStart + engine.length;
 
   // Read keyboard port DFFE (YUIOP half-row: P=bit0, O=bit1)
@@ -196,34 +204,81 @@ export function exportGameFlowToTAP(
   // IN A, (C)
   engine.push(0xed, 0x78);
   
-  // Check O key (bit 1)
+  // Check O key (bit 1) - move RIGHT
   // BIT 1, A
   engine.push(0xcb, 0x4f);
   // JR NZ, check_p (if O not pressed, check P)
-  engine.push(0x20, 0x05);
+  engine.push(0x20, 0x02);
   
-  // O pressed - set border to RED (color 2)
-  // LD A, 2
-  engine.push(0x3e, 0x02);
-  // OUT (0xFE), A
-  engine.push(0xd3, 0xfe);
-  // JR loop (skip P check - need to skip 8 bytes: BIT+JR+LD+OUT)
-  engine.push(0x18, 0x08);
-
+  // O pressed - increment X position
+  // INC D
+  engine.push(0x14);
+  
   // check_p:
-  // Check P key (bit 0)
+  // Check P key (bit 0) - move LEFT
   // BIT 0, A
   engine.push(0xcb, 0x47);
-  // JR NZ, loop (if P not pressed, just loop)
-  engine.push(0x20, 0x04);
+  // JR NZ, draw_pixel (if P not pressed, skip to draw)
+  engine.push(0x20, 0x02);
   
-  // P pressed - set border to CYAN (color 5)
-  // LD A, 5
-  engine.push(0x3e, 0x05);
-  // OUT (0xFE), A
-  engine.push(0xd3, 0xfe);
+  // P pressed - decrement X position
+  // DEC D
+  engine.push(0x15);
 
-  // loop:
+  // draw_pixel:
+  // Calculate screen address from Y (in E) and X (in D)
+  // Using simple formula for testing: address = 16384 + (Y * 32) + (X / 8)
+  
+  // LD A, E (Y position)
+  engine.push(0x7b);
+  // LD L, A
+  engine.push(0x6f);
+  // LD H, 0
+  engine.push(0x26, 0x00);
+  // Add HL, HL (multiply by 2)
+  engine.push(0x29);
+  // Add HL, HL (multiply by 4)
+  engine.push(0x29);
+  // Add HL, HL (multiply by 8)
+  engine.push(0x29);
+  // Add HL, HL (multiply by 16)
+  engine.push(0x29);
+  // Add HL, HL (multiply by 32)
+  engine.push(0x29);
+  
+  // Add X/8 to get character column
+  // LD A, D (X position)
+  engine.push(0x7a);
+  // SRL A (divide by 2)
+  engine.push(0xcb, 0x3f);
+  // SRL A (divide by 4)
+  engine.push(0xcb, 0x3f);
+  // SRL A (divide by 8)
+  engine.push(0xcb, 0x3f);
+  // LD C, A
+  engine.push(0x4f);
+  // LD B, 0
+  engine.push(0x06, 0x00);
+  // ADD HL, BC
+  engine.push(0x09);
+  
+  // Add screen base 16384
+  // LD BC, 16384
+  engine.push(0x01, 0x00, 0x40);
+  // ADD HL, BC
+  engine.push(0x09);
+  
+  // Draw pixel at this position
+  // LD (HL), 0xFF
+  engine.push(0x36, 0xff);
+  
+  // Small delay
+  // LD B, 20
+  engine.push(0x06, 0x14);
+  const delayLoopAddr = engineStart + engine.length;
+  // DJNZ delay_loop
+  engine.push(0x10, 0xfe);
+
   // Jump back to game loop
   const loopOffset = gameLoopAddr - (engineStart + engine.length + 2);
   engine.push(0x18, loopOffset & 0xff);
