@@ -177,15 +177,41 @@ export const GameFlowDesigner = ({ screens, blocks, gameFlow, onGameFlowChange }
                             ctx.fillStyle = "#000";
                             ctx.fillRect(0, 0, 256, 192);
                             
-                            // Render screen content
-                            if (screen.type === "title" && screen.pixels) {
-                              // Render title screen pixels
+                            // Render screen content based on type
+                            if ((screen.type === "title" || screen.type === "loading") && screen.pixels) {
+                              // Render pixel-based screens (title/loading)
                               for (let y = 0; y < 192; y++) {
                                 for (let x = 0; x < 256; x++) {
                                   const color = screen.pixels[y]?.[x];
                                   if (color) {
                                     ctx.fillStyle = color.value;
                                     ctx.fillRect(x, y, 1, 1);
+                                  }
+                                }
+                              }
+                            } else if (screen.type === "game" && screen.tiles) {
+                              // Render game screen with blocks
+                              const GRID_WIDTH = 32;
+                              const GRID_HEIGHT = 24;
+                              const BLOCK_SIZE = 8;
+                              
+                              for (let gy = 0; gy < GRID_HEIGHT; gy++) {
+                                for (let gx = 0; gx < GRID_WIDTH; gx++) {
+                                  const blockId = screen.tiles[gy]?.[gx];
+                                  if (blockId) {
+                                    const block = blocks.find(b => b.id === blockId);
+                                    if (block?.sprite?.frames?.[0]?.pixels) {
+                                      for (let by = 0; by < BLOCK_SIZE; by++) {
+                                        for (let bx = 0; bx < BLOCK_SIZE; bx++) {
+                                          const colorIndex = block.sprite.frames[0].pixels[by]?.[bx];
+                                          if (colorIndex !== undefined && colorIndex !== 0) {
+                                            const color = SPECTRUM_COLORS[colorIndex]?.value || "#fff";
+                                            ctx.fillStyle = color;
+                                            ctx.fillRect(gx * BLOCK_SIZE + bx, gy * BLOCK_SIZE + by, 1, 1);
+                                          }
+                                        }
+                                      }
+                                    }
                                   }
                                 }
                               }
