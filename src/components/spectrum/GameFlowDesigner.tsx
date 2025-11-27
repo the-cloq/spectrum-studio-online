@@ -38,10 +38,15 @@ export const GameFlowDesigner = ({ screens, blocks, levels, gameFlow, onGameFlow
   const flowScreenIds = new Set(gameFlow.map(f => f.screenId));
   const availableScreens = filteredScreens.filter(s => !flowScreenIds.has(s.id));
 
-  const handleDragStart = (screenId: string) => {
+  const handleDragStart = (e: React.DragEvent, screenId: string) => {
     setDraggedScreenId(screenId);
+    try {
+      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer.setData("text/plain", screenId);
+    } catch {
+      // dataTransfer may not be available in some environments; ignore
+    }
   };
-
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -50,14 +55,23 @@ export const GameFlowDesigner = ({ screens, blocks, levels, gameFlow, onGameFlow
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    
-    if (!draggedScreenId) return;
 
-    const screen = screens.find(s => s.id === draggedScreenId);
+    const droppedId = (() => {
+      try {
+        const fromData = e.dataTransfer.getData("text/plain");
+        return fromData || draggedScreenId;
+      } catch {
+        return draggedScreenId;
+      }
+    })();
+
+    if (!droppedId) return;
+
+    const screen = screens.find(s => s.id === droppedId);
     if (!screen) return;
 
     // Check if screen is already in flow
-    if (flowScreenIds.has(draggedScreenId)) {
+    if (flowScreenIds.has(droppedId)) {
       toast.error("Screen is already in Game Flow");
       setDraggedScreenId(null);
       return;
@@ -71,7 +85,7 @@ export const GameFlowDesigner = ({ screens, blocks, levels, gameFlow, onGameFlow
       }).length;
 
       const newFlow: GameFlowScreen = {
-        screenId: draggedScreenId,
+        screenId: droppedId,
         order: loadingCount,
         autoShow: true,
       };
@@ -90,7 +104,7 @@ export const GameFlowDesigner = ({ screens, blocks, levels, gameFlow, onGameFlow
       );
 
       const newFlow: GameFlowScreen = {
-        screenId: draggedScreenId,
+        screenId: droppedId,
         order: maxLoadingOrder + 1 + (gameFlow.length - (maxLoadingOrder + 1)),
         accessKey: undefined,
         scrollText: screen.name,
@@ -178,8 +192,7 @@ export const GameFlowDesigner = ({ screens, blocks, levels, gameFlow, onGameFlow
                 <Card
                   key={screen.id}
                   draggable
-                  onDragStart={() => handleDragStart(screen.id)}
-                  onDragEnd={() => setDraggedScreenId(null)}
+                  onDragStart={(e) => handleDragStart(e, screen.id)}
                   className="p-3 cursor-move hover:border-primary transition-colors"
                 >
                   <div className="flex items-center gap-2">
