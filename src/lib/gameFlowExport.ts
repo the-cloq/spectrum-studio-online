@@ -171,8 +171,22 @@ export function exportGameFlowToTAP(
   const playerYPixel = playerY * 8;
 
   // ===== PHASE 2: KEYBOARD BORDER TEST (Q/W) =====
-  // For now, keep things ultra-simple to verify keyboard input works reliably.
-  // This engine just changes the border color when Q or W is pressed, and loops forever.
+  // First, display the game level screen, then run keyboard test loop.
+
+  // Copy target screen to display memory
+  // LD HL, <source address of background screen data> (patched below)
+  engine.push(0x21);
+  const bgAddrIdx = engine.length;
+  engine.push(0x00, 0x00); // placeholder - will be patched with bgScreenDataAddr
+
+  // LD DE, 16384 (screen memory start)
+  engine.push(0x11, 0x00, 0x40);
+
+  // LD BC, 6912 (full screen size)
+  engine.push(0x01, 0x00, 0x1b);
+  
+  // LDIR (copy all 6912 bytes from background to screen)
+  engine.push(0xed, 0xb0);
 
   // Set initial border color to black
   engine.push(
@@ -236,9 +250,17 @@ export function exportGameFlowToTAP(
   engine.push(0x18, loopOffset & 0xff);
 
   // ===== DATA SECTION =====
-  // For this phase, the engine has no extra data; code block is engine only.
+  // Background screen data follows engine code
+  const bgScreenDataAddr = engineStart + engine.length;
+
+  // Patch background screen address placeholder
+  engine[bgAddrIdx] = bgScreenDataAddr & 0xff;
+  engine[bgAddrIdx + 1] = (bgScreenDataAddr >> 8) & 0xff;
+
+  // Build final code data: engine + background screen data
   const codeData = [
-    ...engine
+    ...engine,
+    ...targetScr
   ];
 
   const codeName = "GameFlow  ";
