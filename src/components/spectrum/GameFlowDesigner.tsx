@@ -5,20 +5,23 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
-import { type Screen, type GameFlowScreen, type Block, SPECTRUM_COLORS } from "@/types/spectrum";
+import { type Screen, type GameFlowScreen, type Block, type Level, SPECTRUM_COLORS } from "@/types/spectrum";
 import { toast } from "sonner";
-import { Grip, X, Settings2, Plus, AlertCircle } from "lucide-react";
+import { Grip, X, Settings2, Plus, AlertCircle, Download } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
+import { exportGameFlowToTAP, downloadGameFlowTAP } from "@/lib/gameFlowExport";
 
 interface GameFlowDesignerProps {
   screens: Screen[];
   blocks: Block[];
+  levels: Level[];
   gameFlow: GameFlowScreen[];
   onGameFlowChange: (gameFlow: GameFlowScreen[]) => void;
+  projectName: string;
 }
 
-export const GameFlowDesigner = ({ screens, blocks, gameFlow, onGameFlowChange }: GameFlowDesignerProps) => {
+export const GameFlowDesigner = ({ screens, blocks, levels, gameFlow, onGameFlowChange, projectName }: GameFlowDesignerProps) => {
   const [selectedFlowScreen, setSelectedFlowScreen] = useState<GameFlowScreen | null>(null);
   const [draggedScreenId, setDraggedScreenId] = useState<string | null>(null);
   const [categoryFilter, setCategoryFilter] = useState<"all" | "loading" | "title" | "instructions" | "controls" | "scoreboard" | "gameover">("all");
@@ -41,14 +44,24 @@ export const GameFlowDesigner = ({ screens, blocks, gameFlow, onGameFlowChange }
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
+    e.stopPropagation();
   };
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
+    e.stopPropagation();
+    
     if (!draggedScreenId) return;
 
     const screen = screens.find(s => s.id === draggedScreenId);
     if (!screen) return;
+
+    // Check if screen is already in flow
+    if (flowScreenIds.has(draggedScreenId)) {
+      toast.error("Screen is already in Game Flow");
+      setDraggedScreenId(null);
+      return;
+    }
 
     // Loading screens must come first
     if (screen.type === "loading") {
@@ -120,6 +133,17 @@ export const GameFlowDesigner = ({ screens, blocks, gameFlow, onGameFlowChange }
     toast.success("Screen configuration updated");
   };
 
+  const handleExportTAP = () => {
+    try {
+      const blob = exportGameFlowToTAP(gameFlow, screens, levels, projectName);
+      downloadGameFlowTAP(blob, projectName);
+      toast.success("Game Flow exported to TAP file successfully!");
+    } catch (error) {
+      console.error("TAP export error:", error);
+      toast.error("Failed to export TAP file");
+    }
+  };
+
   // Sort game flow by order
   const sortedGameFlow = [...gameFlow].sort((a, b) => a.order - b.order);
 
@@ -155,6 +179,7 @@ export const GameFlowDesigner = ({ screens, blocks, gameFlow, onGameFlowChange }
                   key={screen.id}
                   draggable
                   onDragStart={() => handleDragStart(screen.id)}
+                  onDragEnd={() => setDraggedScreenId(null)}
                   className="p-3 cursor-move hover:border-primary transition-colors"
                 >
                   <div className="flex items-center gap-2">
@@ -366,11 +391,22 @@ export const GameFlowDesigner = ({ screens, blocks, gameFlow, onGameFlowChange }
         )}
 
         {gameFlow.length > 0 && (
-          <div className="mt-6 p-4 bg-muted/30 rounded-lg">
-            <h4 className="font-semibold text-sm mb-2">Menu Navigation</h4>
-            <p className="text-xs text-muted-foreground">
-              Game flow will use continuous loop scrolling text menu for navigation between screens.
-            </p>
+          <div className="mt-6 space-y-3">
+            <div className="p-4 bg-muted/30 rounded-lg">
+              <h4 className="font-semibold text-sm mb-2">Menu Navigation</h4>
+              <p className="text-xs text-muted-foreground">
+                Set access keys for each screen. The game will show a scrolling menu at the bottom of title screens.
+              </p>
+            </div>
+            
+            <Button 
+              onClick={handleExportTAP}
+              className="w-full"
+              disabled={gameFlow.length === 0}
+            >
+              <Download className="w-4 h-4 mr-2" />
+              Export Game Flow as TAP
+            </Button>
           </div>
         )}
       </Card>
