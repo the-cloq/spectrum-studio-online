@@ -54,10 +54,10 @@ export const LoadingScreenCreator = ({ screen, onScreenChange, onBlockEditPanelC
     screen.conversionOptions?.paperStrategy || "lighter"
   );
   const [singleColorAs, setSingleColorAs] = useState<"paper" | "ink">(
-    screen.conversionOptions?.singleColorAs || "paper"
+    screen.conversionOptions?.singleColorAs || "ink"
   );
   const [preserveNeighbors, setPreserveNeighbors] = useState<"no" | "left" | "up" | "match">(
-    screen.conversionOptions?.preserveNeighbors || "no"
+    screen.conversionOptions?.preserveNeighbors || "left"
   );
   const [strippedPixels, setStrippedPixels] = useState<SpectrumColor[][] | null>(null);
 
@@ -684,8 +684,8 @@ export const LoadingScreenCreator = ({ screen, onScreenChange, onBlockEditPanelC
         const blockColors = getBlockColors(bx, by);
         
         if (blockColors.length === 1) {
-          // Single color block
-          const targetColor = singleColorAs === "paper" ? black : white;
+          // Single color block - reversed to match retronator behavior
+          const targetColor = singleColorAs === "ink" ? black : white;
           for (let y = 0; y < ATTR_BLOCK; y++) {
             for (let x = 0; x < ATTR_BLOCK; x++) {
               stripped[by + y][bx + x] = targetColor;
