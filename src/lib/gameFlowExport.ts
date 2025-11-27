@@ -159,12 +159,13 @@ export function exportGameFlowToTAP(
 
   // LD BC, 6912 (0x1B00)
   engine.push(0x01, 0x00, 0x1b);
-
+  
   // LDIR
   engine.push(0xed, 0xb0);
-
-  // RET
-  engine.push(0xc9);
+  
+  // Infinite loop to stay in machine code (do not return to BASIC)
+  // JR -2 (jump back two bytes to itself)
+  engine.push(0x18, 0xfe);
 
   // ===== DATA SECTION =====
 
