@@ -258,35 +258,37 @@ function createBinaryGameEngine(
   
   // Find target screen in screen bank
   // For now, render first screen (screenId at offset 0)
-  // Screen bank format: screenCount(2) + screens[]
-  // Each screen: width(2) height(2) tileCount(2) tiles[] objectCount(2) objects[]
+  // Screen bank format: pointer_table(2) + screen0_data
+  // Screen data: width(1) height(1) tiles[width*height] objects[]
   
   // Load screen bank address
   engine.push(0x21);              // LD HL, screenBankAddr
   const screenBankAddrIdx = engine.length;
   engine.push(0x00, 0x00);        // Placeholder
   
-  // Skip screen count (2 bytes) to get to first screen
+  // Skip pointer table (2 bytes) to get to first screen data
   engine.push(0x23, 0x23);        // INC HL, INC HL
   
-  // Read screen width (not used for now)
-  engine.push(0x23, 0x23);        // INC HL, INC HL
-  
-  // Read screen height (not used for now)
-  engine.push(0x23, 0x23);        // INC HL, INC HL
-  
-  // Read tile count into BC
-  engine.push(0x4e);              // LD C, (HL)
-  engine.push(0x23);              // INC HL
-  engine.push(0x46);              // LD B, (HL)
+  // Read screen width (1 byte) into D
+  engine.push(0x56);              // LD D, (HL)
   engine.push(0x23);              // INC HL
   
-  // Now HL points to first tile
-  // Tile format: x(2) y(2) blockIndex(2) = 6 bytes per tile
+  // Read screen height (1 byte) into E
+  engine.push(0x5e);              // LD E, (HL)
+  engine.push(0x23);              // INC HL
   
-  // Store tile pointer in IX
-  engine.push(0xdd, 0xe5);        // PUSH IX
-  engine.push(0xdd, 0xe1);        // POP IX (IX = HL)
+  // Set tile count to 768 (32 * 24 = 0x0300) in BC
+  engine.push(0x01, 0x00, 0x03);  // LD BC, 768
+  
+  // Now HL points to first tile byte
+  // Tile format: flat array of 1-byte block indices
+  // Position (x, y) derived from index: x = index % 32, y = index / 32
+  
+  // Initialize tile position counter: D'E' will track current X,Y
+  engine.push(0xd9);              // EXX (switch to alternate registers)
+  engine.push(0x16, 0x00);        // LD D', 0 (tile X counter)
+  engine.push(0x1e, 0x00);        // LD E', 0 (tile Y counter)
+  engine.push(0xd9);              // EXX (back to main registers)
   
   // ===== TILE RENDERING LOOP =====
   const tileLoopStart = 32768 + engine.length;
@@ -297,19 +299,29 @@ function createBinaryGameEngine(
   const jzToPlayerSetup = engine.length;
   engine.push(0x28, 0x00);        // JR Z, player_setup (placeholder)
   
-  // Read tile X position into D
-  engine.push(0xdd, 0x56, 0x00);  // LD D, (IX+0)
+  // Read block index (1 byte) from current tile position
+  engine.push(0x7e);              // LD A, (HL)
+  engine.push(0x23);              // INC HL (advance to next tile)
   
-  // Read tile Y position into E
-  engine.push(0xdd, 0x5e, 0x02);  // LD E, (IX+2)
-  
-  // Read block index into HL
-  engine.push(0xdd, 0x6e, 0x04);  // LD L, (IX+4)
-  engine.push(0xdd, 0x66, 0x05);  // LD H, (IX+5)
-  
-  // Save BC and IX
+  // Save tile counter BC and data pointer HL
   engine.push(0xc5);              // PUSH BC
-  engine.push(0xdd, 0xe5);        // PUSH IX
+  engine.push(0xe5);              // PUSH HL
+  
+  // Get current tile X,Y position from alternate registers
+  engine.push(0xd9);              // EXX
+  engine.push(0x7a);              // LD A, D' (tile X)
+  engine.push(0x47);              // LD B, A
+  engine.push(0x7b);              // LD A, E' (tile Y)
+  engine.push(0x4f);              // LD C, A
+  engine.push(0xd9);              // EXX
+  // Now B = tile X (0-31), C = tile Y (0-23)
+  
+  // Save block index in A to D register
+  engine.push(0x57);              // LD D, A
+  
+  // Extend block index from A (8-bit) to HL (16-bit)
+  engine.push(0x6f);              // LD L, A
+  engine.push(0x26, 0x00);        // LD H, 0
   
   // Look up block in block bank
   // Block bank format: blockCount(2) + blocks[]
@@ -396,18 +408,26 @@ function createBinaryGameEngine(
   
   // For simplicity, just draw a white 8x8 block at the tile position
   // TODO: Implement proper sprite pixel rendering
-  // This is a placeholder that draws white blocks
+  // This is a placeholder that draws white blocks for non-empty tiles
   
-  // Calculate screen address for tile at (tileX * 8, tileY * 8)
-  // For now, just mark that we've processed this tile
+  // Restore tile counter and data pointer
+  engine.push(0xe1);              // POP HL
+  engine.push(0xc1);              // POP BC
   
-  // Move to next tile (advance IX by 6 bytes)
-  engine.push(0xdd, 0x23);        // INC IX (6 times)
-  engine.push(0xdd, 0x23);
-  engine.push(0xdd, 0x23);
-  engine.push(0xdd, 0x23);
-  engine.push(0xdd, 0x23);
-  engine.push(0xdd, 0x23);
+  // Advance tile position counter (X, Y)
+  engine.push(0xd9);              // EXX (switch to alternate registers)
+  engine.push(0x14);              // INC D' (increment X)
+  engine.push(0x7a);              // LD A, D' (check if X == 32)
+  engine.push(0xfe, 0x20);        // CP 32
+  const jrNoWrapX = engine.length;
+  engine.push(0x20, 0x00);        // JR NZ, no_wrap_x (placeholder)
+  
+  // Wrapped to next row - reset X to 0, increment Y
+  engine.push(0x16, 0x00);        // LD D', 0 (reset X)
+  engine.push(0x1c);              // INC E' (increment Y)
+  
+  const noWrapXPos = engine.length;
+  engine.push(0xd9);              // EXX (back to main registers)
   
   // Decrement tile counter
   engine.push(0x0b);              // DEC BC
@@ -419,8 +439,7 @@ function createBinaryGameEngine(
   // ===== PLAYER SETUP =====
   const playerSetupPos = engine.length;
   
-  // Restore IX
-  engine.push(0xdd, 0xe1);        // POP IX
+  // Clean up stack (tile counter and data pointer were already popped in loop)
   
   // Initialize player position
   const playerXPixel = 128;
@@ -585,48 +604,39 @@ function createBinaryGameEngine(
   const screenBankAddrIdx2 = engine.length;
   engine.push(0x00, 0x00);        // Placeholder
   
-  // Skip to tile array: screenCount(2) + width(2) + height(2) + tileCount(2) = 8 bytes
-  engine.push(0x01, 0x08, 0x00);  // LD BC, 8
+  // Skip to tile array: pointer(2) + width(1) + height(1) = 4 bytes
+  engine.push(0x01, 0x04, 0x00);  // LD BC, 4
   engine.push(0x09);              // ADD HL, BC
   
-  // Read tile count
-  engine.push(0x5e);              // LD E, (HL)
-  engine.push(0x23);              // INC HL
-  engine.push(0x56);              // LD D, (HL)
-  engine.push(0x23);              // INC HL
+  // Now HL points to first tile byte in flat array
+  // Calculate tile offset: offset = (tileY * 32) + tileX
+  // tileY is in C, tileX is in D
   
-  // Now HL points to first tile, DE = tile count
-  // Save tile pointer in IX
-  engine.push(0xdd, 0xe5);        // PUSH IX
-  engine.push(0xdd, 0xe1);        // POP IX (IX = HL)
+  // Calculate tileY * 32: shift left 5 times
+  engine.push(0x79);              // LD A, C (tile Y)
+  engine.push(0xcb, 0x27);        // SLA A (x2)
+  engine.push(0xcb, 0x27);        // SLA A (x4)
+  engine.push(0xcb, 0x27);        // SLA A (x8)
+  engine.push(0xcb, 0x27);        // SLA A (x16)
+  engine.push(0xcb, 0x27);        // SLA A (x32)
+  engine.push(0x5f);              // LD E, A
+  engine.push(0x16, 0x00);        // LD D, 0 (DE = tileY * 32)
   
-  // Tile search loop
-  const tileSearchLoopPos = engine.length;
+  // Add tileX (in D originally, need to move)
+  engine.push(0x7a);              // LD A, D (tile X)
+  engine.push(0x83);              // ADD A, E
+  engine.push(0x5f);              // LD E, A
+  engine.push(0x30, 0x01);        // JR NC, skip_carry
+  engine.push(0x14);              // INC D (handle carry)
+  // skip_carry:
   
-  // Check if tile count == 0
-  engine.push(0x7a);              // LD A, D
-  engine.push(0xb3);              // OR E
-  const jrNoCollisionPos = engine.length;
-  engine.push(0x28, 0x00);        // JR Z, no_collision (placeholder)
+  // Add offset to base address
+  engine.push(0x19);              // ADD HL, DE (HL now points to tile at player position)
   
-  // Read tile Y position (at IX+2)
-  engine.push(0xdd, 0x7e, 0x02);  // LD A, (IX+2)
-  
-  // Compare with player tile Y (in C)
-  engine.push(0xb9);              // CP C
-  const jrNotThisTilePos = engine.length;
-  engine.push(0x20, 0x00);        // JR NZ, next_tile (placeholder)
-  
-  // Y matches, check X
-  engine.push(0xdd, 0x7e, 0x00);  // LD A, (IX+0)
-  engine.push(0xba);              // CP D (player tile X)
-  const jrNotThisTilePos2 = engine.length;
-  engine.push(0x20, 0x00);        // JR NZ, next_tile (placeholder)
-  
-  // Found tile at player position! Check if it's solid
-  // Read block index (at IX+4)
-  engine.push(0xdd, 0x6e, 0x04);  // LD L, (IX+4)
-  engine.push(0xdd, 0x66, 0x05);  // LD H, (IX+5)
+  // Read block index (1 byte) at this position
+  engine.push(0x7e);              // LD A, (HL)
+  engine.push(0x6f);              // LD L, A
+  engine.push(0x26, 0x00);        // LD H, 0 (HL = block index)
   
   // Calculate block address: blockBankAddr + 2 + (blockIndex * 5)
   engine.push(0x29);              // ADD HL, HL (blockIndex * 2)
@@ -654,13 +664,12 @@ function createBinaryGameEngine(
   const jrIsConveyorPos = engine.length;
   engine.push(0x28, 0x00);        // JR Z, land_on_block (placeholder)
   
-  // Not a landable block, try next tile
+  // Not a landable block, fall through to ground check
   const jrNotLandablePos = engine.length;
-  engine.push(0x18, 0x00);        // JR next_tile (placeholder)
+  engine.push(0x18, 0x00);        // JR no_collision (placeholder)
   
   // Landable block found (solid or conveyor)!
   const landOnBlockPos = engine.length;
-  engine.push(0xdd, 0xe1);        // POP IX (restore IX)
   
   // Save block address (HL) for reading conveyor properties later
   engine.push(0xe5);              // PUSH HL (save block address)
@@ -769,27 +778,8 @@ function createBinaryGameEngine(
   const jrToCheckRightPos2 = engine.length;
   engine.push(0x18, 0x00);        // JR check_right_key (placeholder)
   
-  // Next tile in search
-  const nextTilePos = engine.length;
-  
-  // Advance to next tile (6 bytes per tile)
-  engine.push(0xdd, 0x23);        // INC IX (6 times)
-  engine.push(0xdd, 0x23);
-  engine.push(0xdd, 0x23);
-  engine.push(0xdd, 0x23);
-  engine.push(0xdd, 0x23);
-  engine.push(0xdd, 0x23);
-  
-  // Decrement tile counter
-  engine.push(0x1b);              // DEC DE
-  
-  // Loop back
-  let searchLoopOffset = tileSearchLoopPos - (32768 + engine.length + 2);
-  engine.push(0x18, searchLoopOffset & 0xff);  // JR tile_search_loop
-  
   // No collision found - check ground level
   const noCollisionPos = engine.length;
-  engine.push(0xdd, 0xe1);        // POP IX (restore IX)
   
   // Check if Y >= ground level
   engine.push(0x78);              // LD A, B (foot Y from earlier)
@@ -1210,7 +1200,6 @@ function createBinaryGameEngine(
   const skipJumpInitAddr = 32768 + skipJumpInitPos;
   const checkRightKeyAddr = 32768 + checkRightKeyPos;
   const landCheckAddr = 32768 + landCheckPos;
-  const nextTileAddr = 32768 + nextTilePos;
   const noCollisionAddr = 32768 + noCollisionPos;
   const stillAirborneAddr = 32768 + stillAirbornePos;
   const checkLeftVelAddr = 32768 + checkLeftVelPos;
@@ -1243,25 +1232,15 @@ function createBinaryGameEngine(
   disp = checkRightKeyAddr - (32768 + jrToCheckRightPos + 2);
   engine[jrToCheckRightPos + 1] = disp & 0xff;
   
-  // Collision detection jumps
-  disp = noCollisionAddr - (32768 + jrNoCollisionPos + 2);
-  engine[jrNoCollisionPos + 1] = disp & 0xff;
-  
-  disp = nextTileAddr - (32768 + jrNotThisTilePos + 2);
-  engine[jrNotThisTilePos + 1] = disp & 0xff;
-  
-  disp = nextTileAddr - (32768 + jrNotThisTilePos2 + 2);
-  engine[jrNotThisTilePos2 + 1] = disp & 0xff;
-  
-  disp = nextTileAddr - (32768 + jrNotLandablePos + 2);
-  engine[jrNotLandablePos + 1] = disp & 0xff;
-  
   // Conveyor landing jumps
   disp = landOnBlockAddr - (32768 + jrIsSolidPos + 2);
   engine[jrIsSolidPos + 1] = disp & 0xff;
   
   disp = landOnBlockAddr - (32768 + jrIsConveyorPos + 2);
   engine[jrIsConveyorPos + 1] = disp & 0xff;
+  
+  disp = noCollisionAddr - (32768 + jrNotLandablePos + 2);
+  engine[jrNotLandablePos + 1] = disp & 0xff;
   
   disp = skipConveyorAddr - (32768 + jrNotConveyorPos + 2);
   engine[jrNotConveyorPos + 1] = disp & 0xff;
