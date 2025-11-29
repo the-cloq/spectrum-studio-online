@@ -123,6 +123,7 @@ export type PlacedObject = {
   x: number;
   y: number;
   direction: "left" | "right";
+  propertyOverrides?: Partial<GameObject["properties"]>; // Per-instance property overrides
 };
 
 export type Screen = {
