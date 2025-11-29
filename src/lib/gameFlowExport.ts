@@ -726,6 +726,54 @@ function createBinaryGameEngine(
   // ===== CHECK HORIZONTAL MOVEMENT =====
   const checkRightKeyPos = engine.length;
   
+  // Apply current horizontal velocity first
+  engine.push(0x3a);              // LD A, (playerVelX)
+  const playerVelXReadIdx1 = engine.length;
+  engine.push(0x00, 0x00);        // Placeholder
+  
+  // Check if velocity is zero
+  engine.push(0xa7);              // AND A
+  const jrNoVelocityPos = engine.length;
+  engine.push(0x28, 0x00);        // JR Z, check_keys (placeholder)
+  
+  // Check if velocity is positive (moving right)
+  engine.push(0xfe, 0x01);        // CP 1
+  const jrNotMovingRightPos = engine.length;
+  engine.push(0x20, 0x00);        // JR NZ, check_left_vel (placeholder)
+  
+  // Moving right - apply velocity
+  engine.push(0x3a);              // LD A, (playerX)
+  const playerXReadIdx1 = engine.length;
+  engine.push(0x00, 0x00);        // Placeholder
+  engine.push(0xc6, 0x03);        // ADD A, 3 (velocity in pixels/frame)
+  engine.push(0x32);              // LD (playerX), A
+  const playerXWriteIdx1 = engine.length;
+  engine.push(0x00, 0x00);        // Placeholder
+  
+  const jrCheckKeysPos = engine.length;
+  engine.push(0x18, 0x00);        // JR check_keys (placeholder)
+  
+  // Check if moving left
+  const checkLeftVelPos = engine.length;
+  engine.push(0x3a);              // LD A, (playerVelX)
+  const playerVelXReadIdx2 = engine.length;
+  engine.push(0x00, 0x00);        // Placeholder
+  engine.push(0xfe, 0xff);        // CP 255 (-1 as unsigned byte)
+  const jrCheckKeysPos2 = engine.length;
+  engine.push(0x20, 0x00);        // JR NZ, check_keys (placeholder)
+  
+  // Moving left - apply velocity
+  engine.push(0x3a);              // LD A, (playerX)
+  const playerXReadIdx2 = engine.length;
+  engine.push(0x00, 0x00);        // Placeholder
+  engine.push(0xd6, 0x03);        // SUB 3 (velocity in pixels/frame)
+  engine.push(0x32);              // LD (playerX), A
+  const playerXWriteIdx2 = engine.length;
+  engine.push(0x00, 0x00);        // Placeholder
+  
+  // Now check keyboard input to update velocity
+  const checkKeysPos = engine.length;
+  
   // Read keyboard for right key
   engine.push(0x01);              // LD BC, port
   engine.push((rightMapping?.port || 0xFBFE) & 0xff);
@@ -738,19 +786,17 @@ function createBinaryGameEngine(
   const jrNoRightPos = engine.length;
   engine.push(0x20, 0x00);        // JR NZ, check_left (placeholder)
   
-  // Right key pressed - move right
-  engine.push(0x3a);              // LD A, (playerX)
-  const playerXReadIdx1 = engine.length;
-  engine.push(0x00, 0x00);        // Placeholder
-  engine.push(0xc6, 0x08);        // ADD A, 8
-  engine.push(0x32);              // LD (playerX), A
-  const playerXWriteIdx1 = engine.length;
+  // Right key pressed - set velocity to right (1)
+  engine.push(0x3e, 0x01);        // LD A, 1
+  engine.push(0x32);              // LD (playerVelX), A
+  const playerVelXWriteIdx1 = engine.length;
   engine.push(0x00, 0x00);        // Placeholder
   engine.push(0x3e, 0x02);        // LD A, 2
   engine.push(0xd3, 0xfe);        // OUT (254), A (border red)
   
   const jrToDrawPos = engine.length;
   engine.push(0x18, 0x00);        // JR draw_player (placeholder)
+  
   
   // Check left key
   const checkLeftPos = engine.length;
@@ -764,18 +810,25 @@ function createBinaryGameEngine(
   const leftBit = leftMapping?.bit || 0;
   engine.push(0xcb, 0x47 + (leftBit * 8));  // BIT n, A
   const jrNoLeftPos = engine.length;
-  engine.push(0x20, 0x00);        // JR NZ, no_key (placeholder)
+  engine.push(0x20, 0x00);        // JR NZ, check_no_key (placeholder)
   
-  // Left key pressed - move left
-  engine.push(0x3a);              // LD A, (playerX)
-  const playerXReadIdx2 = engine.length;
-  engine.push(0x00, 0x00);        // Placeholder
-  engine.push(0xd6, 0x08);        // SUB 8
-  engine.push(0x32);              // LD (playerX), A
-  const playerXWriteIdx2 = engine.length;
+  // Left key pressed - set velocity to left (-1)
+  engine.push(0x3e, 0xff);        // LD A, 255 (-1 as unsigned byte)
+  engine.push(0x32);              // LD (playerVelX), A
+  const playerVelXWriteIdx2 = engine.length;
   engine.push(0x00, 0x00);        // Placeholder
   engine.push(0x3e, 0x05);        // LD A, 5
   engine.push(0xd3, 0xfe);        // OUT (254), A (border cyan)
+  
+  const jrToDrawPos2 = engine.length;
+  engine.push(0x18, 0x00);        // JR draw_player (placeholder)
+  
+  // No keys pressed - set velocity to zero
+  const checkNoKeyPos = engine.length;
+  engine.push(0xaf);              // XOR A (A = 0)
+  engine.push(0x32);              // LD (playerVelX), A
+  const playerVelXWriteIdx3 = engine.length;
+  engine.push(0x00, 0x00);        // Placeholder
   
   // Draw player at current position
   const noKeyPos = engine.length;
@@ -862,6 +915,10 @@ function createBinaryGameEngine(
   const jumpFrameIdxVarAddr = 32768 + engine.length;
   engine.push(0x00);
   
+  // Player velocity X variable (-1 = left, 0 = stationary, 1 = right)
+  const playerVelXVarAddr = 32768 + engine.length;
+  engine.push(0x00);
+  
   // Sprite width variable
   const spriteWidthVarAddr = 32768 + engine.length;
   engine.push(0x08);
@@ -930,6 +987,22 @@ function createBinaryGameEngine(
   
   engine[playerXReadIdx4] = playerXVarAddr & 0xff;
   engine[playerXReadIdx4 + 1] = (playerXVarAddr >> 8) & 0xff;
+  
+  // Patch player velocity X variable addresses
+  engine[playerVelXReadIdx1] = playerVelXVarAddr & 0xff;
+  engine[playerVelXReadIdx1 + 1] = (playerVelXVarAddr >> 8) & 0xff;
+  
+  engine[playerVelXReadIdx2] = playerVelXVarAddr & 0xff;
+  engine[playerVelXReadIdx2 + 1] = (playerVelXVarAddr >> 8) & 0xff;
+  
+  engine[playerVelXWriteIdx1] = playerVelXVarAddr & 0xff;
+  engine[playerVelXWriteIdx1 + 1] = (playerVelXVarAddr >> 8) & 0xff;
+  
+  engine[playerVelXWriteIdx2] = playerVelXVarAddr & 0xff;
+  engine[playerVelXWriteIdx2 + 1] = (playerVelXVarAddr >> 8) & 0xff;
+  
+  engine[playerVelXWriteIdx3] = playerVelXVarAddr & 0xff;
+  engine[playerVelXWriteIdx3 + 1] = (playerVelXVarAddr >> 8) & 0xff;
   
   // Patch player Y variable addresses
   engine[playerYVarIdx] = playerYVarAddr & 0xff;
@@ -1007,7 +1080,10 @@ function createBinaryGameEngine(
   const nextTileAddr = 32768 + nextTilePos;
   const noCollisionAddr = 32768 + noCollisionPos;
   const stillAirborneAddr = 32768 + stillAirbornePos;
+  const checkLeftVelAddr = 32768 + checkLeftVelPos;
+  const checkKeysAddr = 32768 + checkKeysPos;
   const checkLeftAddr = 32768 + checkLeftPos;
+  const checkNoKeyAddr = 32768 + checkNoKeyPos;
   const drawPlayerAddr = 32768 + drawPlayerPos;
   const noKeyAddr = 32768 + noKeyPos;
   const playerSetupAddr = 32768 + playerSetupPos;
@@ -1049,14 +1125,30 @@ function createBinaryGameEngine(
   disp = checkRightKeyAddr - (32768 + jrToCheckRightPos3 + 2);
   engine[jrToCheckRightPos3 + 1] = disp & 0xff;
   
+  // Velocity persistence jumps
+  disp = checkKeysAddr - (32768 + jrNoVelocityPos + 2);
+  engine[jrNoVelocityPos + 1] = disp & 0xff;
+  
+  disp = checkLeftVelAddr - (32768 + jrNotMovingRightPos + 2);
+  engine[jrNotMovingRightPos + 1] = disp & 0xff;
+  
+  disp = checkKeysAddr - (32768 + jrCheckKeysPos + 2);
+  engine[jrCheckKeysPos + 1] = disp & 0xff;
+  
+  disp = checkKeysAddr - (32768 + jrCheckKeysPos2 + 2);
+  engine[jrCheckKeysPos2 + 1] = disp & 0xff;
+  
   disp = checkLeftAddr - (32768 + jrNoRightPos + 2);
   engine[jrNoRightPos + 1] = disp & 0xff;
   
   disp = drawPlayerAddr - (32768 + jrToDrawPos + 2);
   engine[jrToDrawPos + 1] = disp & 0xff;
   
-  disp = noKeyAddr - (32768 + jrNoLeftPos + 2);
+  disp = checkNoKeyAddr - (32768 + jrNoLeftPos + 2);
   engine[jrNoLeftPos + 1] = disp & 0xff;
+  
+  disp = drawPlayerAddr - (32768 + jrToDrawPos2 + 2);
+  engine[jrToDrawPos2 + 1] = disp & 0xff;
   
   disp = playerSetupAddr - (32768 + jzToPlayerSetup + 2);
   engine[jzToPlayerSetup + 1] = disp & 0xff;
