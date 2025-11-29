@@ -1,15 +1,16 @@
 import { Button } from "@/components/ui/button";
-import { Cpu, Download, Save, FolderOpen } from "lucide-react";
+import { Cpu, Download, Save } from "lucide-react";
 import { type GameProject } from "@/types/spectrum";
+import { useProjectState } from "@/contexts/ProjectStateContext";
+import { cn } from "@/lib/utils";
 
 interface HeaderProps {
   project: GameProject;
   onExportTAP: () => void;
-  onSave: () => void;
-  onLoad: () => void;
 }
 
-export const Header = ({ project, onExportTAP, onSave, onLoad }: HeaderProps) => {
+export const Header = ({ project, onExportTAP }: HeaderProps) => {
+  const { dirtyCount, isSaving, justSaved, saveToSupabase } = useProjectState();
   return (
     <header className="border-b border-border bg-card">
       <div className="container mx-auto px-4 py-3 flex items-center justify-between">
@@ -25,15 +26,41 @@ export const Header = ({ project, onExportTAP, onSave, onLoad }: HeaderProps) =>
           </div>
         </div>
 
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={onLoad}>
-            <FolderOpen className="w-4 h-4 mr-2" />
-            Open
+        <div className="flex items-center gap-3">
+          {dirtyCount > 15 && !isSaving && !justSaved && (
+            <div className="text-sm text-muted-foreground animate-pulse">
+              You have unsaved changes
+            </div>
+          )}
+          
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={saveToSupabase}
+            disabled={isSaving}
+            className={cn(
+              "transition-colors",
+              justSaved && "border-green-500 text-green-500"
+            )}
+          >
+            {isSaving ? (
+              <>
+                <div className="w-4 h-4 mr-2 border-2 border-muted border-t-primary rounded-full animate-spin" />
+                Saving...
+              </>
+            ) : justSaved ? (
+              <>
+                <span className="mr-2">✓</span>
+                Saved
+              </>
+            ) : (
+              <>
+                <Save className="w-4 h-4 mr-2" />
+                Save
+              </>
+            )}
           </Button>
-          <Button variant="outline" size="sm" onClick={onSave}>
-            <Save className="w-4 h-4 mr-2" />
-            Save
-          </Button>
+          
           <Button variant="default" size="sm" onClick={onExportTAP}>
             <Download className="w-4 h-4 mr-2" />
             Export TAP
