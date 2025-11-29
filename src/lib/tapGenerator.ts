@@ -278,6 +278,57 @@ export class TAPGenerator {
     this.data.push(checksum);
   }
 
+  // Debug helper to inspect TAP structure and block offsets
+  debugDump() {
+    console.log('=== TAP DEBUG DUMP ===');
+    let offset = 0;
+    let blockIndex = 0;
+
+    while (offset + 2 <= this.data.length) {
+      const length = this.data[offset] | (this.data[offset + 1] << 8);
+      const blockStart = offset + 2;
+      const blockEnd = blockStart + length; // includes checksum byte
+
+      if (blockEnd > this.data.length) {
+        console.log(`Block ${blockIndex}: INVALID length beyond data (offset ${offset}, length ${length}, dataLen ${this.data.length})`);
+        break;
+      }
+
+      const fullBlock = this.data.slice(blockStart, blockEnd); // flag + payload + checksum
+      const flag = fullBlock[0];
+      const payload = fullBlock.slice(0, fullBlock.length - 1); // flag + data
+      const storedChecksum = fullBlock[fullBlock.length - 1];
+
+      let computedChecksum = 0;
+      for (const b of payload) {
+        computedChecksum ^= b;
+      }
+
+      console.log(`Block ${blockIndex}:`);
+      console.log(`  Offset (including length bytes): ${offset}`);
+      console.log(`  Length (header value, incl. checksum): ${length}`);
+      console.log(`  Flag: 0x${flag.toString(16).padStart(2, '0')}`);
+      console.log(`  Payload bytes (flag + data): ${payload.length}`);
+      console.log(`  Stored checksum: 0x${storedChecksum.toString(16).padStart(2, '0')}`);
+      console.log(`  Computed checksum: 0x${computedChecksum.toString(16).padStart(2, '0')}`);
+      console.log('  First 16 bytes:', fullBlock
+        .slice(0, 16)
+        .map((b) => b.toString(16).padStart(2, '0'))
+        .join(' ')
+      );
+      console.log('  Last 16 bytes: ', fullBlock
+        .slice(-16)
+        .map((b) => b.toString(16).padStart(2, '0'))
+        .join(' ')
+      );
+
+      offset = blockEnd;
+      blockIndex++;
+    }
+
+    console.log('=== END TAP DEBUG DUMP ===');
+  }
+
   // Generate the final TAP file as Uint8Array
   generate(): number[] {
     return this.data;

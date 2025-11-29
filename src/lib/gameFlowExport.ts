@@ -152,6 +152,8 @@ export function exportGameFlowToTAP(
     clearLine: 32767,
   });
 
+  tap.debugDump();
+
   return tap.toBlob();
 }
 
