@@ -74,13 +74,18 @@ export function packScreen(
 ): Uint8Array {
   const packer = new BinaryPacker();
   
-  // Header: screen dimensions
-  packer.writeByte(screen.width);
-  packer.writeByte(screen.height);
+  // Derive tile dimensions from the tiles array (tile-based grid),
+  // not from the pixel-based screen width/height.
+  const tileHeight = screen.tiles?.length ?? 0;
+  const tileWidth = tileHeight > 0 ? screen.tiles![0]!.length : 0;
   
-  // Tilemap data (width * height tile indices)
-  for (let y = 0; y < screen.height; y++) {
-    for (let x = 0; x < screen.width; x++) {
+  // Header: screen dimensions in tiles (e.g., 32x24)
+  packer.writeByte(tileWidth);
+  packer.writeByte(tileHeight);
+  
+  // Tilemap data (tileWidth * tileHeight tile indices)
+  for (let y = 0; y < tileHeight; y++) {
+    for (let x = 0; x < tileWidth; x++) {
       const blockId = screen.tiles?.[y]?.[x] || "";
       const blockIndex = blockIndexMap.get(blockId) ?? 0;
       packer.writeByte(blockIndex);
@@ -161,17 +166,23 @@ export function generateScreenBankAsm(
   
   asm += "\n; Screen data\n";
   for (let i = 0; i < screens.length; i++) {
-    const screenData = Array.from(packScreen(screens[i], blockIndexMap, objectIndexMap, objects));
-    asm += `\nScreen${i}Data:  ; ${screens[i].name}\n`;
-    asm += `    defb ${screens[i].width},${screens[i].height}  ; Dimensions\n`;
+    const screen = screens[i];
+    const screenData = Array.from(packScreen(screen, blockIndexMap, objectIndexMap, objects));
+
+    // Derive tile dimensions from the tiles array to match packScreen()
+    const tileHeight = screen.tiles?.length ?? 0;
+    const tileWidth = tileHeight > 0 ? screen.tiles![0]!.length : 0;
+    const tilemapSize = tileWidth * tileHeight;
+
+    asm += `\nScreen${i}Data:  ; ${screen.name}\n`;
+    asm += `    defb ${tileWidth},${tileHeight}  ; Dimensions (tiles)\n`;
     
     // Write tilemap data in rows
-    const tilemapSize = screens[i].width * screens[i].height;
     const tilemapBytes = screenData.slice(2, 2 + tilemapSize);
-    asm += `    ; Tilemap (${screens[i].width}x${screens[i].height} tiles)\n`;
-    for (let row = 0; row < screens[i].height; row++) {
-      const rowStart = row * screens[i].width;
-      const rowBytes = tilemapBytes.slice(rowStart, rowStart + screens[i].width);
+    asm += `    ; Tilemap (${tileWidth}x${tileHeight} tiles)\n`;
+    for (let row = 0; row < tileHeight; row++) {
+      const rowStart = row * tileWidth;
+      const rowBytes = tilemapBytes.slice(rowStart, rowStart + tileWidth);
       asm += `    defb ${rowBytes.join(",")}  ; Row ${row}\n`;
     }
     
