@@ -122,8 +122,8 @@ export class TAPGenerator {
 
   // Add a block with length header and checksum (made public for direct access)
   addBlock(blockData: number[]) {
-    // TAP block length must include the checksum byte
-    const length = blockData.length + 1; // flag + data + checksum
+    // TAP block length is the size of flag + payload ONLY (checksum not included)
+    const length = blockData.length; // flag + data
 
     // Add 2-byte length (little-endian)
     this.data.push(length & 0xff);

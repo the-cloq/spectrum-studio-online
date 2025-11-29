@@ -104,6 +104,8 @@ export function exportGameFlowToTAP(
     ...Array.from(screenBank)
   ];
 
+  // TAP debug logging is performed after building the BASIC program and TAP blocks below.
+
   // Build simplified BASIC loader (3 lines only)
   const basicProgram: number[] = [];
 
@@ -173,6 +175,26 @@ export function exportGameFlowToTAP(
   const codeName = "Level     ";
   tap.addHeader(codeName, combinedCode.length, codeStart);
   tap.addDataBlock(combinedCode);
+
+  const BASIC_DEFAULT_START = 23755; // Default PROG address on 48K Spectrum
+  const basicEndApprox = BASIC_DEFAULT_START + basicProgram.length;
+
+  console.log("[TAP DEBUG] Final TAP layout", {
+    blocksOrder: "BASIC header, BASIC data, SCREEN$ header, SCREEN$ data, CODE header, CODE data",
+    codeStart,
+    engineSizeDummy: engineSize,
+    engineSizeFinal: engine.length,
+    spriteBankSize: spriteBank.length,
+    blockBankSize: blockBank.length,
+    objectBankSize: objectBank.length,
+    screenBankSize: screenBank.length,
+    combinedCodeLength: combinedCode.length,
+    headerLength: combinedCode.length,
+    tapDataLengthFlagPlusPayload: combinedCode.length + 1,
+    basicLength: basicProgram.length,
+    basicEndApprox,
+    clearLine: 32767,
+  });
 
   return tap.toBlob();
 }
