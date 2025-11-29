@@ -7,10 +7,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
 import { type Screen, type GameFlowScreen, type Block, type Level, type GameObject, type Sprite, SPECTRUM_COLORS } from "@/types/spectrum";
 import { toast } from "sonner";
-import { Grip, X, Settings2, Plus, AlertCircle, Download } from "lucide-react";
+import { Grip, X, Settings2, Plus, AlertCircle, Download, ChevronDown } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { exportGameFlowToTAP, downloadGameFlowTAP } from "@/lib/gameFlowExport";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { exportGameFlowToTAP, downloadGameFlowTAP, exportGameFlowToASM, downloadGameFlowASM, exportGameFlowToBIN, downloadGameFlowBIN } from "@/lib/gameFlowExport";
 
 interface GameFlowDesignerProps {
   screens: Screen[];
@@ -214,6 +215,28 @@ export const GameFlowDesigner = ({ screens, blocks, levels, objects, sprites, ga
     }
   };
 
+  const handleExportASM = () => {
+    try {
+      const asm = exportGameFlowToASM(gameFlow, screens, levels, blocks, objects, sprites, projectName);
+      downloadGameFlowASM(asm, projectName);
+      toast.success("Game Flow exported to ASM file successfully!");
+    } catch (error) {
+      console.error("ASM export error:", error);
+      toast.error("Failed to export ASM file");
+    }
+  };
+
+  const handleExportBIN = () => {
+    try {
+      const blob = exportGameFlowToBIN(gameFlow, screens, levels, blocks, objects, sprites, projectName);
+      downloadGameFlowBIN(blob, projectName);
+      toast.success("Game Flow exported to BIN file successfully!");
+    } catch (error) {
+      console.error("BIN export error:", error);
+      toast.error("Failed to export BIN file");
+    }
+  };
+
   // Sort game flow by order
   const sortedGameFlow = [...gameFlow].sort((a, b) => a.order - b.order);
   
@@ -388,15 +411,33 @@ export const GameFlowDesigner = ({ screens, blocks, levels, objects, sprites, ga
             <h3 className="font-bold text-lg">Game Flow Sequence</h3>
             <p className="text-xs text-muted-foreground">Organize screens and levels in your game</p>
           </div>
-          <Button
-            onClick={handleExportTAP}
-            disabled={gameFlow.length === 0}
-            size="sm"
-            className="gap-2"
-          >
-            <Download className="w-4 h-4" />
-            Export TAP
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                disabled={gameFlow.length === 0}
+                size="sm"
+                className="gap-2"
+              >
+                <Download className="w-4 h-4" />
+                Export
+                <ChevronDown className="w-4 h-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={handleExportTAP}>
+                <Download className="w-4 h-4 mr-2" />
+                Export TAP
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handleExportASM}>
+                <Download className="w-4 h-4 mr-2" />
+                Export ASM
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handleExportBIN}>
+                <Download className="w-4 h-4 mr-2" />
+                Export BIN
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
 
         <Tabs value={flowFilter} onValueChange={(v) => setFlowFilter(v as any)} className="mb-4">
