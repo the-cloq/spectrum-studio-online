@@ -28,6 +28,7 @@ const BLOCK_TYPES: { value: BlockType; label: string; description: string }[] = 
 
 export const BlockDesigner = ({ sprites, blocks, onBlocksChange }: BlockDesignerProps) => {
   const [selectedBlock, setSelectedBlock] = useState<Block | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
   const [editingBlock, setEditingBlock] = useState<Partial<Block>>({
     name: "",
     type: "solid",
@@ -67,6 +68,59 @@ export const BlockDesigner = ({ sprites, blocks, onBlocksChange }: BlockDesigner
     if (selectedBlock?.id === blockId) {
       setSelectedBlock(null);
     }
+    if (isEditing) {
+      setIsEditing(false);
+      setEditingBlock({
+        name: "",
+        type: "solid",
+        properties: {},
+      });
+    }
+  };
+
+  const handleEditBlock = (block: Block) => {
+    setIsEditing(true);
+    setEditingBlock({
+      ...block,
+      properties: { ...block.properties }
+    });
+  };
+
+  const handleSaveEdit = () => {
+    if (!editingBlock.name || !editingBlock.sprite || !editingBlock.id) {
+      toast.error("Invalid block data");
+      return;
+    }
+
+    const updatedBlocks = safeBlocks.map(b => 
+      b.id === editingBlock.id 
+        ? {
+            id: b.id,
+            name: editingBlock.name,
+            sprite: editingBlock.sprite,
+            type: editingBlock.type || "solid",
+            properties: editingBlock.properties || {},
+          } as Block
+        : b
+    );
+
+    onBlocksChange(updatedBlocks);
+    toast.success(`Block "${editingBlock.name}" updated!`);
+    setIsEditing(false);
+    setEditingBlock({
+      name: "",
+      type: "solid",
+      properties: {},
+    });
+  };
+
+  const handleCancelEdit = () => {
+    setIsEditing(false);
+    setEditingBlock({
+      name: "",
+      type: "solid",
+      properties: {},
+    });
   };
 
   const renderSpritePreview = (sprite: Sprite | undefined) => {
@@ -139,6 +193,17 @@ export const BlockDesigner = ({ sprites, blocks, onBlocksChange }: BlockDesigner
                     className="flex-1 h-7"
                     onClick={(e) => {
                       e.stopPropagation();
+                      handleEditBlock(block);
+                    }}
+                  >
+                    <Edit className="w-3 h-3" />
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="flex-1 h-7"
+                    onClick={(e) => {
+                      e.stopPropagation();
                       handleDeleteBlock(block.id);
                     }}
                   >
@@ -153,9 +218,11 @@ export const BlockDesigner = ({ sprites, blocks, onBlocksChange }: BlockDesigner
 
 
 
-      {/* Block Creator */}
+      {/* Block Creator/Editor */}
       <Card className="p-4">
-        <h2 className="text-lg font-bold text-primary mb-4">Create Block</h2>
+        <h2 className="text-lg font-bold text-primary mb-4">
+          {isEditing ? "Edit Block" : "Create Block"}
+        </h2>
         
         <div className="space-y-4">
           <div>
@@ -391,10 +458,21 @@ export const BlockDesigner = ({ sprites, blocks, onBlocksChange }: BlockDesigner
             </div>
           )}
 
-          <Button onClick={handleCreateBlock} className="w-full">
-            <Plus className="w-4 h-4 mr-2" />
-            Create Block
-          </Button>
+          {isEditing ? (
+            <div className="flex gap-2">
+              <Button onClick={handleCancelEdit} variant="outline" className="flex-1">
+                Cancel
+              </Button>
+              <Button onClick={handleSaveEdit} className="flex-1">
+                Save Changes
+              </Button>
+            </div>
+          ) : (
+            <Button onClick={handleCreateBlock} className="w-full">
+              <Plus className="w-4 h-4 mr-2" />
+              Create Block
+            </Button>
+          )}
         </div>
       </Card>
     </div>
