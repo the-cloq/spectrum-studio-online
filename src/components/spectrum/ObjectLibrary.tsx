@@ -97,7 +97,13 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
         return { 
           speed: 3, 
           jumpHeight: 40, 
-          gravity: 5
+          gravity: 5,
+          keyLeft: "q",
+          keyRight: "w",
+          keyJump: "p",
+          keyFire: "m",
+          keyUp: "o",
+          keyDown: "k"
         };
       case "enemy":
         return { 
@@ -395,9 +401,14 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
       const rawKey = e.key;
       const keyLower = rawKey.toLowerCase();
 
-      const isMoveLeft = rawKey === "ArrowLeft" || keyLower === "q";
-      const isMoveRight = rawKey === "ArrowRight" || keyLower === "w";
-      const isJump = rawKey === "ArrowUp" || rawKey === " " || keyLower === "p";
+      // Read key bindings from player properties
+      const keyLeft = selectedObject.properties.keyLeft?.toLowerCase() || "q";
+      const keyRight = selectedObject.properties.keyRight?.toLowerCase() || "w";
+      const keyJump = selectedObject.properties.keyJump?.toLowerCase() || "p";
+
+      const isMoveLeft = rawKey === "ArrowLeft" || keyLower === keyLeft;
+      const isMoveRight = rawKey === "ArrowRight" || keyLower === keyRight;
+      const isJump = rawKey === "ArrowUp" || rawKey === " " || keyLower === keyJump;
 
       if (!isMoveLeft && !isMoveRight && !isJump) return;
 
@@ -416,9 +427,14 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
       const rawKey = e.key;
       const keyLower = rawKey.toLowerCase();
 
-      const isMoveLeft = rawKey === "ArrowLeft" || keyLower === "q";
-      const isMoveRight = rawKey === "ArrowRight" || keyLower === "w";
-      const isJump = rawKey === "ArrowUp" || rawKey === " " || keyLower === "p";
+      // Read key bindings from player properties
+      const keyLeft = selectedObject.properties.keyLeft?.toLowerCase() || "q";
+      const keyRight = selectedObject.properties.keyRight?.toLowerCase() || "w";
+      const keyJump = selectedObject.properties.keyJump?.toLowerCase() || "p";
+
+      const isMoveLeft = rawKey === "ArrowLeft" || keyLower === keyLeft;
+      const isMoveRight = rawKey === "ArrowRight" || keyLower === keyRight;
+      const isJump = rawKey === "ArrowUp" || rawKey === " " || keyLower === keyJump;
 
       if (!isMoveLeft && !isMoveRight && !isJump) return;
 
@@ -800,6 +816,79 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
                         step={1}
                       />
                       <p className="text-xs text-muted-foreground">Fall speed (higher = faster)</p>
+                    </div>
+
+                    <div className="border-t pt-4 mt-4">
+                      <h4 className="text-sm font-semibold mb-3">Control Keys</h4>
+                      <p className="text-xs text-muted-foreground mb-3">Single character or special keys (space, enter, shift)</p>
+                      
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-2">
+                          <Label>Move Left</Label>
+                          <Input
+                            value={selectedObject.properties.keyLeft || "q"}
+                            onChange={(e) => updateProperty("keyLeft", e.target.value.toLowerCase())}
+                            maxLength={10}
+                            placeholder="q"
+                            className="font-mono"
+                          />
+                        </div>
+                        
+                        <div className="space-y-2">
+                          <Label>Move Right</Label>
+                          <Input
+                            value={selectedObject.properties.keyRight || "w"}
+                            onChange={(e) => updateProperty("keyRight", e.target.value.toLowerCase())}
+                            maxLength={10}
+                            placeholder="w"
+                            className="font-mono"
+                          />
+                        </div>
+                        
+                        <div className="space-y-2">
+                          <Label>Jump</Label>
+                          <Input
+                            value={selectedObject.properties.keyJump || "p"}
+                            onChange={(e) => updateProperty("keyJump", e.target.value.toLowerCase())}
+                            maxLength={10}
+                            placeholder="p"
+                            className="font-mono"
+                          />
+                        </div>
+                        
+                        <div className="space-y-2">
+                          <Label>Fire</Label>
+                          <Input
+                            value={selectedObject.properties.keyFire || "m"}
+                            onChange={(e) => updateProperty("keyFire", e.target.value.toLowerCase())}
+                            maxLength={10}
+                            placeholder="m"
+                            className="font-mono"
+                          />
+                        </div>
+                        
+                        <div className="space-y-2">
+                          <Label>Move Up</Label>
+                          <Input
+                            value={selectedObject.properties.keyUp || "o"}
+                            onChange={(e) => updateProperty("keyUp", e.target.value.toLowerCase())}
+                            maxLength={10}
+                            placeholder="o"
+                            className="font-mono"
+                          />
+                        </div>
+                        
+                        <div className="space-y-2">
+                          <Label>Move Down</Label>
+                          <Input
+                            value={selectedObject.properties.keyDown || "k"}
+                            onChange={(e) => updateProperty("keyDown", e.target.value.toLowerCase())}
+                            maxLength={10}
+                            placeholder="k"
+                            className="font-mono"
+                          />
+                        </div>
+                      </div>
                     </div>
 
                     <div className="border-t pt-4 mt-4">
