@@ -633,16 +633,30 @@ function createBinaryGameEngine(
   engine.push(0x00, 0x00);        // Placeholder
   engine.push(0x19);              // ADD HL, DE
   
-  // Read block type (first byte)
+  // Read block type (first byte at block address)
   engine.push(0x7e);              // LD A, (HL)
+  engine.push(0x47);              // LD B, A (save block type in B)
   
   // Check if solid (type == 0)
   engine.push(0xa7);              // AND A
-  const jrNotSolidPos = engine.length;
-  engine.push(0x20, 0x00);        // JR NZ, next_tile (placeholder)
+  const jrIsSolidPos = engine.length;
+  engine.push(0x28, 0x00);        // JR Z, land_on_block (placeholder)
   
-  // Solid block found! Land on it
+  // Check if conveyor (type == 2)
+  engine.push(0xfe, 0x02);        // CP 2
+  const jrIsConveyorPos = engine.length;
+  engine.push(0x28, 0x00);        // JR Z, land_on_block (placeholder)
+  
+  // Not a landable block, try next tile
+  const jrNotLandablePos = engine.length;
+  engine.push(0x18, 0x00);        // JR next_tile (placeholder)
+  
+  // Landable block found (solid or conveyor)!
+  const landOnBlockPos = engine.length;
   engine.push(0xdd, 0xe1);        // POP IX (restore IX)
+  
+  // Save block address (HL) for reading conveyor properties later
+  engine.push(0xe5);              // PUSH HL (save block address)
   
   // Calculate landing Y: tile Y * 8 (shift left 3 times)
   engine.push(0x79);              // LD A, C (tile Y)
@@ -662,6 +676,86 @@ function createBinaryGameEngine(
   const isJumpingWriteIdx2 = engine.length;
   engine.push(0x00, 0x00);        // Placeholder
   
+  // Check if this is a conveyor block (type == 2)
+  engine.push(0x78);              // LD A, B (block type)
+  engine.push(0xfe, 0x02);        // CP 2
+  const jrNotConveyorPos = engine.length;
+  engine.push(0x20, 0x00);        // JR NZ, skip_conveyor (placeholder)
+  
+  // It's a conveyor! Read properties and apply push
+  // Pop block address from stack (we pushed it earlier)
+  engine.push(0xe1);              // POP HL
+  
+  // HL points to block definition (byte 0 = spriteId, byte 1 = type, byte 2 = flags)
+  engine.push(0x23);              // INC HL (skip spriteId)
+  engine.push(0x23);              // INC HL (skip type)
+  engine.push(0x7e);              // LD A, (HL) (read flags)
+  engine.push(0x23);              // INC HL (now at properties)
+  
+  // Check if HAS_SPEED flag (bit 0) is set
+  engine.push(0xcb, 0x47);        // BIT 0, A
+  const jrNoConveyorSpeedPos = engine.length;
+  engine.push(0x28, 0x00);        // JR Z, no_conveyor_push (placeholder)
+  
+  // Read speed (first property byte, fixed8 format)
+  engine.push(0x7e);              // LD A, (HL) (speed)
+  engine.push(0x57);              // LD D, A (save speed in D)
+  engine.push(0x23);              // INC HL
+  
+  // Check if HAS_DIRECTION flag (bit 1) is set in flags (need to re-read flags)
+  engine.push(0x2b);              // DEC HL
+  engine.push(0x2b);              // DEC HL
+  engine.push(0x2b);              // DEC HL (back to flags)
+  engine.push(0x7e);              // LD A, (HL)
+  engine.push(0xcb, 0x4f);        // BIT 1, A
+  const jrNoConveyorDirPos = engine.length;
+  engine.push(0x28, 0x00);        // JR Z, no_conveyor_push (placeholder)
+  
+  // Read direction (second property byte after speed)
+  engine.push(0x23);              // INC HL (to properties)
+  engine.push(0x23);              // INC HL (skip speed)
+  engine.push(0x7e);              // LD A, (HL) (direction: 0xFF=left, 1=right)
+  
+  // Apply conveyor push to playerX
+  engine.push(0xfe, 0x01);        // CP 1 (check if right)
+  const jrConveyorLeftPos = engine.length;
+  engine.push(0x20, 0x00);        // JR NZ, conveyor_left (placeholder)
+  
+  // Conveyor pushing right
+  engine.push(0x3a);              // LD A, (playerX)
+  const playerXReadIdxConveyor1 = engine.length;
+  engine.push(0x00, 0x00);        // Placeholder
+  engine.push(0x82);              // ADD A, D (add speed)
+  engine.push(0x32);              // LD (playerX), A
+  const playerXWriteIdxConveyor1 = engine.length;
+  engine.push(0x00, 0x00);        // Placeholder
+  
+  const jrConveyorDonePos = engine.length;
+  engine.push(0x18, 0x00);        // JR conveyor_done (placeholder)
+  
+  // Conveyor pushing left
+  const conveyorLeftPos = engine.length;
+  engine.push(0x3a);              // LD A, (playerX)
+  const playerXReadIdxConveyor2 = engine.length;
+  engine.push(0x00, 0x00);        // Placeholder
+  engine.push(0x92);              // SUB D (subtract speed)
+  engine.push(0x32);              // LD (playerX), A
+  const playerXWriteIdxConveyor2 = engine.length;
+  engine.push(0x00, 0x00);        // Placeholder
+  
+  const conveyorDonePos = engine.length;
+  engine.push(0x3e, 0x06);        // LD A, 6
+  engine.push(0xd3, 0xfe);        // OUT (254), A (border yellow - on conveyor)
+  
+  const jrSkipConveyorPos = engine.length;
+  engine.push(0x18, 0x00);        // JR skip_conveyor (placeholder)
+  
+  // Not a conveyor or no push - just pop the saved block address
+  const noConveyorPushPos = engine.length;
+  engine.push(0xe1);              // POP HL (discard saved block address)
+  
+  // Skip conveyor logic
+  const skipConveyorPos = engine.length;
   engine.push(0x3e, 0x03);        // LD A, 3
   engine.push(0xd3, 0xfe);        // OUT (254), A (border magenta - landed on block)
   
@@ -1008,6 +1102,18 @@ function createBinaryGameEngine(
   engine[playerXReadIdx4] = playerXVarAddr & 0xff;
   engine[playerXReadIdx4 + 1] = (playerXVarAddr >> 8) & 0xff;
   
+  engine[playerXReadIdxConveyor1] = playerXVarAddr & 0xff;
+  engine[playerXReadIdxConveyor1 + 1] = (playerXVarAddr >> 8) & 0xff;
+  
+  engine[playerXWriteIdxConveyor1] = playerXVarAddr & 0xff;
+  engine[playerXWriteIdxConveyor1 + 1] = (playerXVarAddr >> 8) & 0xff;
+  
+  engine[playerXReadIdxConveyor2] = playerXVarAddr & 0xff;
+  engine[playerXReadIdxConveyor2 + 1] = (playerXVarAddr >> 8) & 0xff;
+  
+  engine[playerXWriteIdxConveyor2] = playerXVarAddr & 0xff;
+  engine[playerXWriteIdxConveyor2 + 1] = (playerXVarAddr >> 8) & 0xff;
+  
   // Patch player velocity X variable addresses
   engine[playerVelXReadIdx1] = playerVelXVarAddr & 0xff;
   engine[playerVelXReadIdx1 + 1] = (playerVelXVarAddr >> 8) & 0xff;
@@ -1109,6 +1215,11 @@ function createBinaryGameEngine(
   const drawPlayerAddr = 32768 + drawPlayerPos;
   const noKeyAddr = 32768 + noKeyPos;
   const playerSetupAddr = 32768 + playerSetupPos;
+  const landOnBlockAddr = 32768 + landOnBlockPos;
+  const skipConveyorAddr = 32768 + skipConveyorPos;
+  const noConveyorPushAddr = 32768 + noConveyorPushPos;
+  const conveyorLeftAddr = 32768 + conveyorLeftPos;
+  const conveyorDoneAddr = 32768 + conveyorDonePos;
   
   let disp = skipJumpInitAddr - (32768 + jrNoJumpPos + 2);
   engine[jrNoJumpPos + 1] = disp & 0xff;
@@ -1135,8 +1246,33 @@ function createBinaryGameEngine(
   disp = nextTileAddr - (32768 + jrNotThisTilePos2 + 2);
   engine[jrNotThisTilePos2 + 1] = disp & 0xff;
   
-  disp = nextTileAddr - (32768 + jrNotSolidPos + 2);
-  engine[jrNotSolidPos + 1] = disp & 0xff;
+  disp = nextTileAddr - (32768 + jrNotLandablePos + 2);
+  engine[jrNotLandablePos + 1] = disp & 0xff;
+  
+  // Conveyor landing jumps
+  disp = landOnBlockAddr - (32768 + jrIsSolidPos + 2);
+  engine[jrIsSolidPos + 1] = disp & 0xff;
+  
+  disp = landOnBlockAddr - (32768 + jrIsConveyorPos + 2);
+  engine[jrIsConveyorPos + 1] = disp & 0xff;
+  
+  disp = skipConveyorAddr - (32768 + jrNotConveyorPos + 2);
+  engine[jrNotConveyorPos + 1] = disp & 0xff;
+  
+  disp = noConveyorPushAddr - (32768 + jrNoConveyorSpeedPos + 2);
+  engine[jrNoConveyorSpeedPos + 1] = disp & 0xff;
+  
+  disp = noConveyorPushAddr - (32768 + jrNoConveyorDirPos + 2);
+  engine[jrNoConveyorDirPos + 1] = disp & 0xff;
+  
+  disp = conveyorLeftAddr - (32768 + jrConveyorLeftPos + 2);
+  engine[jrConveyorLeftPos + 1] = disp & 0xff;
+  
+  disp = conveyorDoneAddr - (32768 + jrConveyorDonePos + 2);
+  engine[jrConveyorDonePos + 1] = disp & 0xff;
+  
+  disp = skipConveyorAddr - (32768 + jrSkipConveyorPos + 2);
+  engine[jrSkipConveyorPos + 1] = disp & 0xff;
   
   disp = checkRightKeyAddr - (32768 + jrToCheckRightPos2 + 2);
   engine[jrToCheckRightPos2 + 1] = disp & 0xff;
