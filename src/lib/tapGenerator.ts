@@ -85,6 +85,68 @@ export class TAPGenerator {
     this.addBlock(basicData);
   }
 
+  // Add a BASIC program header and loader with SCREEN$ support
+  addBasicLoaderWithScreen(codeLength: number, codeStart: number = 32768) {
+    const basicProgram: number[] = [];
+    
+    // Line 10: CLEAR 32767
+    basicProgram.push(0x00, 0x0a);
+    const line10Start = basicProgram.length;
+    basicProgram.push(0x00, 0x00);
+    basicProgram.push(0xfd, 0x20);
+    basicProgram.push(0x33, 0x32, 0x37, 0x36, 0x37);
+    basicProgram.push(0x0e, 0x00, 0x00, 0xff, 0x7f, 0x00);
+    basicProgram.push(0x0d);
+    const line10Length = basicProgram.length - line10Start - 2;
+    basicProgram[line10Start] = line10Length & 0xff;
+    basicProgram[line10Start + 1] = (line10Length >> 8) & 0xff;
+    
+    // Line 20: LOAD "" SCREEN$ (no space before SCREEN$)
+    basicProgram.push(0x00, 0x14);
+    const line20Start = basicProgram.length;
+    basicProgram.push(0x00, 0x00);
+    basicProgram.push(0xef, 0x20, 0x22, 0x22, 0xaa, 0x0d);
+    const line20Length = basicProgram.length - line20Start - 2;
+    basicProgram[line20Start] = line20Length & 0xff;
+    basicProgram[line20Start + 1] = (line20Length >> 8) & 0xff;
+    
+    // Line 30: LOAD "" CODE
+    basicProgram.push(0x00, 0x1e);
+    const line30Start = basicProgram.length;
+    basicProgram.push(0x00, 0x00);
+    basicProgram.push(0xef, 0x20, 0x22, 0x22, 0xaf, 0x0d);
+    const line30Length = basicProgram.length - line30Start - 2;
+    basicProgram[line30Start] = line30Length & 0xff;
+    basicProgram[line30Start + 1] = (line30Length >> 8) & 0xff;
+    
+    // Line 40: RANDOMIZE USR 32768
+    basicProgram.push(0x00, 0x28);
+    const line40Start = basicProgram.length;
+    basicProgram.push(0x00, 0x00);
+    basicProgram.push(0xf9, 0x20, 0xc0, 0x20);
+    basicProgram.push(0x33, 0x32, 0x37, 0x36, 0x38);
+    basicProgram.push(0x0e, 0x00, 0x00, 0x00, 0x80, 0x00);
+    basicProgram.push(0x0d);
+    const line40Length = basicProgram.length - line40Start - 2;
+    basicProgram[line40Start] = line40Length & 0xff;
+    basicProgram[line40Start + 1] = (line40Length >> 8) & 0xff;
+    
+    // Build header
+    const headerData: number[] = [0x00, 0x00];
+    const filename = "Loader    ";
+    for (let i = 0; i < 10; i++) {
+      headerData.push(filename.charCodeAt(i));
+    }
+    headerData.push(basicProgram.length & 0xff);
+    headerData.push((basicProgram.length >> 8) & 0xff);
+    headerData.push(0x0a, 0x00);
+    headerData.push(basicProgram.length & 0xff);
+    headerData.push((basicProgram.length >> 8) & 0xff);
+    
+    this.addBlock(headerData);
+    this.addBlock([0xff, ...basicProgram]);
+  }
+
   // Add a CODE header block (type 0x00)
   addHeader(filename: string, dataLength: number, autoStart: number = 32768) {
     const headerData: number[] = [
