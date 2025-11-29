@@ -211,6 +211,7 @@ export function exportGameFlowToTAP(
 
 /**
  * Create Z80 game engine that reads binary data banks
+ * This version reads from the binary tables instead of embedding SCR data
  */
 function createBinaryGameEngine(
   spriteBankAddr: number,
@@ -225,171 +226,372 @@ function createBinaryGameEngine(
 ): number[] {
   const engine: number[] = [];
 
-  // Simple test engine: display a screen from binary data and enable keyboard movement
-  // This is Phase 1+2 combined: static display + keyboard test
-
-  // Load background screen (render target screen to SCR format for now)
-  const bgScr = encodeScreenToSCR(targetScreen, blocks, objects, sprites);
+  // ===== INITIALIZATION =====
   
-  // Copy screen to display memory
-  // LD HL, bgScreenAddr
-  engine.push(0x21);
-  const bgAddrIdx = engine.length;
-  engine.push(0x00, 0x00); // placeholder
+  // Clear screen memory (pixel area)
+  engine.push(0x21, 0x00, 0x40);  // LD HL, 16384
+  engine.push(0x11, 0x01, 0x40);  // LD DE, 16385
+  engine.push(0x01, 0xff, 0x17);  // LD BC, 6143
+  engine.push(0x36, 0x00);        // LD (HL), 0
+  engine.push(0xed, 0xb0);        // LDIR
 
-  // LD DE, 16384 (screen memory)
-  engine.push(0x11, 0x00, 0x40);
+  // Set attributes (white INK on black PAPER, BRIGHT)
+  engine.push(0x21, 0x00, 0x58);  // LD HL, 22528
+  engine.push(0x11, 0x01, 0x58);  // LD DE, 22529
+  engine.push(0x01, 0xff, 0x02);  // LD BC, 767
+  engine.push(0x36, 0x47);        // LD (HL), 71 (BRIGHT 1, PAPER 0, INK 7)
+  engine.push(0xed, 0xb0);        // LDIR
 
-  // LD BC, 6912
-  engine.push(0x01, 0x00, 0x1b);
+  // Set border to black
+  engine.push(0x3e, 0x00);        // LD A, 0
+  engine.push(0xd3, 0xfe);        // OUT (254), A
+
+  // ===== RENDER SCREEN FROM BINARY DATA =====
   
-  // LDIR
-  engine.push(0xed, 0xb0);
-
-  // Force bright white ink on black paper
-  engine.push(0x21, 0x00, 0x58); // LD HL, 22528
-  engine.push(0x36, 0x47);       // LD (HL), 0x47
-  engine.push(0x11, 0x01, 0x58); // LD DE, 22529
-  engine.push(0x01, 0xff, 0x02); // LD BC, 767
-  engine.push(0xed, 0xb0);       // LDIR
-
+  // Find target screen in screen bank
+  // For now, render first screen (screenId at offset 0)
+  // Screen bank format: screenCount(2) + screens[]
+  // Each screen: width(2) height(2) tileCount(2) tiles[] objectCount(2) objects[]
+  
+  // Load screen bank address
+  engine.push(0x21);              // LD HL, screenBankAddr
+  const screenBankAddrIdx = engine.length;
+  engine.push(0x00, 0x00);        // Placeholder
+  
+  // Skip screen count (2 bytes) to get to first screen
+  engine.push(0x23, 0x23);        // INC HL, INC HL
+  
+  // Read screen width (not used for now)
+  engine.push(0x23, 0x23);        // INC HL, INC HL
+  
+  // Read screen height (not used for now)
+  engine.push(0x23, 0x23);        // INC HL, INC HL
+  
+  // Read tile count into BC
+  engine.push(0x4e);              // LD C, (HL)
+  engine.push(0x23);              // INC HL
+  engine.push(0x46);              // LD B, (HL)
+  engine.push(0x23);              // INC HL
+  
+  // Now HL points to first tile
+  // Tile format: x(2) y(2) blockIndex(2) = 6 bytes per tile
+  
+  // Store tile pointer in IX
+  engine.push(0xdd, 0xe5);        // PUSH IX
+  engine.push(0xdd, 0xe1);        // POP IX (IX = HL)
+  
+  // ===== TILE RENDERING LOOP =====
+  const tileLoopStart = 32768 + engine.length;
+  
+  // Check if BC == 0 (no more tiles)
+  engine.push(0x78);              // LD A, B
+  engine.push(0xb1);              // OR C
+  const jzToPlayerSetup = engine.length;
+  engine.push(0x28, 0x00);        // JR Z, player_setup (placeholder)
+  
+  // Read tile X position into D
+  engine.push(0xdd, 0x56, 0x00);  // LD D, (IX+0)
+  
+  // Read tile Y position into E
+  engine.push(0xdd, 0x5e, 0x02);  // LD E, (IX+2)
+  
+  // Read block index into HL
+  engine.push(0xdd, 0x6e, 0x04);  // LD L, (IX+4)
+  engine.push(0xdd, 0x66, 0x05);  // LD H, (IX+5)
+  
+  // Save BC and IX
+  engine.push(0xc5);              // PUSH BC
+  engine.push(0xdd, 0xe5);        // PUSH IX
+  
+  // Look up block in block bank
+  // Block bank format: blockCount(2) + blocks[]
+  // Each block: type(1) spriteIndex(2) propsOffset(2) = 5 bytes per block
+  
+  // Calculate block address: blockBankAddr + 2 + (blockIndex * 5)
+  // First multiply HL by 5
+  engine.push(0x29);              // ADD HL, HL  (HL = blockIndex * 2)
+  engine.push(0x54);              // LD D, H
+  engine.push(0x5d);              // LD E, L     (DE = blockIndex * 2)
+  engine.push(0x29);              // ADD HL, HL  (HL = blockIndex * 4)
+  engine.push(0x19);              // ADD HL, DE  (HL = blockIndex * 5)
+  
+  // Add block bank base address + 2
+  engine.push(0x11);              // LD DE, blockBankAddr + 2
+  const blockBankAddrIdx = engine.length;
+  engine.push(0x00, 0x00);        // Placeholder
+  engine.push(0x19);              // ADD HL, DE
+  
+  // Skip block type (1 byte)
+  engine.push(0x23);              // INC HL
+  
+  // Read sprite index into DE
+  engine.push(0x5e);              // LD E, (HL)
+  engine.push(0x23);              // INC HL
+  engine.push(0x56);              // LD D, (HL)
+  
+  // Look up sprite in sprite bank
+  // Sprite bank format: spriteCount(2) + sprites[]
+  // Each sprite: width(1) height(1) frameCount(2) frameDataOffset(2) collisionBox(4) = 10 bytes per sprite
+  
+  // Calculate sprite address: spriteBankAddr + 2 + (spriteIndex * 10)
+  engine.push(0xeb);              // EX DE, HL   (HL = spriteIndex)
+  
+  // Multiply by 10: HL * 8 + HL * 2
+  engine.push(0x29);              // ADD HL, HL  (HL * 2)
+  engine.push(0x54);              // LD D, H
+  engine.push(0x5d);              // LD E, L     (DE = spriteIndex * 2)
+  engine.push(0x29);              // ADD HL, HL  (HL * 4)
+  engine.push(0x29);              // ADD HL, HL  (HL * 8)
+  engine.push(0x19);              // ADD HL, DE  (HL * 10)
+  
+  // Add sprite bank base address + 2
+  engine.push(0x11);              // LD DE, spriteBankAddr + 2
+  const spriteBankAddrIdx = engine.length;
+  engine.push(0x00, 0x00);        // Placeholder
+  engine.push(0x19);              // ADD HL, DE
+  
+  // Read sprite width
+  engine.push(0x7e);              // LD A, (HL)
+  engine.push(0x23);              // INC HL
+  engine.push(0x32);              // LD (spriteWidth), A
+  const spriteWidthAddr = engine.length;
+  engine.push(0x00, 0x00);        // Placeholder
+  
+  // Read sprite height
+  engine.push(0x7e);              // LD A, (HL)
+  engine.push(0x23);              // INC HL
+  engine.push(0x32);              // LD (spriteHeight), A
+  const spriteHeightAddr = engine.length;
+  engine.push(0x00, 0x00);        // Placeholder
+  
+  // Skip frame count (2 bytes)
+  engine.push(0x23, 0x23);        // INC HL, INC HL
+  
+  // Read frame data offset into HL
+  engine.push(0x5e);              // LD E, (HL)
+  engine.push(0x23);              // INC HL
+  engine.push(0x56);              // LD D, (HL)
+  engine.push(0xeb);              // EX DE, HL   (HL = frame data offset)
+  
+  // Add sprite bank base to get absolute address
+  engine.push(0x11);              // LD DE, spriteBankAddr
+  const spriteBankAddrIdx2 = engine.length;
+  engine.push(0x00, 0x00);        // Placeholder
+  engine.push(0x19);              // ADD HL, DE  (HL = frame pixel data)
+  
+  // Now render the 8x8 sprite at tile position
+  // Pop tile X, Y from stack (currently in D, E from earlier)
+  engine.push(0xd1);              // POP DE (restore original IX)
+  engine.push(0xd1);              // POP DE (now DE has correct IX value)
+  engine.push(0xdd, 0xe1);        // POP IX
+  engine.push(0xc1);              // POP BC
+  
+  // For simplicity, just draw a white 8x8 block at the tile position
+  // TODO: Implement proper sprite pixel rendering
+  // This is a placeholder that draws white blocks
+  
+  // Calculate screen address for tile at (tileX * 8, tileY * 8)
+  // For now, just mark that we've processed this tile
+  
+  // Move to next tile (advance IX by 6 bytes)
+  engine.push(0xdd, 0x23);        // INC IX (6 times)
+  engine.push(0xdd, 0x23);
+  engine.push(0xdd, 0x23);
+  engine.push(0xdd, 0x23);
+  engine.push(0xdd, 0x23);
+  engine.push(0xdd, 0x23);
+  
+  // Decrement tile counter
+  engine.push(0x0b);              // DEC BC
+  
+  // Loop back
+  let loopOffset = tileLoopStart - (32768 + engine.length + 2);
+  engine.push(0x18, loopOffset & 0xff);  // JR tile_loop
+  
+  // ===== PLAYER SETUP =====
+  const playerSetupPos = engine.length;
+  
+  // Restore IX
+  engine.push(0xdd, 0xe1);        // POP IX
+  
   // Initialize player position
   const playerXPixel = 128;
   const playerYPixel = 96;
   
-  engine.push(0x21);
-  const playerXAddrIdx = engine.length;
-  engine.push(0x00, 0x00);
-  engine.push(0x36, playerXPixel & 0xff);
-
-  // Set border to black
-  engine.push(0x3e, 0x00, 0xd3, 0xfe);
-
-  // Main game loop
-  const gameLoopAddr = 32768 + engine.length;
-
-  // Read keyboard (Q/W keys)
-  engine.push(0x01, 0xfe, 0xfb); // LD BC, 0xFBFE
-  engine.push(0xed, 0x78);       // IN A, (C)
+  engine.push(0x3e, playerXPixel & 0xff);  // LD A, playerX
+  engine.push(0x32);              // LD (playerX), A
+  const playerXVarIdx = engine.length;
+  engine.push(0x00, 0x00);        // Placeholder
   
-  // Check W key (move right)
-  engine.push(0xcb, 0x4f);       // BIT 1, A
+  // ===== MAIN GAME LOOP =====
+  const gameLoopAddr = 32768 + engine.length;
+  
+  // Read keyboard (Q/W keys on port 0xFBFE)
+  engine.push(0x01, 0xfe, 0xfb);  // LD BC, 0xFBFE
+  engine.push(0xed, 0x78);        // IN A, (C)
+  
+  // Check W key (bit 1, move right)
+  engine.push(0xcb, 0x4f);        // BIT 1, A
   const jrNoWPos = engine.length;
-  engine.push(0x20, 0x00);       // JR NZ, check_q
+  engine.push(0x20, 0x00);        // JR NZ, check_q (placeholder)
   
   // W pressed - move right
-  engine.push(0x21);
+  engine.push(0x3a);              // LD A, (playerX)
   const playerXReadIdx1 = engine.length;
-  engine.push(0x00, 0x00);
-  engine.push(0x7e);             // LD A, (HL)
-  engine.push(0xc6, 0x08);       // ADD A, 8
-  engine.push(0x77);             // LD (HL), A
-  engine.push(0x3e, 0x02, 0xd3, 0xfe); // Border red
+  engine.push(0x00, 0x00);        // Placeholder
+  engine.push(0xc6, 0x08);        // ADD A, 8
+  engine.push(0x32);              // LD (playerX), A
+  const playerXWriteIdx1 = engine.length;
+  engine.push(0x00, 0x00);        // Placeholder
+  engine.push(0x3e, 0x02);        // LD A, 2
+  engine.push(0xd3, 0xfe);        // OUT (254), A (border red)
   
-  const jrToDrawFromWPos = engine.length;
-  engine.push(0x18, 0x00);       // JR draw_pixel
+  const jrToDrawPos = engine.length;
+  engine.push(0x18, 0x00);        // JR draw_player (placeholder)
   
-  // Check Q key (move left)
+  // Check Q key (bit 0, move left)
   const checkQPos = engine.length;
-  engine.push(0xcb, 0x47);       // BIT 0, A
+  engine.push(0xcb, 0x47);        // BIT 0, A
   const jrNoQPos = engine.length;
-  engine.push(0x20, 0x00);       // JR NZ, no_key
+  engine.push(0x20, 0x00);        // JR NZ, no_key (placeholder)
   
   // Q pressed - move left
-  engine.push(0x21);
+  engine.push(0x3a);              // LD A, (playerX)
   const playerXReadIdx2 = engine.length;
-  engine.push(0x00, 0x00);
-  engine.push(0x7e);             // LD A, (HL)
-  engine.push(0xd6, 0x08);       // SUB 8
-  engine.push(0x77);             // LD (HL), A
-  engine.push(0x3e, 0x05, 0xd3, 0xfe); // Border cyan
-
-  const noKeyPos = engine.length;
-  const drawPixelPos = engine.length;
+  engine.push(0x00, 0x00);        // Placeholder
+  engine.push(0xd6, 0x08);        // SUB 8
+  engine.push(0x32);              // LD (playerX), A
+  const playerXWriteIdx2 = engine.length;
+  engine.push(0x00, 0x00);        // Placeholder
+  engine.push(0x3e, 0x05);        // LD A, 5
+  engine.push(0xd3, 0xfe);        // OUT (254), A (border cyan)
   
-  // Draw pixel at player position
-  engine.push(0x21);
+  // Draw player at current position
+  const noKeyPos = engine.length;
+  const drawPlayerPos = engine.length;
+  
+  // Load player X position
+  engine.push(0x3a);              // LD A, (playerX)
   const playerXReadIdx3 = engine.length;
-  engine.push(0x00, 0x00);
-  engine.push(0x7e);             // LD A, (HL) - X position
-  engine.push(0x4f);             // LD C, A
-
-  // Calculate screen address for fixed Y
-  engine.push(0x3e, playerYPixel & 0xff); // LD A, Y
-  engine.push(0xe6, 0xc0);       // AND 192
-  engine.push(0xcb, 0x3f);       // SRL A (3x)
-  engine.push(0xcb, 0x3f);
-  engine.push(0xcb, 0x3f);
-  engine.push(0x67);             // LD H, A
-
-  engine.push(0x3e, playerYPixel & 0xff);
-  engine.push(0xe6, 0x07);       // AND 7
-  engine.push(0xb4);             // OR H
-  engine.push(0xc6, 0x40);       // ADD A, 0x40
-  engine.push(0x67);             // LD H, A
-
-  engine.push(0x3e, playerYPixel & 0xff);
-  engine.push(0xe6, 0x38);       // AND 56
-  engine.push(0xcb, 0x27);       // SLA A (2x)
-  engine.push(0xcb, 0x27);
-  engine.push(0x6f);             // LD L, A
-
-  engine.push(0x79);             // LD A, C (X)
-  engine.push(0xcb, 0x3f);       // SRL A (3x)
-  engine.push(0xcb, 0x3f);
-  engine.push(0xcb, 0x3f);
-  engine.push(0x85);             // ADD A, L
-  engine.push(0x6f);             // LD L, A
-
+  engine.push(0x00, 0x00);        // Placeholder
+  engine.push(0x4f);              // LD C, A
+  
+  // Calculate screen address for fixed Y position
+  engine.push(0x3e, playerYPixel & 0xff);  // LD A, playerY
+  engine.push(0xe6, 0xc0);        // AND 192
+  engine.push(0xcb, 0x3f);        // SRL A
+  engine.push(0xcb, 0x3f);        // SRL A
+  engine.push(0xcb, 0x3f);        // SRL A
+  engine.push(0x67);              // LD H, A
+  
+  engine.push(0x3e, playerYPixel & 0xff);  // LD A, playerY
+  engine.push(0xe6, 0x07);        // AND 7
+  engine.push(0xb4);              // OR H
+  engine.push(0xc6, 0x40);        // ADD A, 64
+  engine.push(0x67);              // LD H, A
+  
+  engine.push(0x3e, playerYPixel & 0xff);  // LD A, playerY
+  engine.push(0xe6, 0x38);        // AND 56
+  engine.push(0xcb, 0x27);        // SLA A
+  engine.push(0xcb, 0x27);        // SLA A
+  engine.push(0x6f);              // LD L, A
+  
+  engine.push(0x79);              // LD A, C (X)
+  engine.push(0xcb, 0x3f);        // SRL A
+  engine.push(0xcb, 0x3f);        // SRL A
+  engine.push(0xcb, 0x3f);        // SRL A
+  engine.push(0x85);              // ADD A, L
+  engine.push(0x6f);              // LD L, A
+  
   // Draw white pixel
-  engine.push(0x36, 0xff);       // LD (HL), 0xFF
-
+  engine.push(0x36, 0xff);        // LD (HL), 255
+  
   // Small delay
-  engine.push(0x06, 0x1e);       // LD B, 30
-  engine.push(0x10, 0xfe);       // DJNZ -2
-
-  // Loop back
-  let loopOffset = gameLoopAddr - (32768 + engine.length + 2);
-  engine.push(0x18, loopOffset & 0xff);
-
-  // Append background screen data
-  const bgScreenDataAddr = 32768 + engine.length;
-  engine.push(...bgScr);
+  engine.push(0x06, 0x1e);        // LD B, 30
+  const delayLoopPos = engine.length;
+  engine.push(0x10, 0xfe);        // DJNZ -2
+  
+  // Loop back to game loop
+  loopOffset = gameLoopAddr - (32768 + engine.length + 2);
+  engine.push(0x18, loopOffset & 0xff);  // JR game_loop
+  
+  // ===== DATA AREA =====
   
   // Player X variable
-  const playerXAddr = 32768 + engine.length;
+  const playerXVarAddr = 32768 + engine.length;
   engine.push(playerXPixel & 0xff);
-
-  // Patch all address placeholders
-  engine[bgAddrIdx] = bgScreenDataAddr & 0xff;
-  engine[bgAddrIdx + 1] = (bgScreenDataAddr >> 8) & 0xff;
   
-  engine[playerXAddrIdx] = playerXAddr & 0xff;
-  engine[playerXAddrIdx + 1] = (playerXAddr >> 8) & 0xff;
+  // Sprite width variable
+  const spriteWidthVarAddr = 32768 + engine.length;
+  engine.push(0x08);
   
-  engine[playerXReadIdx1] = playerXAddr & 0xff;
-  engine[playerXReadIdx1 + 1] = (playerXAddr >> 8) & 0xff;
+  // Sprite height variable
+  const spriteHeightVarAddr = 32768 + engine.length;
+  engine.push(0x08);
   
-  engine[playerXReadIdx2] = playerXAddr & 0xff;
-  engine[playerXReadIdx2 + 1] = (playerXAddr >> 8) & 0xff;
+  // ===== PATCH ALL ADDRESS PLACEHOLDERS =====
   
-  engine[playerXReadIdx3] = playerXAddr & 0xff;
-  engine[playerXReadIdx3 + 1] = (playerXAddr >> 8) & 0xff;
-
-  // Patch JR offsets
+  // Patch screen bank address
+  engine[screenBankAddrIdx] = screenBankAddr & 0xff;
+  engine[screenBankAddrIdx + 1] = (screenBankAddr >> 8) & 0xff;
+  
+  // Patch block bank address
+  const blockBankWithOffset = blockBankAddr + 2;
+  engine[blockBankAddrIdx] = blockBankWithOffset & 0xff;
+  engine[blockBankAddrIdx + 1] = (blockBankWithOffset >> 8) & 0xff;
+  
+  // Patch sprite bank addresses
+  const spriteBankWithOffset = spriteBankAddr + 2;
+  engine[spriteBankAddrIdx] = spriteBankWithOffset & 0xff;
+  engine[spriteBankAddrIdx + 1] = (spriteBankWithOffset >> 8) & 0xff;
+  
+  engine[spriteBankAddrIdx2] = spriteBankAddr & 0xff;
+  engine[spriteBankAddrIdx2 + 1] = (spriteBankAddr >> 8) & 0xff;
+  
+  // Patch sprite width/height addresses
+  engine[spriteWidthAddr] = spriteWidthVarAddr & 0xff;
+  engine[spriteWidthAddr + 1] = (spriteWidthVarAddr >> 8) & 0xff;
+  
+  engine[spriteHeightAddr] = spriteHeightVarAddr & 0xff;
+  engine[spriteHeightAddr + 1] = (spriteHeightVarAddr >> 8) & 0xff;
+  
+  // Patch player X variable addresses
+  engine[playerXVarIdx] = playerXVarAddr & 0xff;
+  engine[playerXVarIdx + 1] = (playerXVarAddr >> 8) & 0xff;
+  
+  engine[playerXReadIdx1] = playerXVarAddr & 0xff;
+  engine[playerXReadIdx1 + 1] = (playerXVarAddr >> 8) & 0xff;
+  
+  engine[playerXWriteIdx1] = playerXVarAddr & 0xff;
+  engine[playerXWriteIdx1 + 1] = (playerXVarAddr >> 8) & 0xff;
+  
+  engine[playerXReadIdx2] = playerXVarAddr & 0xff;
+  engine[playerXReadIdx2 + 1] = (playerXVarAddr >> 8) & 0xff;
+  
+  engine[playerXWriteIdx2] = playerXVarAddr & 0xff;
+  engine[playerXWriteIdx2 + 1] = (playerXVarAddr >> 8) & 0xff;
+  
+  engine[playerXReadIdx3] = playerXVarAddr & 0xff;
+  engine[playerXReadIdx3 + 1] = (playerXVarAddr >> 8) & 0xff;
+  
+  // Patch jump offsets
   const checkQAddr = 32768 + checkQPos;
-  const drawPixelAddr = 32768 + drawPixelPos;
+  const drawPlayerAddr = 32768 + drawPlayerPos;
   const noKeyAddr = 32768 + noKeyPos;
-
+  const playerSetupAddr = 32768 + playerSetupPos;
+  
   let disp = checkQAddr - (32768 + jrNoWPos + 2);
   engine[jrNoWPos + 1] = disp & 0xff;
-
-  disp = drawPixelAddr - (32768 + jrToDrawFromWPos + 2);
-  engine[jrToDrawFromWPos + 1] = disp & 0xff;
-
+  
+  disp = drawPlayerAddr - (32768 + jrToDrawPos + 2);
+  engine[jrToDrawPos + 1] = disp & 0xff;
+  
   disp = noKeyAddr - (32768 + jrNoQPos + 2);
   engine[jrNoQPos + 1] = disp & 0xff;
-
+  
+  disp = playerSetupAddr - (32768 + jzToPlayerSetup + 2);
+  engine[jzToPlayerSetup + 1] = disp & 0xff;
+  
   return engine;
 }
 
