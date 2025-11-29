@@ -705,19 +705,10 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
         <CardContent>
           {selectedObject ? (
             <Tabs defaultValue="basic" className="w-full">
-              {/* Show Animations tab only for Player, Enemy, and Moving Platform */}
-              {["player", "enemy", "moving-platform"].includes(selectedObject.type) ? (
-                <TabsList className="grid w-full grid-cols-3">
-                  <TabsTrigger value="basic">Basic</TabsTrigger>
-                  <TabsTrigger value="animations">Animations</TabsTrigger>
-                  <TabsTrigger value="properties">Properties</TabsTrigger>
-                </TabsList>
-              ) : (
-                <TabsList className="grid w-full grid-cols-2">
-                  <TabsTrigger value="basic">Basic</TabsTrigger>
-                  <TabsTrigger value="properties">Properties</TabsTrigger>
-                </TabsList>
-              )}
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="basic">Basic</TabsTrigger>
+                <TabsTrigger value="properties">Properties</TabsTrigger>
+              </TabsList>
 
               <TabsContent value="basic" className="space-y-4">
                 <div className="space-y-2">
@@ -774,249 +765,7 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
                 </div>
               </TabsContent>
 
-              <TabsContent value="animations" className="space-y-4 max-h-[600px] overflow-y-auto">
-                <div className="space-y-3">
-                  {/* Move Left - All types that have animations */}
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <Label>Move Left</Label>
-                      {!selectedObject.animations?.moveLeft && selectedObject.animations?.moveRight && (
-                        <span className="text-xs text-muted-foreground">(will mirror right)</span>
-                      )}
-                    </div>
-                    <Select
-                      value={selectedObject.animations?.moveLeft ?? ANIMATION_NONE_VALUE}
-                      onValueChange={(value) =>
-                        updateAnimation("moveLeft", value === ANIMATION_NONE_VALUE ? "" : value)
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="None (will mirror right)" />
-                      </SelectTrigger>
-                      <SelectContent className="z-50">
-                        <SelectItem value={ANIMATION_NONE_VALUE}>None (will mirror right)</SelectItem>
-                        {sprites.map((sprite) => (
-                          <SelectItem key={sprite.id} value={sprite.id}>
-                            {sprite.name} ({sprite.size})
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {selectedObject.animations?.moveLeft && (
-                      <div className="pt-2">
-                        {renderSpritePreview(selectedObject.animations.moveLeft, 2)}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Move Right - All types that have animations */}
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <Label>Move Right</Label>
-                      {!selectedObject.animations?.moveRight && selectedObject.animations?.moveLeft && (
-                        <span className="text-xs text-muted-foreground">(will mirror left)</span>
-                      )}
-                    </div>
-                    <Select
-                      value={selectedObject.animations?.moveRight ?? ANIMATION_NONE_VALUE}
-                      onValueChange={(value) =>
-                        updateAnimation("moveRight", value === ANIMATION_NONE_VALUE ? "" : value)
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="None (will mirror left)" />
-                      </SelectTrigger>
-                      <SelectContent className="z-50">
-                        <SelectItem value={ANIMATION_NONE_VALUE}>None (will mirror left)</SelectItem>
-                        {sprites.map((sprite) => (
-                          <SelectItem key={sprite.id} value={sprite.id}>
-                            {sprite.name} ({sprite.size})
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {selectedObject.animations?.moveRight && (
-                      <div className="pt-2">
-                        {renderSpritePreview(selectedObject.animations.moveRight, 2)}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Move Up and Move Down - Player and Enemy only */}
-                  {(selectedObject.type === "player" || selectedObject.type === "enemy") && (
-                    <>
-                      <div className="space-y-2">
-                        <Label>Move Up</Label>
-                        <Select
-                          value={selectedObject.animations?.moveUp ?? ANIMATION_NONE_VALUE}
-                          onValueChange={(value) =>
-                            updateAnimation("moveUp", value === ANIMATION_NONE_VALUE ? "" : value)
-                          }
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="None" />
-                          </SelectTrigger>
-                          <SelectContent className="z-50">
-                            <SelectItem value={ANIMATION_NONE_VALUE}>None</SelectItem>
-                            {sprites.map((sprite) => (
-                              <SelectItem key={sprite.id} value={sprite.id}>
-                                {sprite.name} ({sprite.size})
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        {selectedObject.animations?.moveUp && (
-                          <div className="pt-2">
-                            {renderSpritePreview(selectedObject.animations.moveUp, 2)}
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label>Move Down</Label>
-                        <Select
-                          value={selectedObject.animations?.moveDown ?? ANIMATION_NONE_VALUE}
-                          onValueChange={(value) =>
-                            updateAnimation("moveDown", value === ANIMATION_NONE_VALUE ? "" : value)
-                          }
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="None (will mirror up)" />
-                          </SelectTrigger>
-                          <SelectContent className="z-50">
-                            <SelectItem value={ANIMATION_NONE_VALUE}>None (will mirror up)</SelectItem>
-                            {sprites.map((sprite) => (
-                              <SelectItem key={sprite.id} value={sprite.id}>
-                                {sprite.name} ({sprite.size})
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        {selectedObject.animations?.moveDown && (
-                          <div className="pt-2">
-                            {renderSpritePreview(selectedObject.animations.moveDown, 2)}
-                          </div>
-                        )}
-                      </div>
-                    </>
-                  )}
-
-                  {/* Player-only animations */}
-                  {selectedObject.type === "player" && (
-                    <>
-                      <div className="space-y-2">
-                        <Label>Idle</Label>
-                        <Select
-                          value={selectedObject.animations?.idle ?? ANIMATION_NONE_VALUE}
-                          onValueChange={(value) =>
-                            updateAnimation("idle", value === ANIMATION_NONE_VALUE ? "" : value)
-                          }
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="None" />
-                          </SelectTrigger>
-                          <SelectContent className="z-50">
-                            <SelectItem value={ANIMATION_NONE_VALUE}>None</SelectItem>
-                            {sprites.map((sprite) => (
-                              <SelectItem key={sprite.id} value={sprite.id}>
-                                {sprite.name} ({sprite.size})
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        {selectedObject.animations?.idle && (
-                          <div className="pt-2">
-                            {renderSpritePreview(selectedObject.animations.idle, 2)}
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label>Jump Left</Label>
-                        <Select
-                          value={selectedObject.animations?.jumpLeft ?? ANIMATION_NONE_VALUE}
-                          onValueChange={(value) =>
-                            updateAnimation("jumpLeft", value === ANIMATION_NONE_VALUE ? "" : value)
-                          }
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="None" />
-                          </SelectTrigger>
-                          <SelectContent className="z-50">
-                            <SelectItem value={ANIMATION_NONE_VALUE}>None{selectedObject.animations?.jumpRight ? " (will mirror right)" : ""}</SelectItem>
-                            {sprites.map((sprite) => (
-                              <SelectItem key={sprite.id} value={sprite.id}>
-                                {sprite.name} ({sprite.size})
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        {selectedObject.animations?.jumpLeft && (
-                          <div className="pt-2">
-                            {renderSpritePreview(selectedObject.animations.jumpLeft, 2)}
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label>Jump Right</Label>
-                        <Select
-                          value={selectedObject.animations?.jumpRight ?? ANIMATION_NONE_VALUE}
-                          onValueChange={(value) =>
-                            updateAnimation("jumpRight", value === ANIMATION_NONE_VALUE ? "" : value)
-                          }
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="None" />
-                          </SelectTrigger>
-                          <SelectContent className="z-50">
-                            <SelectItem value={ANIMATION_NONE_VALUE}>None{selectedObject.animations?.jumpLeft ? " (will mirror left)" : ""}</SelectItem>
-                            {sprites.map((sprite) => (
-                              <SelectItem key={sprite.id} value={sprite.id}>
-                                {sprite.name} ({sprite.size})
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        {selectedObject.animations?.jumpRight && (
-                          <div className="pt-2">
-                            {renderSpritePreview(selectedObject.animations.jumpRight, 2)}
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label>Fire</Label>
-                        <Select
-                          value={selectedObject.animations?.fire ?? ANIMATION_NONE_VALUE}
-                          onValueChange={(value) =>
-                            updateAnimation("fire", value === ANIMATION_NONE_VALUE ? "" : value)
-                          }
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="None" />
-                          </SelectTrigger>
-                          <SelectContent className="z-50">
-                            <SelectItem value={ANIMATION_NONE_VALUE}>None</SelectItem>
-                            {sprites.map((sprite) => (
-                              <SelectItem key={sprite.id} value={sprite.id}>
-                                {sprite.name} ({sprite.size})
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        {selectedObject.animations?.fire && (
-                          <div className="pt-2">
-                            {renderSpritePreview(selectedObject.animations.fire, 2)}
-                          </div>
-                        )}
-                      </div>
-                    </>
-                  )}
-                </div>
-              </TabsContent>
-
-              <TabsContent value="properties" className="space-y-4">
+              <TabsContent value="properties" className="space-y-4 max-h-[600px] overflow-y-auto">
                 {selectedObject.type === "player" && (
                   <>
                     <div className="space-y-2">
@@ -1051,6 +800,201 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
                         step={1}
                       />
                       <p className="text-xs text-muted-foreground">Fall speed (higher = faster)</p>
+                    </div>
+
+                    <div className="border-t pt-4 mt-4">
+                      <h4 className="text-sm font-semibold mb-3">Animation Sprites</h4>
+                      
+                      <div className="space-y-3">
+                        <div className="space-y-2">
+                          <Label>Move Left</Label>
+                          <Select
+                            value={selectedObject.animations?.moveLeft ?? ANIMATION_NONE_VALUE}
+                            onValueChange={(value) =>
+                              updateAnimation("moveLeft", value === ANIMATION_NONE_VALUE ? "" : value)
+                            }
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="None (will mirror right)" />
+                            </SelectTrigger>
+                            <SelectContent className="z-50">
+                              <SelectItem value={ANIMATION_NONE_VALUE}>None (will mirror right)</SelectItem>
+                              {sprites.map((sprite) => (
+                                <SelectItem key={sprite.id} value={sprite.id}>
+                                  {sprite.name} ({sprite.size})
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          {selectedObject.animations?.moveLeft && (
+                            <div className="pt-2">
+                              {renderSpritePreview(selectedObject.animations.moveLeft, 2)}
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label>Move Right</Label>
+                          <Select
+                            value={selectedObject.animations?.moveRight ?? ANIMATION_NONE_VALUE}
+                            onValueChange={(value) =>
+                              updateAnimation("moveRight", value === ANIMATION_NONE_VALUE ? "" : value)
+                            }
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="None (will mirror left)" />
+                            </SelectTrigger>
+                            <SelectContent className="z-50">
+                              <SelectItem value={ANIMATION_NONE_VALUE}>None (will mirror left)</SelectItem>
+                              {sprites.map((sprite) => (
+                                <SelectItem key={sprite.id} value={sprite.id}>
+                                  {sprite.name} ({sprite.size})
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          {selectedObject.animations?.moveRight && (
+                            <div className="pt-2">
+                              {renderSpritePreview(selectedObject.animations.moveRight, 2)}
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label>Move Up</Label>
+                          <Select
+                            value={selectedObject.animations?.moveUp ?? ANIMATION_NONE_VALUE}
+                            onValueChange={(value) =>
+                              updateAnimation("moveUp", value === ANIMATION_NONE_VALUE ? "" : value)
+                            }
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="None" />
+                            </SelectTrigger>
+                            <SelectContent className="z-50">
+                              <SelectItem value={ANIMATION_NONE_VALUE}>None</SelectItem>
+                              {sprites.map((sprite) => (
+                                <SelectItem key={sprite.id} value={sprite.id}>
+                                  {sprite.name} ({sprite.size})
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          {selectedObject.animations?.moveUp && (
+                            <div className="pt-2">
+                              {renderSpritePreview(selectedObject.animations.moveUp, 2)}
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label>Move Down</Label>
+                          <Select
+                            value={selectedObject.animations?.moveDown ?? ANIMATION_NONE_VALUE}
+                            onValueChange={(value) =>
+                              updateAnimation("moveDown", value === ANIMATION_NONE_VALUE ? "" : value)
+                            }
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="None (will mirror up)" />
+                            </SelectTrigger>
+                            <SelectContent className="z-50">
+                              <SelectItem value={ANIMATION_NONE_VALUE}>None (will mirror up)</SelectItem>
+                              {sprites.map((sprite) => (
+                                <SelectItem key={sprite.id} value={sprite.id}>
+                                  {sprite.name} ({sprite.size})
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          {selectedObject.animations?.moveDown && (
+                            <div className="pt-2">
+                              {renderSpritePreview(selectedObject.animations.moveDown, 2)}
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label>Jump Left</Label>
+                          <Select
+                            value={selectedObject.animations?.jumpLeft ?? ANIMATION_NONE_VALUE}
+                            onValueChange={(value) =>
+                              updateAnimation("jumpLeft", value === ANIMATION_NONE_VALUE ? "" : value)
+                            }
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="None" />
+                            </SelectTrigger>
+                            <SelectContent className="z-50">
+                              <SelectItem value={ANIMATION_NONE_VALUE}>None{selectedObject.animations?.jumpRight ? " (will mirror right)" : ""}</SelectItem>
+                              {sprites.map((sprite) => (
+                                <SelectItem key={sprite.id} value={sprite.id}>
+                                  {sprite.name} ({sprite.size})
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          {selectedObject.animations?.jumpLeft && (
+                            <div className="pt-2">
+                              {renderSpritePreview(selectedObject.animations.jumpLeft, 2)}
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label>Jump Right</Label>
+                          <Select
+                            value={selectedObject.animations?.jumpRight ?? ANIMATION_NONE_VALUE}
+                            onValueChange={(value) =>
+                              updateAnimation("jumpRight", value === ANIMATION_NONE_VALUE ? "" : value)
+                            }
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="None" />
+                            </SelectTrigger>
+                            <SelectContent className="z-50">
+                              <SelectItem value={ANIMATION_NONE_VALUE}>None{selectedObject.animations?.jumpLeft ? " (will mirror left)" : ""}</SelectItem>
+                              {sprites.map((sprite) => (
+                                <SelectItem key={sprite.id} value={sprite.id}>
+                                  {sprite.name} ({sprite.size})
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          {selectedObject.animations?.jumpRight && (
+                            <div className="pt-2">
+                              {renderSpritePreview(selectedObject.animations.jumpRight, 2)}
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label>Fire</Label>
+                          <Select
+                            value={selectedObject.animations?.fire ?? ANIMATION_NONE_VALUE}
+                            onValueChange={(value) =>
+                              updateAnimation("fire", value === ANIMATION_NONE_VALUE ? "" : value)
+                            }
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="None" />
+                            </SelectTrigger>
+                            <SelectContent className="z-50">
+                              <SelectItem value={ANIMATION_NONE_VALUE}>None</SelectItem>
+                              {sprites.map((sprite) => (
+                                <SelectItem key={sprite.id} value={sprite.id}>
+                                  {sprite.name} ({sprite.size})
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          {selectedObject.animations?.fire && (
+                            <div className="pt-2">
+                              {renderSpritePreview(selectedObject.animations.fire, 2)}
+                            </div>
+                          )}
+                        </div>
+                      </div>
                     </div>
                   </>
                 )}
