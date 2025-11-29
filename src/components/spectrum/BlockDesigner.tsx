@@ -75,7 +75,7 @@ export const BlockDesigner = ({ sprites, blocks, onBlocksChange }: BlockDesigner
   };
 
   const renderSpritePreview = (sprite: Sprite) => {
-    if (!sprite.frames?.[0]?.pixels) return "";
+    if (!sprite || !sprite.frames?.[0]?.pixels) return "";
     
     const [width, height] = sprite.size.split("x").map(Number);
     const canvas = document.createElement("canvas");
@@ -190,11 +190,17 @@ export const BlockDesigner = ({ sprites, blocks, onBlocksChange }: BlockDesigner
                 <SelectValue placeholder="Select sprite" />
               </SelectTrigger>
               <SelectContent>
-                {sprites.map((sprite) => (
-                  <SelectItem key={sprite.id} value={sprite.id}>
-                    {sprite.name} ({sprite.size})
-                  </SelectItem>
-                ))}
+                {sprites.length === 0 ? (
+                  <div className="p-2 text-sm text-muted-foreground">
+                    No sprites available. Create sprites first.
+                  </div>
+                ) : (
+                  sprites.map((sprite) => (
+                    <SelectItem key={sprite.id} value={sprite.id}>
+                      {sprite.name} ({sprite.size})
+                    </SelectItem>
+                  ))
+                )}
               </SelectContent>
             </Select>
           </div>

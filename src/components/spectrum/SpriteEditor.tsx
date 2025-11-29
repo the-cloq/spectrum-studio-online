@@ -54,9 +54,76 @@ export const SpriteEditor = ({ sprites, onSpritesChange }: SpriteEditorProps) =>
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const previewCanvasRef = useRef<HTMLCanvasElement>(null);
 
+  // If no sprites exist, show empty state
+  if (sprites.length === 0) {
+    return (
+      <div className="grid grid-cols-1 lg:grid-cols-4 auto-rows-min gap-4">
+        <Card className="p-4 lg:col-span-3">
+          <div className="text-center py-12 text-muted-foreground">
+            <p className="text-lg mb-2">No sprites created yet</p>
+            <p className="text-sm">Create your first sprite using the form on the right</p>
+          </div>
+        </Card>
+        <Card className="p-4">
+          <h2 className="text-lg font-bold text-primary mb-4">Create Sprite</h2>
+          <div className="space-y-3">
+            <div>
+              <Label htmlFor="new-sprite-name">Sprite Name</Label>
+              <Input
+                id="new-sprite-name"
+                value={newSpriteName}
+                onChange={(e) => setNewSpriteName(e.target.value)}
+                placeholder="e.g., Wall, Player, Enemy"
+              />
+            </div>
+            <div>
+              <Label htmlFor="new-sprite-size">Size</Label>
+              <Select value={newSpriteSize} onValueChange={(v) => setNewSpriteSize(v as SpriteSize)}>
+                <SelectTrigger id="new-sprite-size">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="8x8">8x8 (Block)</SelectItem>
+                  <SelectItem value="16x16">16x16 (Standard)</SelectItem>
+                  <SelectItem value="24x12">24x12 (JetPac style)</SelectItem>
+                  <SelectItem value="32x16">32x16 (Large)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <Button 
+              onClick={() => {
+                if (!newSpriteName.trim()) {
+                  toast.error("Please enter a sprite name");
+                  return;
+                }
+                const [w, h] = newSpriteSize.split("x").map(Number);
+                const newSprite: Sprite = {
+                  id: `sprite-${Date.now()}`,
+                  name: newSpriteName,
+                  size: newSpriteSize,
+                  frames: [{
+                    pixels: Array(h).fill(null).map(() => Array(w).fill(0))
+                  }],
+                  animationSpeed: 4,
+                };
+                onSpritesChange([...sprites, newSprite]);
+                setNewSpriteName("");
+                toast.success(`Sprite "${newSprite.name}" created!`);
+              }} 
+              className="w-full"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Create First Sprite
+            </Button>
+          </div>
+        </Card>
+      </div>
+    );
+  }
+
   const sprite = sprites.find(s => s.id === selectedSpriteId) || sprites[0];
-  const [width, height] = sprite ? sprite.size.split("x").map(Number) : [8, 8];
-  const currentFrame = sprite?.frames?.[currentFrameIndex];
+  const [width, height] = sprite.size.split("x").map(Number);
+  const currentFrame = sprite.frames?.[currentFrameIndex];
 
   useEffect(() => {
     drawSprite();
