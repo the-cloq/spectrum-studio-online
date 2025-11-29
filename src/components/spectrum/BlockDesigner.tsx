@@ -19,7 +19,6 @@ const BLOCK_TYPES: { value: BlockType; label: string; description: string }[] = 
   { value: "empty", label: "Empty", description: "No collision" },
   { value: "solid", label: "Solid", description: "Blocks movement" },
   { value: "deadly", label: "Deadly", description: "Kills player on contact" },
-  { value: "collectible", label: "Collectible", description: "Can be picked up" },
   { value: "platform", label: "Platform", description: "Can stand on top" },
   { value: "sinking", label: "Sinking", description: "Sinks when stepped on" },
   { value: "crumbling", label: "Crumbling", description: "Breaks after standing" },
@@ -225,34 +224,6 @@ export const BlockDesigner = ({ sprites, blocks, onBlocksChange }: BlockDesigner
             </Select>
           </div>
 
-          {editingBlock.type === "collectible" && (
-            <>
-              <div>
-                <Label htmlFor="points">Points Value</Label>
-                <Input
-                  id="points"
-                  type="number"
-                  value={editingBlock.properties?.points || 0}
-                  onChange={(e) => setEditingBlock({
-                    ...editingBlock,
-                    properties: { ...editingBlock.properties, points: parseInt(e.target.value) || 0 }
-                  })}
-                />
-              </div>
-              <div>
-                <Label htmlFor="energy">Energy Value</Label>
-                <Input
-                  id="energy"
-                  type="number"
-                  value={editingBlock.properties?.energy || 0}
-                  onChange={(e) => setEditingBlock({
-                    ...editingBlock,
-                    properties: { ...editingBlock.properties, energy: parseInt(e.target.value) || 0 }
-                  })}
-                />
-              </div>
-            </>
-          )}
 
           <Button onClick={handleCreateBlock} className="w-full">
             <Plus className="w-4 h-4 mr-2" />
