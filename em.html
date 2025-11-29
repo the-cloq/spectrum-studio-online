@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>ZX Spectrum Emulator</title>
+<style>
+  body { background: #111; color: white; font-family: monospace; padding: 20px; }
+  #status { margin: 10px 0; padding: 4px; }
+  canvas { border: 2px solid #00ffcc; image-rendering: pixelated; width:256px; height:192px; background:white;}
+</style>
+</head>
+<body>
+
+<h2>ZX Spectrum Emulator</h2>
+
+<input type="file" id="fileInput" accept=".tap,.tzx,.sna"/>
+<div id="status">No file loaded</div>
+<canvas id="spectrum" width="256" height="192"></canvas>
+
+<script src="https://cdn.jsdelivr.net/gh/gasman/jsspeccy3@latest/dist/jsspeccy.min.js"></script>
+<script>
+const fileInput = document.getElementById('fileInput');
+const statusEl = document.getElementById('status');
+const canvas = document.getElementById('spectrum');
+
+const emu = new JSSpeccy({
+  canvas: canvas,
+  autoStart: false,
+  machine: "48K"
+});
+
+fileInput.addEventListener("change", async function() {
+  const file = this.files[0];
+  if (!file) return;
+
+  statusEl.textContent = "Loading " + file.name;
+
+  const buf = await file.arrayBuffer();
+
+  try {
+    emu.stop();
+    emu.reset();
+
+    await emu.loadTape(buf);
+
+    emu.start();
+    emu.pressKey("ENTER"); // auto start LOAD ""
+    emu.pressKey("ENTER");
+
+    statusEl.textContent = "Running " + file.name;
+
+  } catch (e) {
+    console.error(e);
+    statusEl.textContent = "Error loading tape!";
+  }
+});
+</script>
+
+</body>
+</html>
