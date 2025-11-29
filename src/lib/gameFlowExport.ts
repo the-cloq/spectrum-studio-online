@@ -124,64 +124,82 @@ export function exportGameFlowToTAP(
 
   // TAP debug logging is performed after building the BASIC program and TAP blocks below.
 
-  // Build simplified BASIC loader (3 lines only)
+  // Build BASIC loader with proper structure
   const basicProgram: number[] = [];
 
+  // Helper to add a BASIC line
+  const addLine = (lineNum: number, tokens: number[]) => {
+    basicProgram.push((lineNum >> 8) & 0xff, lineNum & 0xff); // Line number (big-endian)
+    const lengthPos = basicProgram.length;
+    basicProgram.push(0x00, 0x00); // Placeholder for line length
+    basicProgram.push(...tokens); // Line content
+    basicProgram.push(0x0d); // ENTER
+    const lineLen = basicProgram.length - lengthPos - 2;
+    basicProgram[lengthPos] = lineLen & 0xff; // Write actual length (little-endian)
+    basicProgram[lengthPos + 1] = (lineLen >> 8) & 0xff;
+  };
+
   // Line 10: CLEAR 32767
-  basicProgram.push(0x00, 0x0a);
-  let lineStart = basicProgram.length;
-  basicProgram.push(0x00, 0x00);
-  basicProgram.push(0xfd, 0x20);
-  basicProgram.push(0x33, 0x32, 0x37, 0x36, 0x37);
-  basicProgram.push(0x0e, 0x00, 0x00, 0xff, 0x7f, 0x00);
-  basicProgram.push(0x0d);
-  let lineLength = basicProgram.length - lineStart - 2;
-  basicProgram[lineStart] = lineLength & 0xff;
-  basicProgram[lineStart + 1] = (lineLength >> 8) & 0xff;
+  addLine(10, [
+    0xfd, // CLEAR
+    0x20, // Space
+    0x33, 0x32, 0x37, 0x36, 0x37, // "32767" ASCII
+    0x0e, 0x00, 0x00, 0xff, 0x7f, 0x00 // Encoded number 32767
+  ]);
 
   // Line 20: LOAD "" SCREEN$
-  basicProgram.push(0x00, 0x14);
-  lineStart = basicProgram.length;
-  basicProgram.push(0x00, 0x00);
-  basicProgram.push(0xef, 0x20, 0x22, 0x22, 0x20, 0xaa, 0x0d);
-  lineLength = basicProgram.length - lineStart - 2;
-  basicProgram[lineStart] = lineLength & 0xff;
-  basicProgram[lineStart + 1] = (lineLength >> 8) & 0xff;
+  addLine(20, [
+    0xef, // LOAD
+    0x20, // Space
+    0x22, 0x22, // ""
+    0x20, // Space
+    0xaa // SCREEN$
+  ]);
 
   // Line 30: LOAD "" CODE
-  basicProgram.push(0x00, 0x1e);
-  lineStart = basicProgram.length;
-  basicProgram.push(0x00, 0x00);
-  basicProgram.push(0xef, 0x20, 0x22, 0x22, 0x20, 0xaf, 0x0d);
-  lineLength = basicProgram.length - lineStart - 2;
-  basicProgram[lineStart] = lineLength & 0xff;
-  basicProgram[lineStart + 1] = (lineLength >> 8) & 0xff;
+  addLine(30, [
+    0xef, // LOAD
+    0x20, // Space
+    0x22, 0x22, // ""
+    0x20, // Space
+    0xaf // CODE
+  ]);
 
   // Line 40: RANDOMIZE USR 32768
-  basicProgram.push(0x00, 0x28);
-  lineStart = basicProgram.length;
-  basicProgram.push(0x00, 0x00);
-  basicProgram.push(0xf9, 0x20, 0xc0, 0x20);
-  basicProgram.push(0x33, 0x32, 0x37, 0x36, 0x38);
-  basicProgram.push(0x0e, 0x00, 0x00, 0x00, 0x80, 0x00);
-  basicProgram.push(0x0d);
-  lineLength = basicProgram.length - lineStart - 2;
-  basicProgram[lineStart] = lineLength & 0xff;
-  basicProgram[lineStart + 1] = (lineLength >> 8) & 0xff;
+  addLine(40, [
+    0xf9, // RANDOMIZE
+    0x20, // Space
+    0xc0, // USR
+    0x20, // Space
+    0x33, 0x32, 0x37, 0x36, 0x38, // "32768" ASCII
+    0x0e, 0x00, 0x00, 0x00, 0x80, 0x00 // Encoded number 32768
+  ]);
 
-  // Add BASIC program header and data
-  const headerData: number[] = [0x00, 0x00];
-  const filename = "Loader    ";
+  // Create BASIC program header (type 0x00 = BASIC)
+  const basicHeader: number[] = [
+    0x00, // Flag: header block
+    0x00, // Type: BASIC program
+  ];
+  
+  // Filename (10 bytes, padded)
+  const loaderName = "Loader    ";
   for (let i = 0; i < 10; i++) {
-    headerData.push(filename.charCodeAt(i));
+    basicHeader.push(loaderName.charCodeAt(i));
   }
-  headerData.push(basicProgram.length & 0xff);
-  headerData.push((basicProgram.length >> 8) & 0xff);
-  headerData.push(0x0a, 0x00);
-  headerData.push(basicProgram.length & 0xff);
-  headerData.push((basicProgram.length >> 8) & 0xff);
+  
+  // Program length (little-endian)
+  basicHeader.push(basicProgram.length & 0xff);
+  basicHeader.push((basicProgram.length >> 8) & 0xff);
+  
+  // Autostart line number (10, little-endian)
+  basicHeader.push(0x0a, 0x00);
+  
+  // Program length again (little-endian)
+  basicHeader.push(basicProgram.length & 0xff);
+  basicHeader.push((basicProgram.length >> 8) & 0xff);
 
-  tap.addBlock(headerData);
+  // Add BASIC blocks to TAP
+  tap.addBlock(basicHeader);
   tap.addBlock([0xff, ...basicProgram]);
 
   // Add loading screen as SCREEN$
