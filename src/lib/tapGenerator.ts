@@ -78,6 +78,40 @@ export class TAPGenerator {
     headerData.push(basicProgram.length & 0xff);
     headerData.push((basicProgram.length >> 8) & 0xff);
     
+    // Debug logging for comparison
+    console.log('[BASIC 3-LINE DEBUG] Total program bytes:', basicProgram.length);
+    console.log('[BASIC 3-LINE DEBUG] Full hex dump:', 
+      basicProgram.map(b => b.toString(16).padStart(2,'0')).join(' ')
+    );
+    
+    console.log('[BASIC 3-LINE DEBUG] Line 10 (CLEAR 32767) - bytes 0-17:', 
+      basicProgram.slice(0, 18).map(b => b.toString(16).padStart(2,'0')).join(' ')
+    );
+    console.log('[BASIC 3-LINE DEBUG] Line 10 length field:', 
+      basicProgram[2] + (basicProgram[3] << 8), 'expected: 14'
+    );
+    
+    console.log('[BASIC 3-LINE DEBUG] Line 20 (LOAD CODE) - bytes 18-29:', 
+      basicProgram.slice(18, 30).map(b => b.toString(16).padStart(2,'0')).join(' ')
+    );
+    console.log('[BASIC 3-LINE DEBUG] Line 20 length field:', 
+      basicProgram[20] + (basicProgram[21] << 8), 'expected: 8'
+    );
+    
+    console.log('[BASIC 3-LINE DEBUG] Line 30 (RANDOMIZE USR) - bytes 30-48:', 
+      basicProgram.slice(30, 49).map(b => b.toString(16).padStart(2,'0')).join(' ')
+    );
+    console.log('[BASIC 3-LINE DEBUG] Line 30 length field:', 
+      basicProgram[32] + (basicProgram[33] << 8), 'expected: 17'
+    );
+    
+    console.log('[BASIC 3-LINE DEBUG] Header bytes:', 
+      headerData.map(b => b.toString(16).padStart(2,'0')).join(' ')
+    );
+    console.log('[BASIC 3-LINE DEBUG] Header program length fields:', 
+      headerData[12] + (headerData[13] << 8), 'should match:', basicProgram.length
+    );
+    
     this.addBlock(headerData);
     
     // Add BASIC program data block
@@ -142,6 +176,48 @@ export class TAPGenerator {
     headerData.push(0x0a, 0x00);
     headerData.push(basicProgram.length & 0xff);
     headerData.push((basicProgram.length >> 8) & 0xff);
+    
+    // Debug logging for byte-level verification
+    console.log('[BASIC WITH SCREEN DEBUG] Total program bytes:', basicProgram.length);
+    console.log('[BASIC WITH SCREEN DEBUG] Full hex dump:', 
+      basicProgram.map(b => b.toString(16).padStart(2,'0')).join(' ')
+    );
+    
+    // Per-line breakdown with calculated lengths
+    console.log('[BASIC WITH SCREEN DEBUG] Line 10 (CLEAR 32767) - bytes 0-17:', 
+      basicProgram.slice(0, 18).map(b => b.toString(16).padStart(2,'0')).join(' ')
+    );
+    console.log('[BASIC WITH SCREEN DEBUG] Line 10 length field:', 
+      basicProgram[2] + (basicProgram[3] << 8), 'expected: 14'
+    );
+    
+    console.log('[BASIC WITH SCREEN DEBUG] Line 20 (LOAD SCREEN$) - bytes 18-28:', 
+      basicProgram.slice(18, 29).map(b => b.toString(16).padStart(2,'0')).join(' ')
+    );
+    console.log('[BASIC WITH SCREEN DEBUG] Line 20 length field:', 
+      basicProgram[20] + (basicProgram[21] << 8), 'expected: 7'
+    );
+    
+    console.log('[BASIC WITH SCREEN DEBUG] Line 30 (LOAD CODE) - bytes 29-39:', 
+      basicProgram.slice(29, 40).map(b => b.toString(16).padStart(2,'0')).join(' ')
+    );
+    console.log('[BASIC WITH SCREEN DEBUG] Line 30 length field:', 
+      basicProgram[31] + (basicProgram[32] << 8), 'expected: 7'
+    );
+    
+    console.log('[BASIC WITH SCREEN DEBUG] Line 40 (RANDOMIZE USR) - bytes 40-59:', 
+      basicProgram.slice(40, 60).map(b => b.toString(16).padStart(2,'0')).join(' ')
+    );
+    console.log('[BASIC WITH SCREEN DEBUG] Line 40 length field:', 
+      basicProgram[42] + (basicProgram[43] << 8), 'expected: 16'
+    );
+    
+    console.log('[BASIC WITH SCREEN DEBUG] Header bytes:', 
+      headerData.map(b => b.toString(16).padStart(2,'0')).join(' ')
+    );
+    console.log('[BASIC WITH SCREEN DEBUG] Header program length fields:', 
+      headerData[12] + (headerData[13] << 8), 'should match:', basicProgram.length
+    );
     
     this.addBlock(headerData);
     this.addBlock([0xff, ...basicProgram]);
