@@ -74,7 +74,7 @@ export const BlockDesigner = ({ sprites, blocks, onBlocksChange }: BlockDesigner
     }
   };
 
-  const renderSpritePreview = (sprite: Sprite) => {
+  const renderSpritePreview = (sprite: Sprite | undefined) => {
     if (!sprite || !sprite.frames?.[0]?.pixels) return "";
     
     const [width, height] = sprite.size.split("x").map(Number);
@@ -86,7 +86,6 @@ export const BlockDesigner = ({ sprites, blocks, onBlocksChange }: BlockDesigner
     if (ctx) {
       sprite.frames[0].pixels.forEach((row, y) => {
         row.forEach((colorIndex, x) => {
-          // Use actual Spectrum colors from the palette
           let color = "#000000";
           if (colorIndex > 0 && colorIndex <= 15) {
             const spectrumColors = [
