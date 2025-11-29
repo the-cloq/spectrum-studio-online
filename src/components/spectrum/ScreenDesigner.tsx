@@ -813,10 +813,12 @@ export const ScreenDesigner = ({ blocks, objects, sprites, screens, onScreensCha
                       <div className="space-y-2">
                         <div className="flex items-center justify-between">
                           <Label className="text-xs">Patrol Type</Label>
-                          {isOverridden("patrolType") && (
+                          {isOverridden("patrolType") ? (
                             <Button size="sm" variant="ghost" className="h-5 text-xs" onClick={() => resetPropertyOverride("patrolType")}>
                               Reset
                             </Button>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">Default</span>
                           )}
                         </div>
                         <Select
@@ -859,10 +861,12 @@ export const ScreenDesigner = ({ blocks, objects, sprites, screens, onScreensCha
                       <div className="space-y-2">
                         <div className="flex items-center justify-between">
                           <Label className="text-xs">AI Behavior</Label>
-                          {isOverridden("aiBehavior") && (
+                          {isOverridden("aiBehavior") ? (
                             <Button size="sm" variant="ghost" className="h-5 text-xs" onClick={() => resetPropertyOverride("aiBehavior")}>
                               Reset
                             </Button>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">Default</span>
                           )}
                         </div>
                         <Select
@@ -912,10 +916,12 @@ export const ScreenDesigner = ({ blocks, objects, sprites, screens, onScreensCha
                       <div className="space-y-2">
                         <div className="flex items-center justify-between">
                           <Label className="text-xs">Required to Exit</Label>
-                          {isOverridden("requiredToExit") && (
+                          {isOverridden("requiredToExit") ? (
                             <Button size="sm" variant="ghost" className="h-5 text-xs" onClick={() => resetPropertyOverride("requiredToExit")}>
                               Reset
                             </Button>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">Default</span>
                           )}
                         </div>
                         <div className="flex items-center gap-2">
@@ -1010,10 +1016,12 @@ export const ScreenDesigner = ({ blocks, objects, sprites, screens, onScreensCha
                       <div className="space-y-2">
                         <div className="flex items-center justify-between">
                           <Label className="text-xs">Target Room</Label>
-                          {isOverridden("targetRoom") && (
+                          {isOverridden("targetRoom") ? (
                             <Button size="sm" variant="ghost" className="h-5 text-xs" onClick={() => resetPropertyOverride("targetRoom")}>
                               Reset
                             </Button>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">Default</span>
                           )}
                         </div>
                         <input
@@ -1056,10 +1064,12 @@ export const ScreenDesigner = ({ blocks, objects, sprites, screens, onScreensCha
                       <div className="space-y-2">
                         <div className="flex items-center justify-between">
                           <Label className="text-xs">Target Level</Label>
-                          {isOverridden("targetLevel") && (
+                          {isOverridden("targetLevel") ? (
                             <Button size="sm" variant="ghost" className="h-5 text-xs" onClick={() => resetPropertyOverride("targetLevel")}>
                               Reset
                             </Button>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">Default</span>
                           )}
                         </div>
                         <input
@@ -1074,10 +1084,12 @@ export const ScreenDesigner = ({ blocks, objects, sprites, screens, onScreensCha
                       <div className="space-y-2">
                         <div className="flex items-center justify-between">
                           <Label className="text-xs">Activation Conditions</Label>
-                          {isOverridden("activationConditions") && (
+                          {isOverridden("activationConditions") ? (
                             <Button size="sm" variant="ghost" className="h-5 text-xs" onClick={() => resetPropertyOverride("activationConditions")}>
                               Reset
                             </Button>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">Default</span>
                           )}
                         </div>
                         <input
@@ -1099,10 +1111,12 @@ export const ScreenDesigner = ({ blocks, objects, sprites, screens, onScreensCha
                       <div className="space-y-2">
                         <div className="flex items-center justify-between">
                           <Label className="text-xs">Platform Type</Label>
-                          {isOverridden("platformType") && (
+                          {isOverridden("platformType") ? (
                             <Button size="sm" variant="ghost" className="h-5 text-xs" onClick={() => resetPropertyOverride("platformType")}>
                               Reset
                             </Button>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">Default</span>
                           )}
                         </div>
                         <Select
@@ -1186,10 +1200,12 @@ export const ScreenDesigner = ({ blocks, objects, sprites, screens, onScreensCha
                       <div className="space-y-2">
                         <div className="flex items-center justify-between">
                           <Label className="text-xs">Start Direction</Label>
-                          {isOverridden("startDirection") && (
+                          {isOverridden("startDirection") ? (
                             <Button size="sm" variant="ghost" className="h-5 text-xs" onClick={() => resetPropertyOverride("startDirection")}>
                               Reset
                             </Button>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">Default</span>
                           )}
                         </div>
                         <Select
@@ -1211,10 +1227,12 @@ export const ScreenDesigner = ({ blocks, objects, sprites, screens, onScreensCha
                       <div className="space-y-2">
                         <div className="flex items-center justify-between">
                           <Label className="text-xs">Repeat Type</Label>
-                          {isOverridden("repeatType") && (
+                          {isOverridden("repeatType") ? (
                             <Button size="sm" variant="ghost" className="h-5 text-xs" onClick={() => resetPropertyOverride("repeatType")}>
                               Reset
                             </Button>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">Default</span>
                           )}
                         </div>
                         <Select
@@ -1235,10 +1253,12 @@ export const ScreenDesigner = ({ blocks, objects, sprites, screens, onScreensCha
                       <div className="space-y-2">
                         <div className="flex items-center justify-between">
                           <Label className="text-xs">Player Carry</Label>
-                          {isOverridden("playerCarry") && (
+                          {isOverridden("playerCarry") ? (
                             <Button size="sm" variant="ghost" className="h-5 text-xs" onClick={() => resetPropertyOverride("playerCarry")}>
                               Reset
                             </Button>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">Default</span>
                           )}
                         </div>
                         <div className="flex items-center gap-2">
