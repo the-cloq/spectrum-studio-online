@@ -746,6 +746,16 @@ function createBinaryGameEngine(
   const playerXReadIdx1 = engine.length;
   engine.push(0x00, 0x00);        // Placeholder
   engine.push(0xc6, 0x03);        // ADD A, 3 (velocity in pixels/frame)
+  
+  // Check right boundary (248 = 256 - 8 for sprite width)
+  engine.push(0xfe, 0xf8);        // CP 248
+  const jrNoWrapRightPos = engine.length;
+  engine.push(0x38, 0x00);        // JR C, no_wrap_right (placeholder)
+  
+  // Wrapped off right edge - wrap to left (X = 0)
+  engine.push(0x3e, 0x00);        // LD A, 0
+  
+  const noWrapRightPos = engine.length;
   engine.push(0x32);              // LD (playerX), A
   const playerXWriteIdx1 = engine.length;
   engine.push(0x00, 0x00);        // Placeholder
@@ -767,6 +777,16 @@ function createBinaryGameEngine(
   const playerXReadIdx2 = engine.length;
   engine.push(0x00, 0x00);        // Placeholder
   engine.push(0xd6, 0x03);        // SUB 3 (velocity in pixels/frame)
+  
+  // Check left boundary (wrapped if A > 248, since SUB caused underflow)
+  engine.push(0xfe, 0xf8);        // CP 248
+  const jrNoWrapLeftPos = engine.length;
+  engine.push(0x38, 0x00);        // JR C, no_wrap_left (placeholder)
+  
+  // Wrapped off left edge - wrap to right (X = 248)
+  engine.push(0x3e, 0xf8);        // LD A, 248
+  
+  const noWrapLeftPos = engine.length;
   engine.push(0x32);              // LD (playerX), A
   const playerXWriteIdx2 = engine.length;
   engine.push(0x00, 0x00);        // Placeholder
@@ -1082,6 +1102,8 @@ function createBinaryGameEngine(
   const stillAirborneAddr = 32768 + stillAirbornePos;
   const checkLeftVelAddr = 32768 + checkLeftVelPos;
   const checkKeysAddr = 32768 + checkKeysPos;
+  const noWrapRightAddr = 32768 + noWrapRightPos;
+  const noWrapLeftAddr = 32768 + noWrapLeftPos;
   const checkLeftAddr = 32768 + checkLeftPos;
   const checkNoKeyAddr = 32768 + checkNoKeyPos;
   const drawPlayerAddr = 32768 + drawPlayerPos;
@@ -1137,6 +1159,13 @@ function createBinaryGameEngine(
   
   disp = checkKeysAddr - (32768 + jrCheckKeysPos2 + 2);
   engine[jrCheckKeysPos2 + 1] = disp & 0xff;
+  
+  // Boundary wrapping jumps
+  disp = noWrapRightAddr - (32768 + jrNoWrapRightPos + 2);
+  engine[jrNoWrapRightPos + 1] = disp & 0xff;
+  
+  disp = noWrapLeftAddr - (32768 + jrNoWrapLeftPos + 2);
+  engine[jrNoWrapLeftPos + 1] = disp & 0xff;
   
   disp = checkLeftAddr - (32768 + jrNoRightPos + 2);
   engine[jrNoRightPos + 1] = disp & 0xff;
