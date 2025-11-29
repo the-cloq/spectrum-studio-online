@@ -41,6 +41,8 @@ export const BlockDesigner = ({ sprites, blocks, onBlocksChange }: BlockDesigner
     },
   });
 
+  const safeBlocks = blocks ?? [];
+
   const handleCreateBlock = () => {
     if (!editingBlock.name || !editingBlock.sprite) {
       toast.error("Please select a sprite and enter a name");
@@ -55,7 +57,7 @@ export const BlockDesigner = ({ sprites, blocks, onBlocksChange }: BlockDesigner
       properties: editingBlock.properties || {},
     };
 
-    onBlocksChange([...blocks, newBlock]);
+    onBlocksChange([...safeBlocks, newBlock]);
     toast.success(`Block "${newBlock.name}" created!`);
     
     // Reset form
@@ -67,7 +69,7 @@ export const BlockDesigner = ({ sprites, blocks, onBlocksChange }: BlockDesigner
   };
 
   const handleDeleteBlock = (blockId: string) => {
-    onBlocksChange(blocks.filter(b => b.id !== blockId));
+    onBlocksChange(safeBlocks.filter(b => b.id !== blockId));
     toast.success("Block deleted");
     if (selectedBlock?.id === blockId) {
       setSelectedBlock(null);
@@ -107,57 +109,54 @@ export const BlockDesigner = ({ sprites, blocks, onBlocksChange }: BlockDesigner
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-4 auto-rows-min gap-4">
-      {/* Block Library */}
-      
-    <Card className="p-4 lg:col-span-3 rounded-lg border bg-card text-card-foreground shadow-sm space-y-4">
+      <Card className="p-4 lg:col-span-3 rounded-lg border bg-card text-card-foreground shadow-sm space-y-4">
+        <h2 className="text-lg font-bold text-primary mb-4">Block Library</h2>
 
-  <h2 className="text-lg font-bold text-primary mb-4">Block Library</h2>
-
-  {blocks.length === 0 ? (
-    <div className="text-center py-8 text-muted-foreground">
-      <p>No blocks created yet</p>
-      <p className="text-sm mt-2">Create blocks from sprites to use in your screens</p>
-    </div>
-  ) : (
-    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-      {blocks.map((block) => (
-        <Card
-          key={block.id}
-          className={`p-3 cursor-pointer transition-all hover:border-primary ${
-            selectedBlock?.id === block.id ? "border-primary retro-glow" : ""
-          }`}
-          onClick={() => setSelectedBlock(block)}
-        >
-          <div className="aspect-video bg-muted rounded mb-2 flex items-center justify-center">
-            {block.sprite && (
-              <img
-                src={renderSpritePreview(block.sprite)}
-                alt={block.name}
-                className="pixelated max-w-full max-h-full"
-                style={{ imageRendering: "pixelated" }}
-              />
-            )}
+        {safeBlocks.length === 0 ? (
+          <div className="text-center py-8 text-muted-foreground">
+            <p>No blocks created yet</p>
+            <p className="text-sm mt-2">Create blocks from sprites to use in your screens</p>
           </div>
-          <p className="text-xs font-semibold text-center truncate">{block.name}</p>
-          <p className="text-xs text-muted-foreground text-center">{block.type}</p>
-          <div className="flex gap-1 mt-2">
-            <Button
-              size="sm"
-              variant="ghost"
-              className="flex-1 h-7"
-              onClick={(e) => {
-                e.stopPropagation();
-                handleDeleteBlock(block.id);
-              }}
-            >
-              <Trash2 className="w-3 h-3" />
-            </Button>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+            {safeBlocks.map((block) => (
+              <Card
+                key={block.id}
+                className={`p-3 cursor-pointer transition-all hover:border-primary ${
+                  selectedBlock?.id === block.id ? "border-primary retro-glow" : ""
+                }`}
+                onClick={() => setSelectedBlock(block)}
+              >
+                <div className="aspect-video bg-muted rounded mb-2 flex items-center justify-center">
+                  {block.sprite && (
+                    <img
+                      src={renderSpritePreview(block.sprite)}
+                      alt={block.name}
+                      className="pixelated max-w-full max-h-full"
+                      style={{ imageRendering: "pixelated" }}
+                    />
+                  )}
+                </div>
+                <p className="text-xs font-semibold text-center truncate">{block.name}</p>
+                <p className="text-xs text-muted-foreground text-center">{block.type}</p>
+                <div className="flex gap-1 mt-2">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="flex-1 h-7"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDeleteBlock(block.id);
+                    }}
+                  >
+                    <Trash2 className="w-3 h-3" />
+                  </Button>
+                </div>
+              </Card>
+            ))}
           </div>
-        </Card>
-      ))}
-    </div>
-  )}
-</Card>
+        )}
+      </Card>
 
 
 
