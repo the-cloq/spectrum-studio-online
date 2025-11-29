@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Slider } from "@/components/ui/slider";
 import { type Block, type Sprite, type BlockType } from "@/types/spectrum";
 import { Plus, Trash2, Edit } from "lucide-react";
 import { toast } from "sonner";
@@ -16,14 +17,13 @@ interface BlockDesignerProps {
 }
 
 const BLOCK_TYPES: { value: BlockType; label: string; description: string }[] = [
-  { value: "empty", label: "Empty", description: "No collision" },
   { value: "solid", label: "Solid", description: "Blocks movement" },
   { value: "deadly", label: "Deadly", description: "Kills player on contact" },
-  { value: "platform", label: "Platform", description: "Can stand on top" },
-  { value: "sinking", label: "Sinking", description: "Sinks when stepped on" },
   { value: "crumbling", label: "Crumbling", description: "Breaks after standing" },
-  { value: "conveyor-left", label: "Conveyor Left", description: "Moves player left" },
-  { value: "conveyor-right", label: "Conveyor Right", description: "Moves player right" },
+  { value: "sinking", label: "Sinking", description: "Sinks when stepped on" },
+  { value: "conveyor", label: "Conveyor", description: "Moves player" },
+  { value: "ice", label: "Ice / Slippery", description: "Low friction surface" },
+  { value: "ladder", label: "Ladder", description: "Allows climbing" },
 ];
 
 export const BlockDesigner = ({ sprites, blocks, onBlocksChange }: BlockDesignerProps) => {
@@ -31,13 +31,7 @@ export const BlockDesigner = ({ sprites, blocks, onBlocksChange }: BlockDesigner
   const [editingBlock, setEditingBlock] = useState<Partial<Block>>({
     name: "",
     type: "solid",
-    properties: {
-      solid: true,
-      deadly: false,
-      collectible: false,
-      points: 0,
-      energy: 0,
-    },
+    properties: {},
   });
 
   const safeBlocks = blocks ?? [];
@@ -63,7 +57,7 @@ export const BlockDesigner = ({ sprites, blocks, onBlocksChange }: BlockDesigner
     setEditingBlock({
       name: "",
       type: "solid",
-      properties: { solid: true },
+      properties: {},
     });
   };
 
@@ -206,7 +200,14 @@ export const BlockDesigner = ({ sprites, blocks, onBlocksChange }: BlockDesigner
             <Label htmlFor="block-type">Block Type</Label>
             <Select
               value={editingBlock.type}
-              onValueChange={(type) => setEditingBlock({ ...editingBlock, type: type as BlockType })}
+              onValueChange={(type) => {
+                // Reset properties when type changes
+                setEditingBlock({ 
+                  ...editingBlock, 
+                  type: type as BlockType,
+                  properties: {}
+                });
+              }}
             >
               <SelectTrigger id="block-type">
                 <SelectValue />
@@ -224,6 +225,171 @@ export const BlockDesigner = ({ sprites, blocks, onBlocksChange }: BlockDesigner
             </Select>
           </div>
 
+          {/* Block Type Properties */}
+          {editingBlock.type === "crumbling" && (
+            <div className="space-y-3 pt-2 border-t">
+              <div>
+                <Label htmlFor="crumbleTime">Crumble Time (seconds)</Label>
+                <Input
+                  id="crumbleTime"
+                  type="number"
+                  min="0.1"
+                  step="0.1"
+                  value={editingBlock.properties?.crumbleTime ?? 1}
+                  onChange={(e) => setEditingBlock({
+                    ...editingBlock,
+                    properties: { ...editingBlock.properties, crumbleTime: parseFloat(e.target.value) }
+                  })}
+                />
+              </div>
+              <div>
+                <Label htmlFor="respawnTime">Respawn Time (seconds, optional)</Label>
+                <Input
+                  id="respawnTime"
+                  type="number"
+                  min="0"
+                  step="0.5"
+                  placeholder="Leave empty for no respawn"
+                  value={editingBlock.properties?.respawnTime ?? ""}
+                  onChange={(e) => setEditingBlock({
+                    ...editingBlock,
+                    properties: { ...editingBlock.properties, respawnTime: e.target.value ? parseFloat(e.target.value) : undefined }
+                  })}
+                />
+              </div>
+            </div>
+          )}
+
+          {editingBlock.type === "sinking" && (
+            <div className="space-y-3 pt-2 border-t">
+              <div>
+                <Label htmlFor="sinkingSpeed">Sinking Speed</Label>
+                <Input
+                  id="sinkingSpeed"
+                  type="number"
+                  min="0.1"
+                  step="0.1"
+                  value={editingBlock.properties?.sinkingSpeed ?? 1}
+                  onChange={(e) => setEditingBlock({
+                    ...editingBlock,
+                    properties: { ...editingBlock.properties, sinkingSpeed: parseFloat(e.target.value) }
+                  })}
+                />
+              </div>
+              <div>
+                <Label htmlFor="sinkingDepth">Sinking Depth (pixels)</Label>
+                <Input
+                  id="sinkingDepth"
+                  type="number"
+                  min="1"
+                  step="1"
+                  value={editingBlock.properties?.sinkingDepth ?? 8}
+                  onChange={(e) => setEditingBlock({
+                    ...editingBlock,
+                    properties: { ...editingBlock.properties, sinkingDepth: parseInt(e.target.value) }
+                  })}
+                />
+              </div>
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="resetOnPlayerDeath"
+                  checked={editingBlock.properties?.resetOnPlayerDeath ?? false}
+                  onCheckedChange={(checked) => setEditingBlock({
+                    ...editingBlock,
+                    properties: { ...editingBlock.properties, resetOnPlayerDeath: checked === true }
+                  })}
+                />
+                <Label htmlFor="resetOnPlayerDeath" className="cursor-pointer">Reset on player death</Label>
+              </div>
+            </div>
+          )}
+
+          {editingBlock.type === "conveyor" && (
+            <div className="space-y-3 pt-2 border-t">
+              <div>
+                <Label htmlFor="conveyorDirection">Direction</Label>
+                <Select
+                  value={editingBlock.properties?.direction ?? "right"}
+                  onValueChange={(value) => setEditingBlock({
+                    ...editingBlock,
+                    properties: { ...editingBlock.properties, direction: value as "left" | "right" }
+                  })}
+                >
+                  <SelectTrigger id="conveyorDirection">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="left">Left</SelectItem>
+                    <SelectItem value="right">Right</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="conveyorSpeed">Speed: {editingBlock.properties?.speed ?? 2}</Label>
+                <Slider
+                  id="conveyorSpeed"
+                  min={1}
+                  max={10}
+                  step={1}
+                  value={[editingBlock.properties?.speed ?? 2]}
+                  onValueChange={([value]) => setEditingBlock({
+                    ...editingBlock,
+                    properties: { ...editingBlock.properties, speed: value }
+                  })}
+                />
+              </div>
+            </div>
+          )}
+
+          {editingBlock.type === "ice" && (
+            <div className="space-y-3 pt-2 border-t">
+              <div>
+                <Label htmlFor="frictionCoefficient">Friction Coefficient: {(editingBlock.properties?.frictionCoefficient ?? 0.5).toFixed(2)}</Label>
+                <Slider
+                  id="frictionCoefficient"
+                  min={0.1}
+                  max={1.0}
+                  step={0.05}
+                  value={[editingBlock.properties?.frictionCoefficient ?? 0.5]}
+                  onValueChange={([value]) => setEditingBlock({
+                    ...editingBlock,
+                    properties: { ...editingBlock.properties, frictionCoefficient: value }
+                  })}
+                />
+                <p className="text-xs text-muted-foreground mt-1">0.1 = very slippery, 1.0 = normal grip</p>
+              </div>
+            </div>
+          )}
+
+          {editingBlock.type === "ladder" && (
+            <div className="space-y-3 pt-2 border-t">
+              <div>
+                <Label htmlFor="climbSpeed">Climb Speed</Label>
+                <Input
+                  id="climbSpeed"
+                  type="number"
+                  min="0.5"
+                  step="0.5"
+                  value={editingBlock.properties?.climbSpeed ?? 2}
+                  onChange={(e) => setEditingBlock({
+                    ...editingBlock,
+                    properties: { ...editingBlock.properties, climbSpeed: parseFloat(e.target.value) }
+                  })}
+                />
+              </div>
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="passThroughAllowed"
+                  checked={editingBlock.properties?.passThroughAllowed ?? true}
+                  onCheckedChange={(checked) => setEditingBlock({
+                    ...editingBlock,
+                    properties: { ...editingBlock.properties, passThroughAllowed: checked === true }
+                  })}
+                />
+                <Label htmlFor="passThroughAllowed" className="cursor-pointer">Allow pass-through</Label>
+              </div>
+            </div>
+          )}
 
           <Button onClick={handleCreateBlock} className="w-full">
             <Plus className="w-4 h-4 mr-2" />
