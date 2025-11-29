@@ -417,11 +417,27 @@ function createBinaryGameEngine(
   
   // Initialize player position
   const playerXPixel = 128;
-  const playerYPixel = 96;
+  const playerYPixel = 152;  // Ground level (192 - 40 pixels from bottom)
   
   engine.push(0x3e, playerXPixel & 0xff);  // LD A, playerX
   engine.push(0x32);              // LD (playerX), A
   const playerXVarIdx = engine.length;
+  engine.push(0x00, 0x00);        // Placeholder
+  
+  engine.push(0x3e, playerYPixel & 0xff);  // LD A, playerY
+  engine.push(0x32);              // LD (playerY), A
+  const playerYVarIdx = engine.length;
+  engine.push(0x00, 0x00);        // Placeholder
+  
+  // Initialize isJumping to 0
+  engine.push(0xaf);              // XOR A
+  engine.push(0x32);              // LD (isJumping), A
+  const isJumpingVarIdx = engine.length;
+  engine.push(0x00, 0x00);        // Placeholder
+  
+  // Initialize jumpFrameIndex to 0
+  engine.push(0x32);              // LD (jumpFrameIndex), A
+  const jumpFrameIdxVarIdx = engine.length;
   engine.push(0x00, 0x00);        // Placeholder
   
   // ===== MAIN GAME LOOP =====
@@ -431,10 +447,144 @@ function createBinaryGameEngine(
   const playerObject = objects.find(obj => obj.type === "player");
   const keyLeft = playerObject?.properties.keyLeft || "q";
   const keyRight = playerObject?.properties.keyRight || "w";
+  const keyJump = playerObject?.properties.keyJump || "p";
   
   // Get Spectrum key mappings
   const leftMapping = getKeyMapping(keyLeft);
   const rightMapping = getKeyMapping(keyRight);
+  const jumpMapping = getKeyMapping(keyJump);
+  
+  // ===== CHECK JUMP KEY =====
+  
+  // Read jump key
+  engine.push(0x01);              // LD BC, port
+  engine.push((jumpMapping?.port || 0xDFFE) & 0xff);
+  engine.push(((jumpMapping?.port || 0xDFFE) >> 8) & 0xff);
+  engine.push(0xed, 0x78);        // IN A, (C)
+  
+  const jumpBit = jumpMapping?.bit || 0;
+  engine.push(0xcb, 0x47 + (jumpBit * 8));  // BIT n, A
+  const jrNoJumpPos = engine.length;
+  engine.push(0x20, 0x00);        // JR NZ, skip_jump_init (placeholder)
+  
+  // Jump key pressed - check if already jumping
+  engine.push(0x3a);              // LD A, (isJumping)
+  const isJumpingReadIdx1 = engine.length;
+  engine.push(0x00, 0x00);        // Placeholder
+  engine.push(0xa7);              // AND A
+  const jrAlreadyJumpingPos = engine.length;
+  engine.push(0x20, 0x00);        // JR NZ, skip_jump_init (placeholder)
+  
+  // Start jump - set isJumping = 1
+  engine.push(0x3e, 0x01);        // LD A, 1
+  engine.push(0x32);              // LD (isJumping), A
+  const isJumpingWriteIdx1 = engine.length;
+  engine.push(0x00, 0x00);        // Placeholder
+  
+  // Reset jumpFrameIndex to 0
+  engine.push(0xaf);              // XOR A
+  engine.push(0x32);              // LD (jumpFrameIndex), A
+  const jumpFrameIdxWriteIdx1 = engine.length;
+  engine.push(0x00, 0x00);        // Placeholder
+  
+  engine.push(0x3e, 0x04);        // LD A, 4
+  engine.push(0xd3, 0xfe);        // OUT (254), A (border green - jump started)
+  
+  // Skip jump initialization
+  const skipJumpInitPos = engine.length;
+  
+  // ===== PROCESS JUMP IF ACTIVE =====
+  
+  // Check if currently jumping
+  engine.push(0x3a);              // LD A, (isJumping)
+  const isJumpingReadIdx2 = engine.length;
+  engine.push(0x00, 0x00);        // Placeholder
+  engine.push(0xa7);              // AND A
+  const jrNotJumpingPos = engine.length;
+  engine.push(0x28, 0x00);        // JR Z, check_right_key (placeholder)
+  
+  // Read current jump frame index
+  engine.push(0x3a);              // LD A, (jumpFrameIndex)
+  const jumpFrameIdxReadIdx1 = engine.length;
+  engine.push(0x00, 0x00);        // Placeholder
+  
+  // Check if past trajectory (frame >= 18)
+  engine.push(0xfe, 0x12);        // CP 18
+  const jrPastTrajectoryPos = engine.length;
+  engine.push(0x30, 0x00);        // JR NC, land_check (placeholder)
+  
+  // Look up trajectory value
+  // HL = trajectory_table + jumpFrameIndex
+  engine.push(0x21);              // LD HL, trajectory_table
+  const trajectoryTableAddrIdx = engine.length;
+  engine.push(0x00, 0x00);        // Placeholder
+  engine.push(0x5f);              // LD E, A
+  engine.push(0x16, 0x00);        // LD D, 0
+  engine.push(0x19);              // ADD HL, DE
+  
+  // Read trajectory offset (signed byte)
+  engine.push(0x7e);              // LD A, (HL)
+  engine.push(0x47);              // LD B, A (save trajectory)
+  
+  // Add to playerY
+  engine.push(0x3a);              // LD A, (playerY)
+  const playerYReadIdx1 = engine.length;
+  engine.push(0x00, 0x00);        // Placeholder
+  engine.push(0x80);              // ADD A, B
+  engine.push(0x32);              // LD (playerY), A
+  const playerYWriteIdx1 = engine.length;
+  engine.push(0x00, 0x00);        // Placeholder
+  
+  // Increment jump frame index
+  engine.push(0x3a);              // LD A, (jumpFrameIndex)
+  const jumpFrameIdxReadIdx2 = engine.length;
+  engine.push(0x00, 0x00);        // Placeholder
+  engine.push(0x3c);              // INC A
+  engine.push(0x32);              // LD (jumpFrameIndex), A
+  const jumpFrameIdxWriteIdx2 = engine.length;
+  engine.push(0x00, 0x00);        // Placeholder
+  
+  const jrToCheckRightPos = engine.length;
+  engine.push(0x18, 0x00);        // JR check_right_key (placeholder)
+  
+  // Land check - check if Y >= ground level
+  const landCheckPos = engine.length;
+  engine.push(0x3a);              // LD A, (playerY)
+  const playerYReadIdx2 = engine.length;
+  engine.push(0x00, 0x00);        // Placeholder
+  engine.push(0xfe, playerYPixel & 0xff);  // CP ground_level
+  const jrStillAirbornePos = engine.length;
+  engine.push(0x38, 0x00);        // JR C, still_airborne (placeholder)
+  
+  // Landed - reset Y to ground and stop jumping
+  engine.push(0x3e, playerYPixel & 0xff);  // LD A, ground_level
+  engine.push(0x32);              // LD (playerY), A
+  const playerYWriteIdx2 = engine.length;
+  engine.push(0x00, 0x00);        // Placeholder
+  
+  engine.push(0xaf);              // XOR A
+  engine.push(0x32);              // LD (isJumping), A
+  const isJumpingWriteIdx2 = engine.length;
+  engine.push(0x00, 0x00);        // Placeholder
+  
+  engine.push(0x3e, 0x00);        // LD A, 0
+  engine.push(0xd3, 0xfe);        // OUT (254), A (border black - landed)
+  
+  const jrToCheckRightPos2 = engine.length;
+  engine.push(0x18, 0x00);        // JR check_right_key (placeholder)
+  
+  // Still airborne - continue falling
+  const stillAirbornePos = engine.length;
+  engine.push(0x3a);              // LD A, (playerY)
+  const playerYReadIdx3 = engine.length;
+  engine.push(0x00, 0x00);        // Placeholder
+  engine.push(0xc6, 0x04);        // ADD A, 4 (fall faster)
+  engine.push(0x32);              // LD (playerY), A
+  const playerYWriteIdx3 = engine.length;
+  engine.push(0x00, 0x00);        // Placeholder
+  
+  // ===== CHECK HORIZONTAL MOVEMENT =====
+  const checkRightKeyPos = engine.length;
   
   // Read keyboard for right key
   engine.push(0x01);              // LD BC, port
@@ -495,23 +645,31 @@ function createBinaryGameEngine(
   engine.push(0x3a);              // LD A, (playerX)
   const playerXReadIdx3 = engine.length;
   engine.push(0x00, 0x00);        // Placeholder
-  engine.push(0x4f);              // LD C, A
+  engine.push(0x4f);              // LD C, A (save X in C)
   
-  // Calculate screen address for fixed Y position
-  engine.push(0x3e, playerYPixel & 0xff);  // LD A, playerY
+  // Load player Y position (dynamic)
+  engine.push(0x3a);              // LD A, (playerY)
+  const playerYReadIdx4 = engine.length;
+  engine.push(0x00, 0x00);        // Placeholder
+  
+  // Calculate screen address for Y position
   engine.push(0xe6, 0xc0);        // AND 192
   engine.push(0xcb, 0x3f);        // SRL A
   engine.push(0xcb, 0x3f);        // SRL A
   engine.push(0xcb, 0x3f);        // SRL A
   engine.push(0x67);              // LD H, A
   
-  engine.push(0x3e, playerYPixel & 0xff);  // LD A, playerY
+  engine.push(0x3a);              // LD A, (playerY)
+  const playerYReadIdx5 = engine.length;
+  engine.push(0x00, 0x00);        // Placeholder
   engine.push(0xe6, 0x07);        // AND 7
   engine.push(0xb4);              // OR H
   engine.push(0xc6, 0x40);        // ADD A, 64
   engine.push(0x67);              // LD H, A
   
-  engine.push(0x3e, playerYPixel & 0xff);  // LD A, playerY
+  engine.push(0x3a);              // LD A, (playerY)
+  const playerYReadIdx6 = engine.length;
+  engine.push(0x00, 0x00);        // Placeholder
   engine.push(0xe6, 0x38);        // AND 56
   engine.push(0xcb, 0x27);        // SLA A
   engine.push(0xcb, 0x27);        // SLA A
@@ -538,9 +696,31 @@ function createBinaryGameEngine(
   
   // ===== DATA AREA =====
   
+  // Manic Miner jump trajectory table (18 frames)
+  const trajectoryTableAddr = 32768 + engine.length;
+  const jumpTrajectory = [
+    -4, -4, -3, -3, -2, -2, -1, -1, 0, 0,  // Ascent
+    1, 1, 2, 2, 3, 3, 4, 4                 // Descent
+  ];
+  jumpTrajectory.forEach(offset => {
+    engine.push(offset < 0 ? 256 + offset : offset);  // Convert to unsigned byte
+  });
+  
   // Player X variable
   const playerXVarAddr = 32768 + engine.length;
   engine.push(playerXPixel & 0xff);
+  
+  // Player Y variable
+  const playerYVarAddr = 32768 + engine.length;
+  engine.push(playerYPixel & 0xff);
+  
+  // IsJumping variable
+  const isJumpingVarAddr = 32768 + engine.length;
+  engine.push(0x00);
+  
+  // JumpFrameIndex variable
+  const jumpFrameIdxVarAddr = 32768 + engine.length;
+  engine.push(0x00);
   
   // Sprite width variable
   const spriteWidthVarAddr = 32768 + engine.length;
@@ -576,6 +756,10 @@ function createBinaryGameEngine(
   engine[spriteHeightAddr] = spriteHeightVarAddr & 0xff;
   engine[spriteHeightAddr + 1] = (spriteHeightVarAddr >> 8) & 0xff;
   
+  // Patch trajectory table address
+  engine[trajectoryTableAddrIdx] = trajectoryTableAddr & 0xff;
+  engine[trajectoryTableAddrIdx + 1] = (trajectoryTableAddr >> 8) & 0xff;
+  
   // Patch player X variable addresses
   engine[playerXVarIdx] = playerXVarAddr & 0xff;
   engine[playerXVarIdx + 1] = (playerXVarAddr >> 8) & 0xff;
@@ -595,13 +779,98 @@ function createBinaryGameEngine(
   engine[playerXReadIdx3] = playerXVarAddr & 0xff;
   engine[playerXReadIdx3 + 1] = (playerXVarAddr >> 8) & 0xff;
   
+  // Patch player Y variable addresses
+  engine[playerYVarIdx] = playerYVarAddr & 0xff;
+  engine[playerYVarIdx + 1] = (playerYVarAddr >> 8) & 0xff;
+  
+  engine[playerYReadIdx1] = playerYVarAddr & 0xff;
+  engine[playerYReadIdx1 + 1] = (playerYVarAddr >> 8) & 0xff;
+  
+  engine[playerYWriteIdx1] = playerYVarAddr & 0xff;
+  engine[playerYWriteIdx1 + 1] = (playerYVarAddr >> 8) & 0xff;
+  
+  engine[playerYReadIdx2] = playerYVarAddr & 0xff;
+  engine[playerYReadIdx2 + 1] = (playerYVarAddr >> 8) & 0xff;
+  
+  engine[playerYWriteIdx2] = playerYVarAddr & 0xff;
+  engine[playerYWriteIdx2 + 1] = (playerYVarAddr >> 8) & 0xff;
+  
+  engine[playerYReadIdx3] = playerYVarAddr & 0xff;
+  engine[playerYReadIdx3 + 1] = (playerYVarAddr >> 8) & 0xff;
+  
+  engine[playerYReadIdx4] = playerYVarAddr & 0xff;
+  engine[playerYReadIdx4 + 1] = (playerYVarAddr >> 8) & 0xff;
+  
+  engine[playerYReadIdx5] = playerYVarAddr & 0xff;
+  engine[playerYReadIdx5 + 1] = (playerYVarAddr >> 8) & 0xff;
+  
+  engine[playerYReadIdx6] = playerYVarAddr & 0xff;
+  engine[playerYReadIdx6 + 1] = (playerYVarAddr >> 8) & 0xff;
+  
+  // Patch isJumping variable addresses
+  engine[isJumpingVarIdx] = isJumpingVarAddr & 0xff;
+  engine[isJumpingVarIdx + 1] = (isJumpingVarAddr >> 8) & 0xff;
+  
+  engine[isJumpingReadIdx1] = isJumpingVarAddr & 0xff;
+  engine[isJumpingReadIdx1 + 1] = (isJumpingVarAddr >> 8) & 0xff;
+  
+  engine[isJumpingWriteIdx1] = isJumpingVarAddr & 0xff;
+  engine[isJumpingWriteIdx1 + 1] = (isJumpingVarAddr >> 8) & 0xff;
+  
+  engine[isJumpingReadIdx2] = isJumpingVarAddr & 0xff;
+  engine[isJumpingReadIdx2 + 1] = (isJumpingVarAddr >> 8) & 0xff;
+  
+  engine[isJumpingWriteIdx2] = isJumpingVarAddr & 0xff;
+  engine[isJumpingWriteIdx2 + 1] = (isJumpingVarAddr >> 8) & 0xff;
+  
+  // Patch jumpFrameIndex variable addresses
+  engine[jumpFrameIdxVarIdx] = jumpFrameIdxVarAddr & 0xff;
+  engine[jumpFrameIdxVarIdx + 1] = (jumpFrameIdxVarAddr >> 8) & 0xff;
+  
+  engine[jumpFrameIdxWriteIdx1] = jumpFrameIdxVarAddr & 0xff;
+  engine[jumpFrameIdxWriteIdx1 + 1] = (jumpFrameIdxVarAddr >> 8) & 0xff;
+  
+  engine[jumpFrameIdxReadIdx1] = jumpFrameIdxVarAddr & 0xff;
+  engine[jumpFrameIdxReadIdx1 + 1] = (jumpFrameIdxVarAddr >> 8) & 0xff;
+  
+  engine[jumpFrameIdxReadIdx2] = jumpFrameIdxVarAddr & 0xff;
+  engine[jumpFrameIdxReadIdx2 + 1] = (jumpFrameIdxVarAddr >> 8) & 0xff;
+  
+  engine[jumpFrameIdxWriteIdx2] = jumpFrameIdxVarAddr & 0xff;
+  engine[jumpFrameIdxWriteIdx2 + 1] = (jumpFrameIdxVarAddr >> 8) & 0xff;
+  
   // Patch jump offsets
+  const skipJumpInitAddr = 32768 + skipJumpInitPos;
+  const checkRightKeyAddr = 32768 + checkRightKeyPos;
+  const landCheckAddr = 32768 + landCheckPos;
+  const stillAirborneAddr = 32768 + stillAirbornePos;
   const checkLeftAddr = 32768 + checkLeftPos;
   const drawPlayerAddr = 32768 + drawPlayerPos;
   const noKeyAddr = 32768 + noKeyPos;
   const playerSetupAddr = 32768 + playerSetupPos;
   
-  let disp = checkLeftAddr - (32768 + jrNoRightPos + 2);
+  let disp = skipJumpInitAddr - (32768 + jrNoJumpPos + 2);
+  engine[jrNoJumpPos + 1] = disp & 0xff;
+  
+  disp = skipJumpInitAddr - (32768 + jrAlreadyJumpingPos + 2);
+  engine[jrAlreadyJumpingPos + 1] = disp & 0xff;
+  
+  disp = checkRightKeyAddr - (32768 + jrNotJumpingPos + 2);
+  engine[jrNotJumpingPos + 1] = disp & 0xff;
+  
+  disp = landCheckAddr - (32768 + jrPastTrajectoryPos + 2);
+  engine[jrPastTrajectoryPos + 1] = disp & 0xff;
+  
+  disp = checkRightKeyAddr - (32768 + jrToCheckRightPos + 2);
+  engine[jrToCheckRightPos + 1] = disp & 0xff;
+  
+  disp = stillAirborneAddr - (32768 + jrStillAirbornePos + 2);
+  engine[jrStillAirbornePos + 1] = disp & 0xff;
+  
+  disp = checkRightKeyAddr - (32768 + jrToCheckRightPos2 + 2);
+  engine[jrToCheckRightPos2 + 1] = disp & 0xff;
+  
+  disp = checkLeftAddr - (32768 + jrNoRightPos + 2);
   engine[jrNoRightPos + 1] = disp & 0xff;
   
   disp = drawPlayerAddr - (32768 + jrToDrawPos + 2);
