@@ -184,7 +184,7 @@ export const LevelDesigner = ({ levels, screens, blocks, objects, sprites, onLev
       if (!blockId) return false;
       const block = blocks.find(b => b.id === blockId);
       if (!block) return false;
-      return block.type === "solid" || block.properties?.solid;
+      return block.type === "solid";
     };
 
     const getGroundYForFall = (x: number, prevTopY: number) => {

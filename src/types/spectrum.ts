@@ -14,15 +14,13 @@ export type ObjectType = "player" | "enemy" | "ammunition" | "collectable" | "do
 export type MovingPlatformType = "horizontal" | "vertical" | "elevator" | "rope";
 
 export type BlockType =
-  | "empty"
   | "solid"
   | "deadly"
-  | "collectible"
-  | "platform"
-  | "sinking"
   | "crumbling"
-  | "conveyor-left"
-  | "conveyor-right";
+  | "sinking"
+  | "conveyor"
+  | "ice"
+  | "ladder";
 
 export type SpriteFrame = {
   pixels: number[][];
@@ -109,11 +107,25 @@ export type Block = {
   sprite: Sprite;
   type: BlockType;
   properties: {
-    deadly?: boolean;
-    collectible?: boolean;
-    points?: number;
-    energy?: number;
-    solid?: boolean;
+    // Crumbling block properties
+    crumbleTime?: number;
+    respawnTime?: number;
+    
+    // Sinking block properties
+    sinkingSpeed?: number;
+    sinkingDepth?: number;
+    resetOnPlayerDeath?: boolean;
+    
+    // Conveyor block properties
+    direction?: "left" | "right";
+    speed?: number;
+    
+    // Ice/Slippery block properties
+    frictionCoefficient?: number;
+    
+    // Ladder block properties
+    climbSpeed?: number;
+    passThroughAllowed?: boolean;
   };
 };
 
