@@ -124,20 +124,22 @@ export function exportGameFlowToTAP(
 
   // TAP debug logging is performed after building the BASIC program and TAP blocks below.
 
-  // MINIMAL DIAGNOSTIC TEST: BASIC program ONLY (no SCREEN$, no CODE blocks at all)
-  // This tests if the BASIC program itself parses correctly without any data blocks
-  tap.addBasicLoader(32768, 32768); // Dummy values - CODE won't exist but BASIC should still parse
+  // DIAGNOSTIC TEST: BASIC loader with CODE block (NO SCREEN$)
+  // This tests if adding CODE blocks breaks the TAP
+  tap.addBasicLoader(combinedCode.length, codeStart);
 
-  // All data blocks disabled for minimal BASIC-only diagnostic test
+  // SCREEN$ block disabled for diagnostic testing
   // const loadingName = projectName.substring(0, 10).padEnd(10, " ");
   // tap.addHeader(loadingName, 6912, 16384);
   // tap.addDataBlock(loadingScr);
-  // const codeName = "Level     ";
-  // tap.addHeader(codeName, combinedCode.length, codeStart);
-  // tap.addDataBlock(combinedCode);
+
+  // Add single combined CODE block (engine + all data banks)
+  const codeName = "Level     ";
+  tap.addHeader(codeName, combinedCode.length, codeStart);
+  tap.addDataBlock(combinedCode);
 
   console.log("[TAP DEBUG] Final TAP layout", {
-    blocksOrder: "MINIMAL DIAGNOSTIC TEST: BASIC header, BASIC data ONLY (no SCREEN$, no CODE at all)",
+    blocksOrder: "DIAGNOSTIC TEST: BASIC header, BASIC data, CODE header, CODE data (NO SCREEN$)",
     codeStart,
     engineSizeDummy: engineSize,
     engineSizeFinal: engine.length,
