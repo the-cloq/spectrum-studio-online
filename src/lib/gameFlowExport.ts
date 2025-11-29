@@ -62,10 +62,26 @@ export function exportGameFlowToTAP(
   const spriteBank = packSpriteBank(sprites);
   const blockBank = packBlockBank(blocks, spriteIndexMap);
   const objectBank = packObjectBank(objects, spriteIndexMap);
-  // Only pack game screens (tile-based), not loading/title screens (pixel-based)
-  const gameScreens = screens.filter(s => s.type === "game");
-  const screenBank = packScreenBank(gameScreens, blockIndexMap, objectIndexMap, objects);
 
+  // Only pack game screens that are actually used in the Game Flow / Levels
+  const usedScreenIds = new Set<string>();
+  for (const flow of sortedFlow) {
+    const directScreen = screens.find(s => s.id === flow.screenId);
+    if (directScreen) {
+      if (directScreen.type === "game") {
+        usedScreenIds.add(directScreen.id);
+      }
+    } else {
+      const level = levels.find(l => l.id === flow.screenId);
+      if (level) {
+        for (const sid of level.screenIds) {
+          usedScreenIds.add(sid);
+        }
+      }
+    }
+  }
+  const gameScreens = screens.filter(s => s.type === "game" && usedScreenIds.has(s.id));
+  const screenBank = packScreenBank(gameScreens, blockIndexMap, objectIndexMap, objects);
   // First pass: Build engine with dummy addresses to calculate size
   const dummyEngine = createBinaryGameEngine(
     0, 0, 0, 0, 0,
