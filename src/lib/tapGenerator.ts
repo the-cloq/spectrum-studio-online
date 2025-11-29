@@ -101,11 +101,11 @@ export class TAPGenerator {
     basicProgram[line10Start] = line10Length & 0xff;
     basicProgram[line10Start + 1] = (line10Length >> 8) & 0xff;
     
-    // Line 20: LOAD "" SCREEN$ (no space before SCREEN$)
+    // Line 20: LOAD "" SCREEN$
     basicProgram.push(0x00, 0x14);
     const line20Start = basicProgram.length;
     basicProgram.push(0x00, 0x00);
-    basicProgram.push(0xef, 0x20, 0x22, 0x22, 0xaa, 0x0d);
+    basicProgram.push(0xef, 0x20, 0x22, 0x22, 0x20, 0xaa, 0x0d);
     const line20Length = basicProgram.length - line20Start - 2;
     basicProgram[line20Start] = line20Length & 0xff;
     basicProgram[line20Start + 1] = (line20Length >> 8) & 0xff;
@@ -114,7 +114,7 @@ export class TAPGenerator {
     basicProgram.push(0x00, 0x1e);
     const line30Start = basicProgram.length;
     basicProgram.push(0x00, 0x00);
-    basicProgram.push(0xef, 0x20, 0x22, 0x22, 0xaf, 0x0d);
+    basicProgram.push(0xef, 0x20, 0x22, 0x22, 0x20, 0xaf, 0x0d);
     const line30Length = basicProgram.length - line30Start - 2;
     basicProgram[line30Start] = line30Length & 0xff;
     basicProgram[line30Start + 1] = (line30Length >> 8) & 0xff;
