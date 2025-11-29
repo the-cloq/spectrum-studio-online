@@ -124,83 +124,8 @@ export function exportGameFlowToTAP(
 
   // TAP debug logging is performed after building the BASIC program and TAP blocks below.
 
-  // Build BASIC loader with proper structure
-  const basicProgram: number[] = [];
-
-  // Helper to add a BASIC line
-  const addLine = (lineNum: number, tokens: number[]) => {
-    basicProgram.push((lineNum >> 8) & 0xff, lineNum & 0xff); // Line number (big-endian)
-    const lengthPos = basicProgram.length;
-    basicProgram.push(0x00, 0x00); // Placeholder for line length
-    basicProgram.push(...tokens); // Line content
-    basicProgram.push(0x0d); // ENTER
-    const lineLen = basicProgram.length - lengthPos - 2;
-    basicProgram[lengthPos] = lineLen & 0xff; // Write actual length (little-endian)
-    basicProgram[lengthPos + 1] = (lineLen >> 8) & 0xff;
-  };
-
-  // Line 10: CLEAR 32767
-  addLine(10, [
-    0xfd, // CLEAR
-    0x20, // Space
-    0x33, 0x32, 0x37, 0x36, 0x37, // "32767" ASCII
-    0x0e, 0x00, 0x00, 0xff, 0x7f, 0x00 // Encoded number 32767
-  ]);
-
-  // Line 20: LOAD "" SCREEN$
-  addLine(20, [
-    0xef, // LOAD
-    0x20, // Space
-    0x22, 0x22, // ""
-    0x20, // Space
-    0xaa // SCREEN$
-  ]);
-
-  // Line 30: LOAD "" CODE
-  addLine(30, [
-    0xef, // LOAD
-    0x20, // Space
-    0x22, 0x22, // ""
-    0x20, // Space
-    0xaf // CODE
-  ]);
-
-  // Line 40: RANDOMIZE USR 32768
-  addLine(40, [
-    0xf9, // RANDOMIZE
-    0x20, // Space
-    0xc0, // USR
-    0x20, // Space
-    0x33, 0x32, 0x37, 0x36, 0x38, // "32768" ASCII
-    0x0e, 0x00, 0x00, 0x00, 0x80, 0x00 // Encoded number 32768
-  ]);
-
-  // Create BASIC program header (type 0x00 = BASIC)
-  const basicHeader: number[] = [
-    0x00, // Flag: header block
-    0x00, // Type: BASIC program
-  ];
-  
-  // Filename (10 bytes, padded)
-  const loaderName = "Loader    ";
-  for (let i = 0; i < 10; i++) {
-    basicHeader.push(loaderName.charCodeAt(i));
-  }
-  
-  // Program length (little-endian)
-  basicHeader.push(basicProgram.length & 0xff);
-  basicHeader.push((basicProgram.length >> 8) & 0xff);
-  
-  // Autostart line number (10, little-endian)
-  basicHeader.push(0x0a, 0x00);
-  
-  // Program length again (little-endian)
-  basicHeader.push(basicProgram.length & 0xff);
-  basicHeader.push((basicProgram.length >> 8) & 0xff);
-
-  // Add BASIC blocks to TAP
-  tap.addBlock(basicHeader);
-  tap.addBlock([0xff, ...basicProgram]);
+  // Use the proven BASIC loader with SCREEN$ support
+  tap.addBasicLoaderWithScreen(combinedCode.length, codeStart);
 
   // Add loading screen as SCREEN$
   const loadingName = projectName.substring(0, 10).padEnd(10, " ");
@@ -211,9 +136,6 @@ export function exportGameFlowToTAP(
   const codeName = "Level     ";
   tap.addHeader(codeName, combinedCode.length, codeStart);
   tap.addDataBlock(combinedCode);
-
-  const BASIC_DEFAULT_START = 23755; // Default PROG address on 48K Spectrum
-  const basicEndApprox = BASIC_DEFAULT_START + basicProgram.length;
 
   console.log("[TAP DEBUG] Final TAP layout", {
     blocksOrder: "BASIC header, BASIC data, SCREEN$ header, SCREEN$ data, CODE header, CODE data",
@@ -227,8 +149,6 @@ export function exportGameFlowToTAP(
     combinedCodeLength: combinedCode.length,
     headerLength: combinedCode.length,
     tapDataLengthFlagPlusPayload: combinedCode.length + 1,
-    basicLength: basicProgram.length,
-    basicEndApprox,
     clearLine: 32767,
   });
 
