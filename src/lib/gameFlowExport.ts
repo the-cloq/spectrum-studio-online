@@ -64,15 +64,47 @@ export function exportGameFlowToTAP(
   const objectBank = packObjectBank(objects, spriteIndexMap);
   const screenBank = packScreenBank(screens, blockIndexMap, objectIndexMap, objects);
 
-  // Calculate memory layout
-  const engineStart = 32768;
-  const spriteBankAddr = 40000;
+  // First pass: Build engine with dummy addresses to calculate size
+  const dummyEngine = createBinaryGameEngine(
+    0, 0, 0, 0, 0,
+    validFlowScreens[1] || validFlowScreens[0],
+    blocks,
+    objects,
+    sprites
+  );
+
+  // Calculate memory layout - everything in one continuous block
+  const codeStart = 32768;
+  const engineSize = dummyEngine.length;
+  const spriteBankAddr = codeStart + engineSize;
   const blockBankAddr = spriteBankAddr + spriteBank.length;
   const objectBankAddr = blockBankAddr + blockBank.length;
   const screenBankAddr = objectBankAddr + objectBank.length;
   const bgScreenAddr = screenBankAddr + screenBank.length;
 
-  // Build BASIC loader
+  // Second pass: Build engine with correct addresses
+  const engine = createBinaryGameEngine(
+    spriteBankAddr,
+    blockBankAddr,
+    objectBankAddr,
+    screenBankAddr,
+    bgScreenAddr,
+    validFlowScreens[1] || validFlowScreens[0],
+    blocks,
+    objects,
+    sprites
+  );
+
+  // Combine all data into one continuous block
+  const combinedCode = [
+    ...engine,
+    ...Array.from(spriteBank),
+    ...Array.from(blockBank),
+    ...Array.from(objectBank),
+    ...Array.from(screenBank)
+  ];
+
+  // Build simplified BASIC loader (3 lines only)
   const basicProgram: number[] = [];
 
   // Line 10: CLEAR 32767
@@ -96,7 +128,7 @@ export function exportGameFlowToTAP(
   basicProgram[lineStart] = lineLength & 0xff;
   basicProgram[lineStart + 1] = (lineLength >> 8) & 0xff;
 
-  // Line 30: LOAD "" CODE (sprite bank)
+  // Line 30: LOAD "" CODE
   basicProgram.push(0x00, 0x1e);
   lineStart = basicProgram.length;
   basicProgram.push(0x00, 0x00);
@@ -105,44 +137,8 @@ export function exportGameFlowToTAP(
   basicProgram[lineStart] = lineLength & 0xff;
   basicProgram[lineStart + 1] = (lineLength >> 8) & 0xff;
 
-  // Line 40: LOAD "" CODE (block bank)
+  // Line 40: RANDOMIZE USR 32768
   basicProgram.push(0x00, 0x28);
-  lineStart = basicProgram.length;
-  basicProgram.push(0x00, 0x00);
-  basicProgram.push(0xef, 0x20, 0x22, 0x22, 0x20, 0xaf, 0x0d);
-  lineLength = basicProgram.length - lineStart - 2;
-  basicProgram[lineStart] = lineLength & 0xff;
-  basicProgram[lineStart + 1] = (lineLength >> 8) & 0xff;
-
-  // Line 50: LOAD "" CODE (object bank)
-  basicProgram.push(0x00, 0x32);
-  lineStart = basicProgram.length;
-  basicProgram.push(0x00, 0x00);
-  basicProgram.push(0xef, 0x20, 0x22, 0x22, 0x20, 0xaf, 0x0d);
-  lineLength = basicProgram.length - lineStart - 2;
-  basicProgram[lineStart] = lineLength & 0xff;
-  basicProgram[lineStart + 1] = (lineLength >> 8) & 0xff;
-
-  // Line 60: LOAD "" CODE (screen bank)
-  basicProgram.push(0x00, 0x3c);
-  lineStart = basicProgram.length;
-  basicProgram.push(0x00, 0x00);
-  basicProgram.push(0xef, 0x20, 0x22, 0x22, 0x20, 0xaf, 0x0d);
-  lineLength = basicProgram.length - lineStart - 2;
-  basicProgram[lineStart] = lineLength & 0xff;
-  basicProgram[lineStart + 1] = (lineLength >> 8) & 0xff;
-
-  // Line 70: LOAD "" CODE (engine)
-  basicProgram.push(0x00, 0x46);
-  lineStart = basicProgram.length;
-  basicProgram.push(0x00, 0x00);
-  basicProgram.push(0xef, 0x20, 0x22, 0x22, 0x20, 0xaf, 0x0d);
-  lineLength = basicProgram.length - lineStart - 2;
-  basicProgram[lineStart] = lineLength & 0xff;
-  basicProgram[lineStart + 1] = (lineLength >> 8) & 0xff;
-
-  // Line 80: RANDOMIZE USR 32768
-  basicProgram.push(0x00, 0x50);
   lineStart = basicProgram.length;
   basicProgram.push(0x00, 0x00);
   basicProgram.push(0xf9, 0x20, 0xc0, 0x20);
@@ -173,39 +169,10 @@ export function exportGameFlowToTAP(
   tap.addHeader(loadingName, 6912, 16384);
   tap.addDataBlock(loadingScr);
 
-  // Add sprite bank
-  tap.addHeader("SpriteBank", spriteBank.length, spriteBankAddr);
-  tap.addDataBlock(Array.from(spriteBank));
-
-  // Add block bank
-  tap.addHeader("BlockBank ", blockBank.length, blockBankAddr);
-  tap.addDataBlock(Array.from(blockBank));
-
-  // Add object bank
-  tap.addHeader("ObjectBank", objectBank.length, objectBankAddr);
-  tap.addDataBlock(Array.from(objectBank));
-
-  // Add screen bank
-  tap.addHeader("ScreenBank", screenBank.length, screenBankAddr);
-  tap.addDataBlock(Array.from(screenBank));
-
-  // Build Z80 engine that reads binary tables
-  const engine = createBinaryGameEngine(
-    spriteBankAddr,
-    blockBankAddr,
-    objectBankAddr,
-    screenBankAddr,
-    bgScreenAddr,
-    validFlowScreens[1] || validFlowScreens[0],
-    blocks,
-    objects,
-    sprites
-  );
-
-  // Add engine code
-  const codeName = "GameEngine";
-  tap.addHeader(codeName, engine.length, engineStart);
-  tap.addDataBlock(engine);
+  // Add single combined CODE block (engine + all data banks)
+  const codeName = "Level     ";
+  tap.addHeader(codeName, combinedCode.length, codeStart);
+  tap.addDataBlock(combinedCode);
 
   return tap.toBlob();
 }
