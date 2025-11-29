@@ -94,13 +94,25 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
   const getDefaultProperties = (type: ObjectType) => {
     switch (type) {
       case "player":
-        return { speed: 2, jumpHeight: 40, jumpDistance: 48, gravity: 5, maxFallDistance: 20 };
+        return { 
+          speed: 3, 
+          jumpHeight: 40, 
+          gravity: 5
+        };
       case "enemy":
-        return { damage: 10, movementPattern: "patrol" as const, respawnDelay: 3000, direction: "right" as const };
+        return { 
+          speed: 2, 
+          patrolType: "left-right" as const,
+          damage: 10, 
+          aiBehavior: "patrol" as const
+        };
+      case "collectable":
+        return { 
+          points: 10, 
+          requiredToExit: false
+        };
       case "ammunition":
         return { projectileSpeed: 8, projectileDamage: 5, projectileRange: 100 };
-      case "collectable":
-        return { points: 10, energyBonus: 0, itemType: "coin" as const, oneTime: true };
       case "door":
         return { targetRoom: "", targetFloor: 0 };
       case "exit":
@@ -990,12 +1002,13 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
                     <div className="space-y-2">
                       <Label>Speed (pixels/frame): {selectedObject.properties.speed}</Label>
                       <Slider
-                        value={[selectedObject.properties.speed || 2]}
+                        value={[selectedObject.properties.speed || 3]}
                         onValueChange={([value]) => updateProperty("speed", value)}
                         min={1}
                         max={8}
                         step={1}
                       />
+                      <p className="text-xs text-muted-foreground">Horizontal movement speed</p>
                     </div>
                     <div className="space-y-2">
                       <Label>Jump Height: {selectedObject.properties.jumpHeight}px</Label>
@@ -1006,22 +1019,53 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
                         max={80}
                         step={4}
                       />
+                      <p className="text-xs text-muted-foreground">Maximum jump height in pixels</p>
                     </div>
                     <div className="space-y-2">
-                      <Label>Jump Distance: {selectedObject.properties.jumpDistance}px</Label>
+                      <Label>Gravity: {selectedObject.properties.gravity}</Label>
                       <Slider
-                        value={[selectedObject.properties.jumpDistance || 48]}
-                        onValueChange={([value]) => updateProperty("jumpDistance", value)}
-                        min={24}
-                        max={96}
-                        step={4}
+                        value={[selectedObject.properties.gravity || 5]}
+                        onValueChange={([value]) => updateProperty("gravity", value)}
+                        min={1}
+                        max={10}
+                        step={1}
                       />
+                      <p className="text-xs text-muted-foreground">Fall speed (higher = faster)</p>
                     </div>
                   </>
                 )}
 
                 {selectedObject.type === "enemy" && (
                   <>
+                    <div className="space-y-2">
+                      <Label>Speed (pixels/frame): {selectedObject.properties.speed || 2}</Label>
+                      <Slider
+                        value={[selectedObject.properties.speed || 2]}
+                        onValueChange={([value]) => updateProperty("speed", value)}
+                        min={1}
+                        max={8}
+                        step={1}
+                      />
+                      <p className="text-xs text-muted-foreground">Enemy movement speed</p>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Patrol Type</Label>
+                      <Select
+                        value={selectedObject.properties.patrolType || "left-right"}
+                        onValueChange={(value) => updateProperty("patrolType", value)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="left-right">Left-Right</SelectItem>
+                          <SelectItem value="up-down">Up-Down</SelectItem>
+                          <SelectItem value="circular">Circular</SelectItem>
+                          <SelectItem value="stationary">Stationary</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">How the enemy patrols</p>
+                    </div>
                     <div className="space-y-2">
                       <Label>Damage: {selectedObject.properties.damage}</Label>
                       <Slider
@@ -1031,50 +1075,25 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
                         max={50}
                         step={1}
                       />
+                      <p className="text-xs text-muted-foreground">Damage dealt on contact</p>
                     </div>
                     <div className="space-y-2">
-                      <Label>Movement Pattern</Label>
+                      <Label>AI Behavior</Label>
                       <Select
-                        value={selectedObject.properties.movementPattern || "patrol"}
-                        onValueChange={(value) => updateProperty("movementPattern", value)}
+                        value={selectedObject.properties.aiBehavior || "patrol"}
+                        onValueChange={(value) => updateProperty("aiBehavior", value)}
                       >
                         <SelectTrigger>
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="stationary">Stationary</SelectItem>
                           <SelectItem value="patrol">Patrol</SelectItem>
                           <SelectItem value="chase">Chase Player</SelectItem>
-                          <SelectItem value="fly">Flying</SelectItem>
+                          <SelectItem value="guard">Guard Area</SelectItem>
+                          <SelectItem value="random">Random Movement</SelectItem>
                         </SelectContent>
                       </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Respawn Delay (ms): {selectedObject.properties.respawnDelay}</Label>
-                      <Slider
-                        value={[selectedObject.properties.respawnDelay || 3000]}
-                        onValueChange={([value]) => updateProperty("respawnDelay", value)}
-                        min={0}
-                        max={10000}
-                        step={500}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Direction</Label>
-                      <Select
-                        value={selectedObject.properties.direction || "right"}
-                        onValueChange={(value) => updateProperty("direction", value)}
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="left">Left</SelectItem>
-                          <SelectItem value="right">Right</SelectItem>
-                          <SelectItem value="up">Up</SelectItem>
-                          <SelectItem value="down">Down</SelectItem>
-                        </SelectContent>
-                      </Select>
+                      <p className="text-xs text-muted-foreground">Enemy AI pattern</p>
                     </div>
                   </>
                 )}
@@ -1117,24 +1136,7 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
                 {selectedObject.type === "collectable" && (
                   <>
                     <div className="space-y-2">
-                      <Label>Item Type</Label>
-                      <Select
-                        value={selectedObject.properties.itemType || "coin"}
-                        onValueChange={(value) => updateProperty("itemType", value)}
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="coin">Coin</SelectItem>
-                          <SelectItem value="key">Key</SelectItem>
-                          <SelectItem value="powerup">Power-up</SelectItem>
-                          <SelectItem value="life">Extra Life</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Points: {selectedObject.properties.points}</Label>
+                      <Label>Points Value: {selectedObject.properties.points}</Label>
                       <Slider
                         value={[selectedObject.properties.points || 10]}
                         onValueChange={([value]) => updateProperty("points", value)}
@@ -1142,22 +1144,16 @@ export function ObjectLibrary({ objects, sprites, onObjectsChange }: ObjectLibra
                         max={1000}
                         step={10}
                       />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Energy Bonus: {selectedObject.properties.energyBonus}</Label>
-                      <Slider
-                        value={[selectedObject.properties.energyBonus || 0]}
-                        onValueChange={([value]) => updateProperty("energyBonus", value)}
-                        min={0}
-                        max={50}
-                        step={5}
-                      />
+                      <p className="text-xs text-muted-foreground">Points awarded when collected</p>
                     </div>
                     <div className="flex items-center justify-between">
-                      <Label>One Time Only</Label>
+                      <div>
+                        <Label>Required to Exit</Label>
+                        <p className="text-xs text-muted-foreground mt-1">Must collect before exiting level</p>
+                      </div>
                       <Switch
-                        checked={selectedObject.properties.oneTime || true}
-                        onCheckedChange={(checked) => updateProperty("oneTime", checked)}
+                        checked={selectedObject.properties.requiredToExit || false}
+                        onCheckedChange={(checked) => updateProperty("requiredToExit", checked)}
                       />
                     </div>
                   </>
