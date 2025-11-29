@@ -62,7 +62,9 @@ export function exportGameFlowToTAP(
   const spriteBank = packSpriteBank(sprites);
   const blockBank = packBlockBank(blocks, spriteIndexMap);
   const objectBank = packObjectBank(objects, spriteIndexMap);
-  const screenBank = packScreenBank(screens, blockIndexMap, objectIndexMap, objects);
+  // Only pack game screens (tile-based), not loading/title screens (pixel-based)
+  const gameScreens = screens.filter(s => s.type === "game");
+  const screenBank = packScreenBank(gameScreens, blockIndexMap, objectIndexMap, objects);
 
   // First pass: Build engine with dummy addresses to calculate size
   const dummyEngine = createBinaryGameEngine(
