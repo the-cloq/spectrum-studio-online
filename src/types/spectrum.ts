@@ -63,18 +63,16 @@ export type GameObject = {
   spriteId: string; // Primary sprite reference
   animations?: AnimationSet; // Directional animations
   properties: {
-    // Player properties
-    speed?: number;
+    // Player properties (speed, jumpHeight, gravity)
+    // Enemy properties (speed, patrolType, damage, aiBehavior)
+    speed?: number; // Used by both Player and Enemy
     jumpHeight?: number;
-    jumpDistance?: number;
     gravity?: number;
-    maxFallDistance?: number;
     
-    // Enemy properties
+    // Enemy-specific properties
+    patrolType?: "left-right" | "up-down" | "circular" | "stationary";
     damage?: number;
-    movementPattern?: "stationary" | "patrol" | "chase" | "fly";
-    respawnDelay?: number;
-    direction?: "left" | "right" | "up" | "down";
+    aiBehavior?: "patrol" | "chase" | "guard" | "random";
     
     // Ammunition properties
     projectileSpeed?: number;
@@ -83,9 +81,7 @@ export type GameObject = {
     
     // Collectable properties
     points?: number;
-    energyBonus?: number;
-    itemType?: "coin" | "key" | "powerup" | "life";
-    oneTime?: boolean;
+    requiredToExit?: boolean;
     
     // Door properties
     targetRoom?: string;
