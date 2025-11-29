@@ -96,6 +96,7 @@ const hydrateProjectFromStorage = (loaded: any): GameProject => {
     sprites: migratedSprites,
     screens: migratedScreens,
     objects: loaded.objects ?? [],
+    blocks: loaded.blocks ?? [],
     levels: loaded.levels ?? [],
     gameFlow: loaded.gameFlow ?? [],
     settings:
