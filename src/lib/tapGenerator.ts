@@ -106,9 +106,10 @@ export class TAPGenerator {
     headerData.push(autoStart & 0xff);
     headerData.push((autoStart >> 8) & 0xff);
 
-    // Unused/reserved (2 bytes) - should match data length for CODE blocks
-    headerData.push(dataLength & 0xff);
-    headerData.push((dataLength >> 8) & 0xff);
+    // Parameter 2 for CODE files must be 32768 (0x8000) per Spectrum ROM spec
+    // This is how the ROM distinguishes CODE (incl. SCREEN$) from other types
+    headerData.push(0x00);
+    headerData.push(0x80);
 
     this.addBlock(headerData);
   }
