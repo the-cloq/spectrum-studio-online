@@ -1,9 +1,13 @@
 import { TAPGenerator } from "./tapGenerator";
 import { type Screen, type GameFlowScreen, type Level, type Block, type GameObject, type Sprite, SPECTRUM_COLORS } from "@/types/spectrum";
+import { packBlockBank, generateBlockBankAsm } from "./blockPacker";
+import { packObjectBank, generateObjectBankAsm } from "./objectPacker";
+import { packScreenBank, generateScreenBankAsm } from "./screenPacker";
+import { packSpriteBank, generateSpriteBankAsm, createSpriteIndexMap } from "./spritePacker";
 
 /**
- * Export Game Flow to TAP file
- * Includes loading screens, title screens with keyboard menus, and level data
+ * Export Game Flow to TAP file with binary data banks
+ * Includes loading screens, title screens, and level data using compact binary encoding
  */
 export function exportGameFlowToTAP(
   gameFlow: GameFlowScreen[],
@@ -32,322 +36,329 @@ export function exportGameFlowToTAP(
       }
       return screen;
     })
-    // Include any screen we can resolve (even if it's a tile-based game screen)
     .filter((screen): screen is Screen => !!screen);
 
   if (validFlowScreens.length === 0) {
-    return tap.toBlob(); // No valid screens to export
+    return tap.toBlob();
   }
 
-  // Use first valid screen as loading screen and second as the initial game screen
+  // Use first valid screen as loading screen
   const loadingScreen = validFlowScreens[0];
-  const targetScreen = validFlowScreens.length > 1 ? validFlowScreens[1] : loadingScreen;
-
   const loadingScr = encodeScreenToSCR(loadingScreen, blocks, objects, sprites);
-  const targetScr = encodeScreenToSCR(targetScreen, blocks, objects, sprites);
 
-  // Build BASIC loader:
-  // 10 CLEAR 32767
-  // 20 LOAD "" SCREEN$
-  // 30 LOAD "" CODE
-  // 40 RANDOMIZE USR 32768
+  // Build index maps for binary encoding
+  const spriteIndexMap = createSpriteIndexMap(sprites);
+  const blockIndexMap = new Map<string, number>();
+  blocks.forEach((block, index) => {
+    blockIndexMap.set(block.id, index);
+  });
+  const objectIndexMap = new Map<string, number>();
+  objects.forEach((obj, index) => {
+    objectIndexMap.set(obj.id, index);
+  });
+
+  // Pack all data banks to binary format
+  const spriteBank = packSpriteBank(sprites);
+  const blockBank = packBlockBank(blocks, spriteIndexMap);
+  const objectBank = packObjectBank(objects, spriteIndexMap);
+  const screenBank = packScreenBank(screens, blockIndexMap, objectIndexMap, objects);
+
+  // Calculate memory layout
+  const engineStart = 32768;
+  const spriteBankAddr = 40000;
+  const blockBankAddr = spriteBankAddr + spriteBank.length;
+  const objectBankAddr = blockBankAddr + blockBank.length;
+  const screenBankAddr = objectBankAddr + objectBank.length;
+  const bgScreenAddr = screenBankAddr + screenBank.length;
+
+  // Build BASIC loader
   const basicProgram: number[] = [];
 
   // Line 10: CLEAR 32767
-  basicProgram.push(0x00, 0x0a); // Line number 10
+  basicProgram.push(0x00, 0x0a);
   let lineStart = basicProgram.length;
-  basicProgram.push(0x00, 0x00); // Length placeholder
-  basicProgram.push(0xfd); // CLEAR token
-  basicProgram.push(0x20); // Space
-  // "32767" as ASCII
+  basicProgram.push(0x00, 0x00);
+  basicProgram.push(0xfd, 0x20);
   basicProgram.push(0x33, 0x32, 0x37, 0x36, 0x37);
-  // Encoded number 32767 (matches TAPGenerator.addBasicLoader)
   basicProgram.push(0x0e, 0x00, 0x00, 0xff, 0x7f, 0x00);
-  basicProgram.push(0x0d); // ENTER
+  basicProgram.push(0x0d);
   let lineLength = basicProgram.length - lineStart - 2;
   basicProgram[lineStart] = lineLength & 0xff;
   basicProgram[lineStart + 1] = (lineLength >> 8) & 0xff;
 
   // Line 20: LOAD "" SCREEN$
-  basicProgram.push(0x00, 0x14); // Line number 20
+  basicProgram.push(0x00, 0x14);
   lineStart = basicProgram.length;
-  basicProgram.push(0x00, 0x00); // Length placeholder
-  basicProgram.push(0xef); // LOAD token
-  basicProgram.push(0x20); // Space
-  basicProgram.push(0x22, 0x22); // Empty string ""
-  basicProgram.push(0x20); // Space
-  basicProgram.push(0xaa); // SCREEN$ token
-  basicProgram.push(0x0d); // ENTER
+  basicProgram.push(0x00, 0x00);
+  basicProgram.push(0xef, 0x20, 0x22, 0x22, 0x20, 0xaa, 0x0d);
   lineLength = basicProgram.length - lineStart - 2;
   basicProgram[lineStart] = lineLength & 0xff;
   basicProgram[lineStart + 1] = (lineLength >> 8) & 0xff;
 
-  // Line 30: LOAD "" CODE
-  basicProgram.push(0x00, 0x1e); // Line number 30
+  // Line 30: LOAD "" CODE (sprite bank)
+  basicProgram.push(0x00, 0x1e);
   lineStart = basicProgram.length;
-  basicProgram.push(0x00, 0x00); // Length placeholder
-  basicProgram.push(0xef); // LOAD token
-  basicProgram.push(0x20); // Space
-  basicProgram.push(0x22, 0x22); // Empty string ""
-  basicProgram.push(0x20); // Space
-  basicProgram.push(0xaf); // CODE token
-  basicProgram.push(0x0d); // ENTER
+  basicProgram.push(0x00, 0x00);
+  basicProgram.push(0xef, 0x20, 0x22, 0x22, 0x20, 0xaf, 0x0d);
   lineLength = basicProgram.length - lineStart - 2;
   basicProgram[lineStart] = lineLength & 0xff;
   basicProgram[lineStart + 1] = (lineLength >> 8) & 0xff;
 
-  // Line 40: RANDOMIZE USR 32768
-  basicProgram.push(0x00, 0x28); // Line number 40
+  // Line 40: LOAD "" CODE (block bank)
+  basicProgram.push(0x00, 0x28);
   lineStart = basicProgram.length;
-  basicProgram.push(0x00, 0x00); // Length placeholder
-  basicProgram.push(0xf9); // RANDOMIZE token
-  basicProgram.push(0x20); // Space
-  basicProgram.push(0xc0); // USR token
-  basicProgram.push(0x20); // Space
-  // "32768" as ASCII
+  basicProgram.push(0x00, 0x00);
+  basicProgram.push(0xef, 0x20, 0x22, 0x22, 0x20, 0xaf, 0x0d);
+  lineLength = basicProgram.length - lineStart - 2;
+  basicProgram[lineStart] = lineLength & 0xff;
+  basicProgram[lineStart + 1] = (lineLength >> 8) & 0xff;
+
+  // Line 50: LOAD "" CODE (object bank)
+  basicProgram.push(0x00, 0x32);
+  lineStart = basicProgram.length;
+  basicProgram.push(0x00, 0x00);
+  basicProgram.push(0xef, 0x20, 0x22, 0x22, 0x20, 0xaf, 0x0d);
+  lineLength = basicProgram.length - lineStart - 2;
+  basicProgram[lineStart] = lineLength & 0xff;
+  basicProgram[lineStart + 1] = (lineLength >> 8) & 0xff;
+
+  // Line 60: LOAD "" CODE (screen bank)
+  basicProgram.push(0x00, 0x3c);
+  lineStart = basicProgram.length;
+  basicProgram.push(0x00, 0x00);
+  basicProgram.push(0xef, 0x20, 0x22, 0x22, 0x20, 0xaf, 0x0d);
+  lineLength = basicProgram.length - lineStart - 2;
+  basicProgram[lineStart] = lineLength & 0xff;
+  basicProgram[lineStart + 1] = (lineLength >> 8) & 0xff;
+
+  // Line 70: LOAD "" CODE (engine)
+  basicProgram.push(0x00, 0x46);
+  lineStart = basicProgram.length;
+  basicProgram.push(0x00, 0x00);
+  basicProgram.push(0xef, 0x20, 0x22, 0x22, 0x20, 0xaf, 0x0d);
+  lineLength = basicProgram.length - lineStart - 2;
+  basicProgram[lineStart] = lineLength & 0xff;
+  basicProgram[lineStart + 1] = (lineLength >> 8) & 0xff;
+
+  // Line 80: RANDOMIZE USR 32768
+  basicProgram.push(0x00, 0x50);
+  lineStart = basicProgram.length;
+  basicProgram.push(0x00, 0x00);
+  basicProgram.push(0xf9, 0x20, 0xc0, 0x20);
   basicProgram.push(0x33, 0x32, 0x37, 0x36, 0x38);
-  // Encoded number 32768 (matches TAPGenerator.addBasicLoader)
   basicProgram.push(0x0e, 0x00, 0x00, 0x00, 0x80, 0x00);
-  basicProgram.push(0x0d); // ENTER
+  basicProgram.push(0x0d);
   lineLength = basicProgram.length - lineStart - 2;
   basicProgram[lineStart] = lineLength & 0xff;
   basicProgram[lineStart + 1] = (lineLength >> 8) & 0xff;
 
-  // BASIC program header (same layout as TAPGenerator.addBasicLoader)
-  const headerData: number[] = [
-    0x00, // Header block flag
-    0x00, // BASIC program type
-  ];
+  // Add BASIC program header and data
+  const headerData: number[] = [0x00, 0x00];
   const filename = "Loader    ";
   for (let i = 0; i < 10; i++) {
     headerData.push(filename.charCodeAt(i));
   }
   headerData.push(basicProgram.length & 0xff);
   headerData.push((basicProgram.length >> 8) & 0xff);
-  headerData.push(0x0a, 0x00); // Autostart line 10
+  headerData.push(0x0a, 0x00);
   headerData.push(basicProgram.length & 0xff);
   headerData.push((basicProgram.length >> 8) & 0xff);
 
   tap.addBlock(headerData);
   tap.addBlock([0xff, ...basicProgram]);
 
-  // Add loading screen as SCREEN$ block (CODE header with start 16384 and length 6912)
+  // Add loading screen as SCREEN$
   const loadingName = projectName.substring(0, 10).padEnd(10, " ");
   tap.addHeader(loadingName, 6912, 16384);
   tap.addDataBlock(loadingScr);
 
-  // Build Z80 game engine with keyboard control at 32768
+  // Add sprite bank
+  tap.addHeader("SpriteBank", spriteBank.length, spriteBankAddr);
+  tap.addDataBlock(Array.from(spriteBank));
+
+  // Add block bank
+  tap.addHeader("BlockBank ", blockBank.length, blockBankAddr);
+  tap.addDataBlock(Array.from(blockBank));
+
+  // Add object bank
+  tap.addHeader("ObjectBank", objectBank.length, objectBankAddr);
+  tap.addDataBlock(Array.from(objectBank));
+
+  // Add screen bank
+  tap.addHeader("ScreenBank", screenBank.length, screenBankAddr);
+  tap.addDataBlock(Array.from(screenBank));
+
+  // Build Z80 engine that reads binary tables
+  const engine = createBinaryGameEngine(
+    spriteBankAddr,
+    blockBankAddr,
+    objectBankAddr,
+    screenBankAddr,
+    bgScreenAddr,
+    validFlowScreens[1] || validFlowScreens[0],
+    blocks,
+    objects,
+    sprites
+  );
+
+  // Add engine code
+  const codeName = "GameEngine";
+  tap.addHeader(codeName, engine.length, engineStart);
+  tap.addDataBlock(engine);
+
+  return tap.toBlob();
+}
+
+/**
+ * Create Z80 game engine that reads binary data banks
+ */
+function createBinaryGameEngine(
+  spriteBankAddr: number,
+  blockBankAddr: number,
+  objectBankAddr: number,
+  screenBankAddr: number,
+  bgScreenAddr: number,
+  targetScreen: Screen,
+  blocks: Block[],
+  objects: GameObject[],
+  sprites: Sprite[]
+): number[] {
   const engine: number[] = [];
-  const engineStart = 32768;
 
-  // Use fixed screen position for debugging (center of screen)
-  const playerXPixel = 128; // Middle of 256-pixel width
-  const playerYPixel = 96;  // Middle of 192-pixel height
+  // Simple test engine: display a screen from binary data and enable keyboard movement
+  // This is Phase 1+2 combined: static display + keyboard test
 
-  // ===== PHASE 2: KEYBOARD BORDER TEST (Q/W) + PIXEL MOVEMENT =====
-  // First, display the game level screen, then run keyboard test loop with pixel movement.
-
-  // Copy target screen to display memory
-  // LD HL, <source address of background screen data> (patched below)
+  // Load background screen (render target screen to SCR format for now)
+  const bgScr = encodeScreenToSCR(targetScreen, blocks, objects, sprites);
+  
+  // Copy screen to display memory
+  // LD HL, bgScreenAddr
   engine.push(0x21);
   const bgAddrIdx = engine.length;
-  engine.push(0x00, 0x00); // placeholder - will be patched with bgScreenDataAddr
+  engine.push(0x00, 0x00); // placeholder
 
-  // LD DE, 16384 (screen memory start)
+  // LD DE, 16384 (screen memory)
   engine.push(0x11, 0x00, 0x40);
 
-  // LD BC, 6912 (full screen size)
+  // LD BC, 6912
   engine.push(0x01, 0x00, 0x1b);
   
-  // LDIR (copy all 6912 bytes from background to screen)
+  // LDIR
   engine.push(0xed, 0xb0);
 
-  // Force bright white ink on black paper for all attributes so debug pixel is visible
-  // Attribute memory starts at 22528 (16384 + 6144)
-  // LD HL, 22528
-  engine.push(0x21, 0x00, 0x58);
-  // LD (HL), 0x47 (BRIGHT 1, PAPER 0 (black), INK 7 (white))
-  engine.push(0x36, 0x47);
-  // LD DE, 22529 (next attribute byte)
-  engine.push(0x11, 0x01, 0x58);
-  // LD BC, 767 (remaining attribute bytes)
-  engine.push(0x01, 0xff, 0x02);
-  // LDIR - copy first attribute byte across entire attribute area
-  engine.push(0xed, 0xb0);
+  // Force bright white ink on black paper
+  engine.push(0x21, 0x00, 0x58); // LD HL, 22528
+  engine.push(0x36, 0x47);       // LD (HL), 0x47
+  engine.push(0x11, 0x01, 0x58); // LD DE, 22529
+  engine.push(0x01, 0xff, 0x02); // LD BC, 767
+  engine.push(0xed, 0xb0);       // LDIR
 
-  // Initialize player X position at memory location (patched below)
-  // LD HL, playerXAddr
+  // Initialize player position
+  const playerXPixel = 128;
+  const playerYPixel = 96;
+  
   engine.push(0x21);
   const playerXAddrIdx = engine.length;
-  engine.push(0x00, 0x00); // placeholder
-  // LD (HL), playerXPixel
+  engine.push(0x00, 0x00);
   engine.push(0x36, playerXPixel & 0xff);
 
-  // Set initial border color to black
-  engine.push(
-    0x3e, 0x00, // LD A, 0
-    0xd3, 0xfe  // OUT (254), A
-  );
+  // Set border to black
+  engine.push(0x3e, 0x00, 0xd3, 0xfe);
 
-  // Main game loop address (start of keyboard scan)
-  const gameLoopAddr = engineStart + engine.length;
+  // Main game loop
+  const gameLoopAddr = 32768 + engine.length;
 
-  // Read keyboard port FBFE (QWERT half-row: Q=bit0, W=bit1)
-  // LD BC, 0xFBFE
-  engine.push(0x01, 0xfe, 0xfb);
-  // IN A, (C)
-  engine.push(0xed, 0x78);
+  // Read keyboard (Q/W keys)
+  engine.push(0x01, 0xfe, 0xfb); // LD BC, 0xFBFE
+  engine.push(0xed, 0x78);       // IN A, (C)
   
-  // Check W key (bit 1) - move RIGHT and set RED border
-  // BIT 1, A
-  engine.push(0xcb, 0x4f);
+  // Check W key (move right)
+  engine.push(0xcb, 0x4f);       // BIT 1, A
   const jrNoWPos = engine.length;
-  // JR NZ, check_q (if W not pressed, check Q)
-  engine.push(0x20, 0x00); // offset patched later
+  engine.push(0x20, 0x00);       // JR NZ, check_q
   
-  // W pressed - add 8 to X position in memory (move one full byte right)
-  // LD HL, playerXAddr
+  // W pressed - move right
   engine.push(0x21);
   const playerXReadIdx1 = engine.length;
-  engine.push(0x00, 0x00); // placeholder
-  // LD A, (HL) - load current X
-  engine.push(0x7e);
-  // ADD A, 8
-  engine.push(0xc6, 0x08);
-  // LD (HL), A - store back
-  engine.push(0x77);
+  engine.push(0x00, 0x00);
+  engine.push(0x7e);             // LD A, (HL)
+  engine.push(0xc6, 0x08);       // ADD A, 8
+  engine.push(0x77);             // LD (HL), A
+  engine.push(0x3e, 0x02, 0xd3, 0xfe); // Border red
   
-  // Set border to RED (2)
-  engine.push(
-    0x3e, 0x02, // LD A, 2 (red)
-    0xd3, 0xfe  // OUT (254), A
-  );
-  
-  // Jump to draw_pixel
   const jrToDrawFromWPos = engine.length;
-  engine.push(0x18, 0x00); // JR draw_pixel (offset patched later)
+  engine.push(0x18, 0x00);       // JR draw_pixel
   
-  // check_q:
+  // Check Q key (move left)
   const checkQPos = engine.length;
-  // Check Q key (bit 0) - move LEFT and set CYAN border
-  // BIT 0, A
-  engine.push(0xcb, 0x47);
+  engine.push(0xcb, 0x47);       // BIT 0, A
   const jrNoQPos = engine.length;
-  // JR NZ, no_key (if Q not pressed, skip movement)
-  engine.push(0x20, 0x00); // offset patched later
+  engine.push(0x20, 0x00);       // JR NZ, no_key
   
-  // Q pressed - subtract 8 from X position in memory (move one full byte left)
-  // LD HL, playerXAddr
+  // Q pressed - move left
   engine.push(0x21);
   const playerXReadIdx2 = engine.length;
-  engine.push(0x00, 0x00); // placeholder
-  // LD A, (HL) - load current X
-  engine.push(0x7e);
-  // SUB 8
-  engine.push(0xd6, 0x08);
-  // LD (HL), A - store back
-  engine.push(0x77);
-  
-  // Set border to CYAN (5)
-  engine.push(
-    0x3e, 0x05, // LD A, 5 (cyan)
-    0xd3, 0xfe  // OUT (254), A
-  );
+  engine.push(0x00, 0x00);
+  engine.push(0x7e);             // LD A, (HL)
+  engine.push(0xd6, 0x08);       // SUB 8
+  engine.push(0x77);             // LD (HL), A
+  engine.push(0x3e, 0x05, 0xd3, 0xfe); // Border cyan
 
-  // no_key:
   const noKeyPos = engine.length;
-
-  // draw_pixel:
   const drawPixelPos = engine.length;
-  // Load player X position from memory
-  // LD HL, playerXAddr
+  
+  // Draw pixel at player position
   engine.push(0x21);
   const playerXReadIdx3 = engine.length;
-  engine.push(0x00, 0x00); // placeholder
-  // LD A, (HL) - X position in pixels
-  engine.push(0x7e);
-  // Save X in C register
-  engine.push(0x4f);
-  
-  // Calculate screen address using proper Spectrum interleaved layout
-  // Y is fixed at playerYPixel for now
-  // Screen address = 16384 + ((Y&192)>>3) + ((Y&7)<<8) + ((Y&56)<<2) + (X>>3)
-  
-  // Calculate Y component (using fixed Y = playerYPixel)
-  // LD A, playerYPixel
-  engine.push(0x3e, playerYPixel & 0xff);
-  
-  // Calculate ((Y&192)>>3) for high byte contribution
-  // AND 192
-  engine.push(0xe6, 0xc0);
-  // SRL A
-  engine.push(0xcb, 0x3f);
-  // SRL A
-  engine.push(0xcb, 0x3f);
-  // SRL A
-  engine.push(0xcb, 0x3f);
-  // Save in H temporarily
-  engine.push(0x67);
-  
-  // Calculate (Y&7) for high byte
-  // LD A, playerYPixel
-  engine.push(0x3e, playerYPixel & 0xff);
-  // AND 7
-  engine.push(0xe6, 0x07);
-  // OR H
-  engine.push(0xb4);
-  // Add 0x40 for screen base high byte
-  engine.push(0xc6, 0x40);
-  // LD H, A (high byte done)
-  engine.push(0x67);
-  
-  // Calculate ((Y&56)<<2) for low byte
-  // LD A, playerYPixel
-  engine.push(0x3e, playerYPixel & 0xff);
-  // AND 56
-  engine.push(0xe6, 0x38);
-  // SLA A
-  engine.push(0xcb, 0x27);
-  // SLA A
-  engine.push(0xcb, 0x27);
-  // LD L, A
-  engine.push(0x6f);
-  
-  // Add X>>3 to low byte
-  // LD A, C (X position from earlier)
-  engine.push(0x79);
-  // SRL A (divide by 8)
-  engine.push(0xcb, 0x3f);
-  // SRL A
-  engine.push(0xcb, 0x3f);
-  // SRL A
-  engine.push(0xcb, 0x3f);
-  // ADD A, L
-  engine.push(0x85);
-  // LD L, A
-  engine.push(0x6f);
-  
-  // HL now contains screen address - draw pixel
-  // LD (HL), 0xFF (white pixel)
-  engine.push(0x36, 0xff);
-  
-  // Small delay
-  // LD B, 30
-  engine.push(0x06, 0x1e);
-  const delayLoopAddr = engineStart + engine.length;
-  // DJNZ delay_loop
-  engine.push(0x10, 0xfe);
+  engine.push(0x00, 0x00);
+  engine.push(0x7e);             // LD A, (HL) - X position
+  engine.push(0x4f);             // LD C, A
 
-  // Jump back to game loop
-  let loopOffset = gameLoopAddr - (engineStart + engine.length + 2);
+  // Calculate screen address for fixed Y
+  engine.push(0x3e, playerYPixel & 0xff); // LD A, Y
+  engine.push(0xe6, 0xc0);       // AND 192
+  engine.push(0xcb, 0x3f);       // SRL A (3x)
+  engine.push(0xcb, 0x3f);
+  engine.push(0xcb, 0x3f);
+  engine.push(0x67);             // LD H, A
+
+  engine.push(0x3e, playerYPixel & 0xff);
+  engine.push(0xe6, 0x07);       // AND 7
+  engine.push(0xb4);             // OR H
+  engine.push(0xc6, 0x40);       // ADD A, 0x40
+  engine.push(0x67);             // LD H, A
+
+  engine.push(0x3e, playerYPixel & 0xff);
+  engine.push(0xe6, 0x38);       // AND 56
+  engine.push(0xcb, 0x27);       // SLA A (2x)
+  engine.push(0xcb, 0x27);
+  engine.push(0x6f);             // LD L, A
+
+  engine.push(0x79);             // LD A, C (X)
+  engine.push(0xcb, 0x3f);       // SRL A (3x)
+  engine.push(0xcb, 0x3f);
+  engine.push(0xcb, 0x3f);
+  engine.push(0x85);             // ADD A, L
+  engine.push(0x6f);             // LD L, A
+
+  // Draw white pixel
+  engine.push(0x36, 0xff);       // LD (HL), 0xFF
+
+  // Small delay
+  engine.push(0x06, 0x1e);       // LD B, 30
+  engine.push(0x10, 0xfe);       // DJNZ -2
+
+  // Loop back
+  let loopOffset = gameLoopAddr - (32768 + engine.length + 2);
   engine.push(0x18, loopOffset & 0xff);
 
-  // ===== DATA SECTION =====
-  // Background screen data follows engine code
-  const bgScreenDataAddr = engineStart + engine.length;
+  // Append background screen data
+  const bgScreenDataAddr = 32768 + engine.length;
+  engine.push(...bgScr);
   
-  // Player X position variable (1 byte) follows background data
-  const playerXAddr = bgScreenDataAddr + targetScr.length;
+  // Player X variable
+  const playerXAddr = 32768 + engine.length;
+  engine.push(playerXPixel & 0xff);
 
   // Patch all address placeholders
   engine[bgAddrIdx] = bgScreenDataAddr & 0xff;
@@ -365,48 +376,123 @@ export function exportGameFlowToTAP(
   engine[playerXReadIdx3] = playerXAddr & 0xff;
   engine[playerXReadIdx3 + 1] = (playerXAddr >> 8) & 0xff;
 
-  // Patch JR offsets for keyboard handling
-  const checkQAddr = engineStart + checkQPos;
-  const drawPixelAddr = engineStart + drawPixelPos;
-  const noKeyAddr = engineStart + noKeyPos;
+  // Patch JR offsets
+  const checkQAddr = 32768 + checkQPos;
+  const drawPixelAddr = 32768 + drawPixelPos;
+  const noKeyAddr = 32768 + noKeyPos;
 
-  let disp = checkQAddr - (engineStart + jrNoWPos + 2);
+  let disp = checkQAddr - (32768 + jrNoWPos + 2);
   engine[jrNoWPos + 1] = disp & 0xff;
 
-  disp = drawPixelAddr - (engineStart + jrToDrawFromWPos + 2);
+  disp = drawPixelAddr - (32768 + jrToDrawFromWPos + 2);
   engine[jrToDrawFromWPos + 1] = disp & 0xff;
 
-  disp = noKeyAddr - (engineStart + jrNoQPos + 2);
+  disp = noKeyAddr - (32768 + jrNoQPos + 2);
   engine[jrNoQPos + 1] = disp & 0xff;
 
-  // Build final code data: engine + background screen data + player X variable
-  const codeData = [
-    ...engine,
-    ...targetScr,
-    playerXPixel & 0xff  // playerX variable initialized
-  ];
+  return engine;
+}
 
-  const codeName = "GameFlow  ";
-  tap.addHeader(codeName, codeData.length, engineStart);
-  tap.addDataBlock(codeData);
+/**
+ * Export assembly file (.asm) with all data banks
+ */
+export function exportGameFlowToASM(
+  gameFlow: GameFlowScreen[],
+  screens: Screen[],
+  levels: Level[],
+  blocks: Block[],
+  objects: GameObject[],
+  sprites: Sprite[],
+  projectName: string
+): string {
+  let asm = `; ${projectName} - ZX Spectrum Game Data\n`;
+  asm += `; Generated binary data banks\n\n`;
 
-  return tap.toBlob();
+  // Build index maps
+  const spriteIndexMap = createSpriteIndexMap(sprites);
+  const blockIndexMap = new Map<string, number>();
+  blocks.forEach((block, index) => {
+    blockIndexMap.set(block.id, index);
+  });
+  const objectIndexMap = new Map<string, number>();
+  objects.forEach((obj, index) => {
+    objectIndexMap.set(obj.id, index);
+  });
+
+  // Generate assembly for each bank
+  asm += generateSpriteBankAsm(sprites);
+  asm += "\n\n";
+  asm += generateBlockBankAsm(blocks, spriteIndexMap);
+  asm += "\n\n";
+  asm += generateObjectBankAsm(objects, spriteIndexMap);
+  asm += "\n\n";
+  asm += generateScreenBankAsm(screens, blockIndexMap, objectIndexMap, objects);
+
+  return asm;
+}
+
+/**
+ * Export combined binary file (.bin) with all data banks
+ */
+export function exportGameFlowToBIN(
+  gameFlow: GameFlowScreen[],
+  screens: Screen[],
+  levels: Level[],
+  blocks: Block[],
+  objects: GameObject[],
+  sprites: Sprite[],
+  projectName: string
+): Blob {
+  // Build index maps
+  const spriteIndexMap = createSpriteIndexMap(sprites);
+  const blockIndexMap = new Map<string, number>();
+  blocks.forEach((block, index) => {
+    blockIndexMap.set(block.id, index);
+  });
+  const objectIndexMap = new Map<string, number>();
+  objects.forEach((obj, index) => {
+    objectIndexMap.set(obj.id, index);
+  });
+
+  // Pack all banks
+  const spriteBank = packSpriteBank(sprites);
+  const blockBank = packBlockBank(blocks, spriteIndexMap);
+  const objectBank = packObjectBank(objects, spriteIndexMap);
+  const screenBank = packScreenBank(screens, blockIndexMap, objectIndexMap, objects);
+
+  // Combine all banks into one binary
+  const totalLength = spriteBank.length + blockBank.length + objectBank.length + screenBank.length;
+  const combined = new Uint8Array(totalLength);
+  let offset = 0;
+
+  combined.set(spriteBank, offset);
+  offset += spriteBank.length;
+
+  combined.set(blockBank, offset);
+  offset += blockBank.length;
+
+  combined.set(objectBank, offset);
+  offset += objectBank.length;
+
+  combined.set(screenBank, offset);
+
+  return new Blob([combined], { type: "application/octet-stream" });
 }
 
 /**
  * Encode a screen to ZX Spectrum SCR format (6912 bytes)
+ * Used for loading screens and temporary rendering
  */
 function encodeScreenToSCR(screen: Screen, blocks: Block[], objects: GameObject[], sprites: Sprite[]): number[] {
   const scrData = new Array(6912).fill(0);
 
   // Handle tile-based screens (game levels)
   if (screen.tiles && !screen.pixels) {
-    // Create a pixel array by rendering tiles
     const pixels: (typeof SPECTRUM_COLORS[0])[][] = Array.from({ length: 192 }, () => 
       Array(256).fill(SPECTRUM_COLORS[0])
     );
 
-    // Render each tile (8x8 blocks)
+    // Render tiles
     for (let ty = 0; ty < screen.tiles.length && ty < 24; ty++) {
       for (let tx = 0; tx < screen.tiles[ty].length && tx < 32; tx++) {
         const blockId = screen.tiles[ty][tx];
@@ -417,7 +503,6 @@ function encodeScreenToSCR(screen: Screen, blocks: Block[], objects: GameObject[
 
         const spritePixels = block.sprite.frames[0].pixels;
         
-        // Render the 8x8 sprite into the pixel array
         for (let sy = 0; sy < 8 && sy < spritePixels.length; sy++) {
           for (let sx = 0; sx < 8 && sx < spritePixels[sy].length; sx++) {
             const py = ty * 8 + sy;
@@ -431,13 +516,12 @@ function encodeScreenToSCR(screen: Screen, blocks: Block[], objects: GameObject[
       }
     }
 
-    // Render placed objects on top of tiles
+    // Render placed objects
     if (screen.placedObjects) {
       for (const placedObj of screen.placedObjects) {
         const gameObject = objects.find(o => o.id === placedObj.objectId);
         if (!gameObject) continue;
 
-        // Find the sprite - use primary sprite or directional animation
         let spriteId = gameObject.spriteId;
         if (placedObj.direction === "left" && gameObject.animations?.moveLeft) {
           spriteId = gameObject.animations.moveLeft;
@@ -445,20 +529,17 @@ function encodeScreenToSCR(screen: Screen, blocks: Block[], objects: GameObject[
           spriteId = gameObject.animations.moveRight;
         }
 
-        // Find the sprite in the sprites array
         const objectSprite = sprites.find(s => s.id === spriteId);
         if (!objectSprite || !objectSprite.frames[0]) continue;
 
         const objPixels = objectSprite.frames[0].pixels;
         
-        // Render object sprite at its placed position
         for (let sy = 0; sy < objPixels.length; sy++) {
           for (let sx = 0; sx < objPixels[sy].length; sx++) {
             const py = placedObj.y * 8 + sy;
             const px = placedObj.x * 8 + sx;
             const colorIndex = objPixels[sy][sx];
             
-            // Only render non-transparent pixels (colorIndex !== 0)
             if (colorIndex !== 0 && py >= 0 && py < 192 && px >= 0 && px < 256) {
               pixels[py][px] = SPECTRUM_COLORS[colorIndex] || SPECTRUM_COLORS[0];
             }
@@ -467,13 +548,10 @@ function encodeScreenToSCR(screen: Screen, blocks: Block[], objects: GameObject[
       }
     }
 
-    // Now encode this pixel array to SCR
     return encodePixelsToSCR(pixels);
   }
 
   if (!screen.pixels) return scrData;
-
-  // Encode screen in ZX Spectrum format
   return encodePixelsToSCR(screen.pixels);
 }
 
@@ -485,7 +563,6 @@ function encodePixelsToSCR(pixels: (typeof SPECTRUM_COLORS[0])[][]): number[] {
 
   for (let by = 0; by < 192; by += 8) {
     for (let bx = 0; bx < 256; bx += 8) {
-      // Find the two colors in this 8x8 block
       const colors = new Set<string>();
       for (let y = 0; y < 8; y++) {
         for (let x = 0; x < 8; x++) {
@@ -501,14 +578,12 @@ function encodePixelsToSCR(pixels: (typeof SPECTRUM_COLORS[0])[][]): number[] {
       const inkColor = SPECTRUM_COLORS.find(c => c.value === blockColors[0]) || SPECTRUM_COLORS[0];
       const paperColor = SPECTRUM_COLORS.find(c => c.value === (blockColors[1] || blockColors[0])) || SPECTRUM_COLORS[7];
 
-      // Set attribute byte
       const inkValue = inkColor.ink;
       const paperValue = paperColor.ink;
       const bright = inkColor.bright || paperColor.bright ? 1 : 0;
       const attrIndex = 6144 + (by / 8) * 32 + (bx / 8);
       scrData[attrIndex] = (bright << 6) | (paperValue << 3) | inkValue;
 
-      // Set bitmap bytes
       for (let y = 0; y < 8; y++) {
         const py = by + y;
         const scanline = ((py & 0xC0) << 5) | ((py & 0x07) << 8) | ((py & 0x38) << 2) | (bx / 8);
@@ -530,60 +605,6 @@ function encodePixelsToSCR(pixels: (typeof SPECTRUM_COLORS[0])[][]): number[] {
 }
 
 /**
- * Create Z80 game engine that handles screen flow and keyboard input
- */
-function createGameFlowEngine(
-  gameFlow: GameFlowScreen[],
-  screens: Screen[],
-  levels: Level[]
-): number[] {
-  const engine: number[] = [];
-
-  // Game engine in Z80 assembly
-  // This is a simplified version that:
-  // 1. Shows loading screens
-  // 2. Shows title screen with menu
-  // 3. Waits for keyboard input
-  // 4. Loads appropriate screen/level based on key press
-
-  // Initialize: Set border to black
-  engine.push(0x3E, 0x00);       // LD A, 0
-  engine.push(0xD3, 0xFE);       // OUT (254), A
-
-  // Display first loading screen
-  engine.push(0xCD, 0x00, 0x80); // CALL DisplayScreen (routine at 32768 + offset)
-
-  // Main menu loop
-  engine.push(0xCD, 0x50, 0x80); // CALL DisplayMenu
-
-  // Wait for key press
-  const KEY_SCAN_LOOP = engine.length;
-  engine.push(0xCD, 0xBB, 0x15); // CALL 5563 (ROM keyboard scan)
-
-  // Check each access key defined in game flow
-  gameFlow.forEach((flowScreen) => {
-    const screen = screens.find(s => s.id === flowScreen.screenId);
-    if (flowScreen.accessKey && screen?.type !== "loading") {
-      // Compare with access key
-      engine.push(0xFE, flowScreen.accessKey.charCodeAt(0)); // CP key_code
-      // TODO: Add jump to screen handler
-    }
-  });
-
-  // Loop back if no valid key
-  engine.push(0x18, -(engine.length - KEY_SCAN_LOOP + 2)); // JR back to scan loop
-
-  // DisplayScreen routine
-  engine.push(0x21, 0x00, 0x40); // LD HL, 16384 (screen memory)
-  // TODO: Copy screen data from data area
-
-  // Return
-  engine.push(0xC9); // RET
-
-  return engine;
-}
-
-/**
  * Download helper for TAP files
  */
 export function downloadGameFlowTAP(blob: Blob, filename: string) {
@@ -591,6 +612,35 @@ export function downloadGameFlowTAP(blob: Blob, filename: string) {
   const link = document.createElement("a");
   link.href = url;
   link.download = filename.endsWith(".tap") ? filename : `${filename}.tap`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
+/**
+ * Download helper for ASM files
+ */
+export function downloadGameFlowASM(asm: string, filename: string) {
+  const blob = new Blob([asm], { type: "text/plain" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename.endsWith(".asm") ? filename : `${filename}.asm`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
+/**
+ * Download helper for BIN files
+ */
+export function downloadGameFlowBIN(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename.endsWith(".bin") ? filename : `${filename}.bin`;
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
