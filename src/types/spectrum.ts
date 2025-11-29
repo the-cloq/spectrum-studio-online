@@ -67,6 +67,14 @@ export type GameObject = {
     jumpHeight?: number;
     gravity?: number;
     
+    // Player control key bindings
+    keyLeft?: string;
+    keyRight?: string;
+    keyJump?: string;
+    keyFire?: string;
+    keyUp?: string;
+    keyDown?: string;
+    
     // Enemy-specific properties
     patrolType?: "left-right" | "up-down" | "circular" | "stationary";
     damage?: number;

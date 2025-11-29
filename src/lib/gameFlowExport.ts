@@ -4,6 +4,7 @@ import { packBlockBank, generateBlockBankAsm } from "./blockPacker";
 import { packObjectBank, generateObjectBankAsm } from "./objectPacker";
 import { packScreenBank, generateScreenBankAsm } from "./screenPacker";
 import { packSpriteBank, generateSpriteBankAsm, createSpriteIndexMap } from "./spritePacker";
+import { getKeyMapping } from "./spectrumKeyboardMap";
 
 /**
  * Export Game Flow to TAP file with binary data banks
@@ -426,16 +427,28 @@ function createBinaryGameEngine(
   // ===== MAIN GAME LOOP =====
   const gameLoopAddr = 32768 + engine.length;
   
-  // Read keyboard (Q/W keys on port 0xFBFE)
-  engine.push(0x01, 0xfe, 0xfb);  // LD BC, 0xFBFE
+  // Find player object to get key bindings
+  const playerObject = objects.find(obj => obj.type === "player");
+  const keyLeft = playerObject?.properties.keyLeft || "q";
+  const keyRight = playerObject?.properties.keyRight || "w";
+  
+  // Get Spectrum key mappings
+  const leftMapping = getKeyMapping(keyLeft);
+  const rightMapping = getKeyMapping(keyRight);
+  
+  // Read keyboard for right key
+  engine.push(0x01);              // LD BC, port
+  engine.push((rightMapping?.port || 0xFBFE) & 0xff);
+  engine.push(((rightMapping?.port || 0xFBFE) >> 8) & 0xff);
   engine.push(0xed, 0x78);        // IN A, (C)
   
-  // Check W key (bit 1, move right)
-  engine.push(0xcb, 0x4f);        // BIT 1, A
-  const jrNoWPos = engine.length;
-  engine.push(0x20, 0x00);        // JR NZ, check_q (placeholder)
+  // Check right key
+  const rightBit = rightMapping?.bit || 1;
+  engine.push(0xcb, 0x47 + (rightBit * 8));  // BIT n, A
+  const jrNoRightPos = engine.length;
+  engine.push(0x20, 0x00);        // JR NZ, check_left (placeholder)
   
-  // W pressed - move right
+  // Right key pressed - move right
   engine.push(0x3a);              // LD A, (playerX)
   const playerXReadIdx1 = engine.length;
   engine.push(0x00, 0x00);        // Placeholder
@@ -449,13 +462,21 @@ function createBinaryGameEngine(
   const jrToDrawPos = engine.length;
   engine.push(0x18, 0x00);        // JR draw_player (placeholder)
   
-  // Check Q key (bit 0, move left)
-  const checkQPos = engine.length;
-  engine.push(0xcb, 0x47);        // BIT 0, A
-  const jrNoQPos = engine.length;
+  // Check left key
+  const checkLeftPos = engine.length;
+  
+  // Read keyboard for left key (may be different port)
+  engine.push(0x01);              // LD BC, port
+  engine.push((leftMapping?.port || 0xFBFE) & 0xff);
+  engine.push(((leftMapping?.port || 0xFBFE) >> 8) & 0xff);
+  engine.push(0xed, 0x78);        // IN A, (C)
+  
+  const leftBit = leftMapping?.bit || 0;
+  engine.push(0xcb, 0x47 + (leftBit * 8));  // BIT n, A
+  const jrNoLeftPos = engine.length;
   engine.push(0x20, 0x00);        // JR NZ, no_key (placeholder)
   
-  // Q pressed - move left
+  // Left key pressed - move left
   engine.push(0x3a);              // LD A, (playerX)
   const playerXReadIdx2 = engine.length;
   engine.push(0x00, 0x00);        // Placeholder
@@ -575,19 +596,19 @@ function createBinaryGameEngine(
   engine[playerXReadIdx3 + 1] = (playerXVarAddr >> 8) & 0xff;
   
   // Patch jump offsets
-  const checkQAddr = 32768 + checkQPos;
+  const checkLeftAddr = 32768 + checkLeftPos;
   const drawPlayerAddr = 32768 + drawPlayerPos;
   const noKeyAddr = 32768 + noKeyPos;
   const playerSetupAddr = 32768 + playerSetupPos;
   
-  let disp = checkQAddr - (32768 + jrNoWPos + 2);
-  engine[jrNoWPos + 1] = disp & 0xff;
+  let disp = checkLeftAddr - (32768 + jrNoRightPos + 2);
+  engine[jrNoRightPos + 1] = disp & 0xff;
   
   disp = drawPlayerAddr - (32768 + jrToDrawPos + 2);
   engine[jrToDrawPos + 1] = disp & 0xff;
   
-  disp = noKeyAddr - (32768 + jrNoQPos + 2);
-  engine[jrNoQPos + 1] = disp & 0xff;
+  disp = noKeyAddr - (32768 + jrNoLeftPos + 2);
+  engine[jrNoLeftPos + 1] = disp & 0xff;
   
   disp = playerSetupAddr - (32768 + jzToPlayerSetup + 2);
   engine[jzToPlayerSetup + 1] = disp & 0xff;
