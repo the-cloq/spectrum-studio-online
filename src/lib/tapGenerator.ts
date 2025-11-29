@@ -92,8 +92,8 @@ export class TAPGenerator {
       0x03, // Program file type (CODE)
     ];
 
-    // Filename (10 bytes, padded with spaces)
-    const paddedName = filename.substring(0, 10).padStart(10, " ");
+    // Filename (10 bytes, padded with spaces) - LEFT-ALIGNED
+    const paddedName = filename.substring(0, 10).padEnd(10, " ");
     for (let i = 0; i < 10; i++) {
       headerData.push(paddedName.charCodeAt(i));
     }
