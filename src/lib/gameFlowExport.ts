@@ -547,30 +547,170 @@ function createBinaryGameEngine(
   const jrToCheckRightPos = engine.length;
   engine.push(0x18, 0x00);        // JR check_right_key (placeholder)
   
-  // Land check - check if Y >= ground level
+  // Land check - check collision with blocks or ground
   const landCheckPos = engine.length;
+  
+  // Calculate player's foot position (Y + 8 pixels for sprite height)
   engine.push(0x3a);              // LD A, (playerY)
   const playerYReadIdx2 = engine.length;
   engine.push(0x00, 0x00);        // Placeholder
-  engine.push(0xfe, playerYPixel & 0xff);  // CP ground_level
-  const jrStillAirbornePos = engine.length;
-  engine.push(0x38, 0x00);        // JR C, still_airborne (placeholder)
+  engine.push(0xc6, 0x08);        // ADD A, 8 (foot position)
+  engine.push(0x47);              // LD B, A (save foot Y in B)
   
-  // Landed - reset Y to ground and stop jumping
-  engine.push(0x3e, playerYPixel & 0xff);  // LD A, ground_level
+  // Convert to tile Y coordinate (divide by 8)
+  engine.push(0xcb, 0x3f);        // SRL A (divide by 2)
+  engine.push(0xcb, 0x3f);        // SRL A (divide by 4)
+  engine.push(0xcb, 0x3f);        // SRL A (divide by 8)
+  engine.push(0x4f);              // LD C, A (tile Y in C)
+  
+  // Get player X and convert to tile coordinate
+  engine.push(0x3a);              // LD A, (playerX)
+  const playerXReadIdx4 = engine.length;
+  engine.push(0x00, 0x00);        // Placeholder
+  engine.push(0xcb, 0x3f);        // SRL A (divide by 2)
+  engine.push(0xcb, 0x3f);        // SRL A (divide by 4)
+  engine.push(0xcb, 0x3f);        // SRL A (divide by 8)
+  engine.push(0x57);              // LD D, A (tile X in D)
+  
+  // Search through tile array for solid block at (D, C) position
+  // Load screen bank address
+  engine.push(0x21);              // LD HL, screenBankAddr
+  const screenBankAddrIdx2 = engine.length;
+  engine.push(0x00, 0x00);        // Placeholder
+  
+  // Skip to tile array: screenCount(2) + width(2) + height(2) + tileCount(2) = 8 bytes
+  engine.push(0x01, 0x08, 0x00);  // LD BC, 8
+  engine.push(0x09);              // ADD HL, BC
+  
+  // Read tile count
+  engine.push(0x5e);              // LD E, (HL)
+  engine.push(0x23);              // INC HL
+  engine.push(0x56);              // LD D, (HL)
+  engine.push(0x23);              // INC HL
+  
+  // Now HL points to first tile, DE = tile count
+  // Save tile pointer in IX
+  engine.push(0xdd, 0xe5);        // PUSH IX
+  engine.push(0xdd, 0xe1);        // POP IX (IX = HL)
+  
+  // Tile search loop
+  const tileSearchLoopPos = engine.length;
+  
+  // Check if tile count == 0
+  engine.push(0x7a);              // LD A, D
+  engine.push(0xb3);              // OR E
+  const jrNoCollisionPos = engine.length;
+  engine.push(0x28, 0x00);        // JR Z, no_collision (placeholder)
+  
+  // Read tile Y position (at IX+2)
+  engine.push(0xdd, 0x7e, 0x02);  // LD A, (IX+2)
+  
+  // Compare with player tile Y (in C)
+  engine.push(0xb9);              // CP C
+  const jrNotThisTilePos = engine.length;
+  engine.push(0x20, 0x00);        // JR NZ, next_tile (placeholder)
+  
+  // Y matches, check X
+  engine.push(0xdd, 0x7e, 0x00);  // LD A, (IX+0)
+  engine.push(0xba);              // CP D (player tile X)
+  const jrNotThisTilePos2 = engine.length;
+  engine.push(0x20, 0x00);        // JR NZ, next_tile (placeholder)
+  
+  // Found tile at player position! Check if it's solid
+  // Read block index (at IX+4)
+  engine.push(0xdd, 0x6e, 0x04);  // LD L, (IX+4)
+  engine.push(0xdd, 0x66, 0x05);  // LD H, (IX+5)
+  
+  // Calculate block address: blockBankAddr + 2 + (blockIndex * 5)
+  engine.push(0x29);              // ADD HL, HL (blockIndex * 2)
+  engine.push(0x54);              // LD D, H
+  engine.push(0x5d);              // LD E, L
+  engine.push(0x29);              // ADD HL, HL (blockIndex * 4)
+  engine.push(0x19);              // ADD HL, DE (blockIndex * 5)
+  
+  engine.push(0x11);              // LD DE, blockBankAddr + 2
+  const blockBankAddrIdx2 = engine.length;
+  engine.push(0x00, 0x00);        // Placeholder
+  engine.push(0x19);              // ADD HL, DE
+  
+  // Read block type (first byte)
+  engine.push(0x7e);              // LD A, (HL)
+  
+  // Check if solid (type == 0)
+  engine.push(0xa7);              // AND A
+  const jrNotSolidPos = engine.length;
+  engine.push(0x20, 0x00);        // JR NZ, next_tile (placeholder)
+  
+  // Solid block found! Land on it
+  engine.push(0xdd, 0xe1);        // POP IX (restore IX)
+  
+  // Calculate landing Y: tile Y * 8 (shift left 3 times)
+  engine.push(0x79);              // LD A, C (tile Y)
+  engine.push(0xcb, 0x27);        // SLA A
+  engine.push(0xcb, 0x27);        // SLA A
+  engine.push(0xcb, 0x27);        // SLA A (now A = tile Y * 8)
+  
+  // This is the top of the block, player stands on it
+  engine.push(0xd6, 0x08);        // SUB 8 (player Y = block top - sprite height)
   engine.push(0x32);              // LD (playerY), A
   const playerYWriteIdx2 = engine.length;
   engine.push(0x00, 0x00);        // Placeholder
   
+  // Stop jumping
   engine.push(0xaf);              // XOR A
   engine.push(0x32);              // LD (isJumping), A
   const isJumpingWriteIdx2 = engine.length;
   engine.push(0x00, 0x00);        // Placeholder
   
-  engine.push(0x3e, 0x00);        // LD A, 0
-  engine.push(0xd3, 0xfe);        // OUT (254), A (border black - landed)
+  engine.push(0x3e, 0x03);        // LD A, 3
+  engine.push(0xd3, 0xfe);        // OUT (254), A (border magenta - landed on block)
   
   const jrToCheckRightPos2 = engine.length;
+  engine.push(0x18, 0x00);        // JR check_right_key (placeholder)
+  
+  // Next tile in search
+  const nextTilePos = engine.length;
+  
+  // Advance to next tile (6 bytes per tile)
+  engine.push(0xdd, 0x23);        // INC IX (6 times)
+  engine.push(0xdd, 0x23);
+  engine.push(0xdd, 0x23);
+  engine.push(0xdd, 0x23);
+  engine.push(0xdd, 0x23);
+  engine.push(0xdd, 0x23);
+  
+  // Decrement tile counter
+  engine.push(0x1b);              // DEC DE
+  
+  // Loop back
+  let searchLoopOffset = tileSearchLoopPos - (32768 + engine.length + 2);
+  engine.push(0x18, searchLoopOffset & 0xff);  // JR tile_search_loop
+  
+  // No collision found - check ground level
+  const noCollisionPos = engine.length;
+  engine.push(0xdd, 0xe1);        // POP IX (restore IX)
+  
+  // Check if Y >= ground level
+  engine.push(0x78);              // LD A, B (foot Y from earlier)
+  engine.push(0xfe, (playerYPixel + 8) & 0xff);  // CP ground_level + 8
+  const jrStillAirbornePos = engine.length;
+  engine.push(0x38, 0x00);        // JR C, still_airborne (placeholder)
+  
+  // Reached ground - land
+  engine.push(0x3e, playerYPixel & 0xff);  // LD A, ground_level
+  engine.push(0x32);              // LD (playerY), A
+  const playerYWriteIdx5 = engine.length;
+  engine.push(0x00, 0x00);        // Placeholder
+  
+  engine.push(0xaf);              // XOR A
+  engine.push(0x32);              // LD (isJumping), A
+  const isJumpingWriteIdx3 = engine.length;
+  engine.push(0x00, 0x00);        // Placeholder
+  
+  engine.push(0x3e, 0x00);        // LD A, 0
+  engine.push(0xd3, 0xfe);        // OUT (254), A (border black - landed on ground)
+  
+  const jrToCheckRightPos3 = engine.length;
   engine.push(0x18, 0x00);        // JR check_right_key (placeholder)
   
   // Still airborne - continue falling
@@ -756,6 +896,15 @@ function createBinaryGameEngine(
   engine[spriteHeightAddr] = spriteHeightVarAddr & 0xff;
   engine[spriteHeightAddr + 1] = (spriteHeightVarAddr >> 8) & 0xff;
   
+  // Patch screen bank address (collision detection)
+  engine[screenBankAddrIdx2] = screenBankAddr & 0xff;
+  engine[screenBankAddrIdx2 + 1] = (screenBankAddr >> 8) & 0xff;
+  
+  // Patch block bank address (collision detection)
+  const blockBankWithOffset2 = blockBankAddr + 2;
+  engine[blockBankAddrIdx2] = blockBankWithOffset2 & 0xff;
+  engine[blockBankAddrIdx2 + 1] = (blockBankWithOffset2 >> 8) & 0xff;
+  
   // Patch trajectory table address
   engine[trajectoryTableAddrIdx] = trajectoryTableAddr & 0xff;
   engine[trajectoryTableAddrIdx + 1] = (trajectoryTableAddr >> 8) & 0xff;
@@ -779,6 +928,9 @@ function createBinaryGameEngine(
   engine[playerXReadIdx3] = playerXVarAddr & 0xff;
   engine[playerXReadIdx3 + 1] = (playerXVarAddr >> 8) & 0xff;
   
+  engine[playerXReadIdx4] = playerXVarAddr & 0xff;
+  engine[playerXReadIdx4 + 1] = (playerXVarAddr >> 8) & 0xff;
+  
   // Patch player Y variable addresses
   engine[playerYVarIdx] = playerYVarAddr & 0xff;
   engine[playerYVarIdx + 1] = (playerYVarAddr >> 8) & 0xff;
@@ -798,11 +950,17 @@ function createBinaryGameEngine(
   engine[playerYReadIdx3] = playerYVarAddr & 0xff;
   engine[playerYReadIdx3 + 1] = (playerYVarAddr >> 8) & 0xff;
   
+  engine[playerYWriteIdx3] = playerYVarAddr & 0xff;
+  engine[playerYWriteIdx3 + 1] = (playerYVarAddr >> 8) & 0xff;
+  
   engine[playerYReadIdx4] = playerYVarAddr & 0xff;
   engine[playerYReadIdx4 + 1] = (playerYVarAddr >> 8) & 0xff;
   
   engine[playerYReadIdx5] = playerYVarAddr & 0xff;
   engine[playerYReadIdx5 + 1] = (playerYVarAddr >> 8) & 0xff;
+  
+  engine[playerYWriteIdx5] = playerYVarAddr & 0xff;
+  engine[playerYWriteIdx5 + 1] = (playerYVarAddr >> 8) & 0xff;
   
   engine[playerYReadIdx6] = playerYVarAddr & 0xff;
   engine[playerYReadIdx6 + 1] = (playerYVarAddr >> 8) & 0xff;
@@ -822,6 +980,9 @@ function createBinaryGameEngine(
   
   engine[isJumpingWriteIdx2] = isJumpingVarAddr & 0xff;
   engine[isJumpingWriteIdx2 + 1] = (isJumpingVarAddr >> 8) & 0xff;
+  
+  engine[isJumpingWriteIdx3] = isJumpingVarAddr & 0xff;
+  engine[isJumpingWriteIdx3 + 1] = (isJumpingVarAddr >> 8) & 0xff;
   
   // Patch jumpFrameIndex variable addresses
   engine[jumpFrameIdxVarIdx] = jumpFrameIdxVarAddr & 0xff;
@@ -843,6 +1004,8 @@ function createBinaryGameEngine(
   const skipJumpInitAddr = 32768 + skipJumpInitPos;
   const checkRightKeyAddr = 32768 + checkRightKeyPos;
   const landCheckAddr = 32768 + landCheckPos;
+  const nextTileAddr = 32768 + nextTilePos;
+  const noCollisionAddr = 32768 + noCollisionPos;
   const stillAirborneAddr = 32768 + stillAirbornePos;
   const checkLeftAddr = 32768 + checkLeftPos;
   const drawPlayerAddr = 32768 + drawPlayerPos;
@@ -864,11 +1027,27 @@ function createBinaryGameEngine(
   disp = checkRightKeyAddr - (32768 + jrToCheckRightPos + 2);
   engine[jrToCheckRightPos + 1] = disp & 0xff;
   
-  disp = stillAirborneAddr - (32768 + jrStillAirbornePos + 2);
-  engine[jrStillAirbornePos + 1] = disp & 0xff;
+  // Collision detection jumps
+  disp = noCollisionAddr - (32768 + jrNoCollisionPos + 2);
+  engine[jrNoCollisionPos + 1] = disp & 0xff;
+  
+  disp = nextTileAddr - (32768 + jrNotThisTilePos + 2);
+  engine[jrNotThisTilePos + 1] = disp & 0xff;
+  
+  disp = nextTileAddr - (32768 + jrNotThisTilePos2 + 2);
+  engine[jrNotThisTilePos2 + 1] = disp & 0xff;
+  
+  disp = nextTileAddr - (32768 + jrNotSolidPos + 2);
+  engine[jrNotSolidPos + 1] = disp & 0xff;
   
   disp = checkRightKeyAddr - (32768 + jrToCheckRightPos2 + 2);
   engine[jrToCheckRightPos2 + 1] = disp & 0xff;
+  
+  disp = stillAirborneAddr - (32768 + jrStillAirbornePos + 2);
+  engine[jrStillAirbornePos + 1] = disp & 0xff;
+  
+  disp = checkRightKeyAddr - (32768 + jrToCheckRightPos3 + 2);
+  engine[jrToCheckRightPos3 + 1] = disp & 0xff;
   
   disp = checkLeftAddr - (32768 + jrNoRightPos + 2);
   engine[jrNoRightPos + 1] = disp & 0xff;
