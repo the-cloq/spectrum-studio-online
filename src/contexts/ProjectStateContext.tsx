@@ -214,9 +214,8 @@ export const ProjectStateProvider: React.FC<{ children: React.ReactNode }> = ({ 
       const { error } = await supabase
         .from("projects")
         .upsert({
-          id: project.id,
+          id: project.id || "project-1",
           data: serialized,
-          updated_at: new Date().toISOString(),
         });
 
       if (error) throw error;
