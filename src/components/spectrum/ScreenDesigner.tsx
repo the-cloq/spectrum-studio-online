@@ -931,6 +931,329 @@ export const ScreenDesigner = ({ blocks, objects, sprites, screens, onScreensCha
                     </div>
                   )}
 
+                  {/* Ammunition Properties */}
+                  {globalObject.type === "ammunition" && (
+                    <div className="space-y-3 border-t pt-3">
+                      <Label className="text-sm font-semibold">Properties</Label>
+                      
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <Label className="text-xs">Projectile Speed: {getEffectiveValue("projectileSpeed")}</Label>
+                          {isOverridden("projectileSpeed") ? (
+                            <Button size="sm" variant="ghost" className="h-5 text-xs" onClick={() => resetPropertyOverride("projectileSpeed")}>
+                              Reset
+                            </Button>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">Default</span>
+                          )}
+                        </div>
+                        <input
+                          type="range"
+                          min="1"
+                          max="20"
+                          value={getEffectiveValue("projectileSpeed") || 8}
+                          onChange={(e) => updatePropertyOverride("projectileSpeed", parseInt(e.target.value))}
+                          className="w-full"
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <Label className="text-xs">Projectile Damage: {getEffectiveValue("projectileDamage")}</Label>
+                          {isOverridden("projectileDamage") ? (
+                            <Button size="sm" variant="ghost" className="h-5 text-xs" onClick={() => resetPropertyOverride("projectileDamage")}>
+                              Reset
+                            </Button>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">Default</span>
+                          )}
+                        </div>
+                        <input
+                          type="range"
+                          min="1"
+                          max="50"
+                          value={getEffectiveValue("projectileDamage") || 5}
+                          onChange={(e) => updatePropertyOverride("projectileDamage", parseInt(e.target.value))}
+                          className="w-full"
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <Label className="text-xs">Projectile Range: {getEffectiveValue("projectileRange")}</Label>
+                          {isOverridden("projectileRange") ? (
+                            <Button size="sm" variant="ghost" className="h-5 text-xs" onClick={() => resetPropertyOverride("projectileRange")}>
+                              Reset
+                            </Button>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">Default</span>
+                          )}
+                        </div>
+                        <input
+                          type="range"
+                          min="50"
+                          max="300"
+                          step="10"
+                          value={getEffectiveValue("projectileRange") || 100}
+                          onChange={(e) => updatePropertyOverride("projectileRange", parseInt(e.target.value))}
+                          className="w-full"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Door Properties */}
+                  {globalObject.type === "door" && (
+                    <div className="space-y-3 border-t pt-3">
+                      <Label className="text-sm font-semibold">Properties</Label>
+                      
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <Label className="text-xs">Target Room</Label>
+                          {isOverridden("targetRoom") && (
+                            <Button size="sm" variant="ghost" className="h-5 text-xs" onClick={() => resetPropertyOverride("targetRoom")}>
+                              Reset
+                            </Button>
+                          )}
+                        </div>
+                        <input
+                          type="text"
+                          value={getEffectiveValue("targetRoom") || ""}
+                          onChange={(e) => updatePropertyOverride("targetRoom", e.target.value)}
+                          placeholder="Enter room ID"
+                          className="w-full px-2 py-1 border rounded text-sm"
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <Label className="text-xs">Target Floor: {getEffectiveValue("targetFloor") ?? 0}</Label>
+                          {isOverridden("targetFloor") ? (
+                            <Button size="sm" variant="ghost" className="h-5 text-xs" onClick={() => resetPropertyOverride("targetFloor")}>
+                              Reset
+                            </Button>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">Default</span>
+                          )}
+                        </div>
+                        <input
+                          type="number"
+                          min="0"
+                          max="99"
+                          value={getEffectiveValue("targetFloor") ?? 0}
+                          onChange={(e) => updatePropertyOverride("targetFloor", parseInt(e.target.value))}
+                          className="w-full px-2 py-1 border rounded text-sm"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Exit Properties */}
+                  {globalObject.type === "exit" && (
+                    <div className="space-y-3 border-t pt-3">
+                      <Label className="text-sm font-semibold">Properties</Label>
+                      
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <Label className="text-xs">Target Level</Label>
+                          {isOverridden("targetLevel") && (
+                            <Button size="sm" variant="ghost" className="h-5 text-xs" onClick={() => resetPropertyOverride("targetLevel")}>
+                              Reset
+                            </Button>
+                          )}
+                        </div>
+                        <input
+                          type="text"
+                          value={getEffectiveValue("targetLevel") || ""}
+                          onChange={(e) => updatePropertyOverride("targetLevel", e.target.value)}
+                          placeholder="Enter level ID"
+                          className="w-full px-2 py-1 border rounded text-sm"
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <Label className="text-xs">Activation Conditions</Label>
+                          {isOverridden("activationConditions") && (
+                            <Button size="sm" variant="ghost" className="h-5 text-xs" onClick={() => resetPropertyOverride("activationConditions")}>
+                              Reset
+                            </Button>
+                          )}
+                        </div>
+                        <input
+                          type="text"
+                          value={getEffectiveValue("activationConditions") || ""}
+                          onChange={(e) => updatePropertyOverride("activationConditions", e.target.value)}
+                          placeholder="e.g., all_items_collected"
+                          className="w-full px-2 py-1 border rounded text-sm"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Moving Platform Properties */}
+                  {globalObject.type === "moving-platform" && (
+                    <div className="space-y-3 border-t pt-3">
+                      <Label className="text-sm font-semibold">Properties</Label>
+                      
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <Label className="text-xs">Platform Type</Label>
+                          {isOverridden("platformType") && (
+                            <Button size="sm" variant="ghost" className="h-5 text-xs" onClick={() => resetPropertyOverride("platformType")}>
+                              Reset
+                            </Button>
+                          )}
+                        </div>
+                        <Select
+                          value={getEffectiveValue("platformType") || "horizontal"}
+                          onValueChange={(value) => updatePropertyOverride("platformType", value)}
+                        >
+                          <SelectTrigger className="h-8 text-xs">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="horizontal">Horizontal</SelectItem>
+                            <SelectItem value="vertical">Vertical</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <Label className="text-xs">Platform Speed: {getEffectiveValue("platformSpeed")}</Label>
+                          {isOverridden("platformSpeed") ? (
+                            <Button size="sm" variant="ghost" className="h-5 text-xs" onClick={() => resetPropertyOverride("platformSpeed")}>
+                              Reset
+                            </Button>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">Default</span>
+                          )}
+                        </div>
+                        <input
+                          type="range"
+                          min="1"
+                          max="8"
+                          value={getEffectiveValue("platformSpeed") || 2}
+                          onChange={(e) => updatePropertyOverride("platformSpeed", parseInt(e.target.value))}
+                          className="w-full"
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <Label className="text-xs">Platform Range: {getEffectiveValue("platformRange")} tiles</Label>
+                          {isOverridden("platformRange") ? (
+                            <Button size="sm" variant="ghost" className="h-5 text-xs" onClick={() => resetPropertyOverride("platformRange")}>
+                              Reset
+                            </Button>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">Default</span>
+                          )}
+                        </div>
+                        <input
+                          type="range"
+                          min="2"
+                          max="20"
+                          value={getEffectiveValue("platformRange") || 8}
+                          onChange={(e) => updatePropertyOverride("platformRange", parseInt(e.target.value))}
+                          className="w-full"
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <Label className="text-xs">Pause at Ends: {getEffectiveValue("pauseAtEnds")}ms</Label>
+                          {isOverridden("pauseAtEnds") ? (
+                            <Button size="sm" variant="ghost" className="h-5 text-xs" onClick={() => resetPropertyOverride("pauseAtEnds")}>
+                              Reset
+                            </Button>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">Default</span>
+                          )}
+                        </div>
+                        <input
+                          type="range"
+                          min="0"
+                          max="2000"
+                          step="100"
+                          value={getEffectiveValue("pauseAtEnds") || 500}
+                          onChange={(e) => updatePropertyOverride("pauseAtEnds", parseInt(e.target.value))}
+                          className="w-full"
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <Label className="text-xs">Start Direction</Label>
+                          {isOverridden("startDirection") && (
+                            <Button size="sm" variant="ghost" className="h-5 text-xs" onClick={() => resetPropertyOverride("startDirection")}>
+                              Reset
+                            </Button>
+                          )}
+                        </div>
+                        <Select
+                          value={getEffectiveValue("startDirection") || "right"}
+                          onValueChange={(value) => updatePropertyOverride("startDirection", value)}
+                        >
+                          <SelectTrigger className="h-8 text-xs">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="left">Left</SelectItem>
+                            <SelectItem value="right">Right</SelectItem>
+                            <SelectItem value="up">Up</SelectItem>
+                            <SelectItem value="down">Down</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <Label className="text-xs">Repeat Type</Label>
+                          {isOverridden("repeatType") && (
+                            <Button size="sm" variant="ghost" className="h-5 text-xs" onClick={() => resetPropertyOverride("repeatType")}>
+                              Reset
+                            </Button>
+                          )}
+                        </div>
+                        <Select
+                          value={getEffectiveValue("repeatType") || "ping-pong"}
+                          onValueChange={(value) => updatePropertyOverride("repeatType", value)}
+                        >
+                          <SelectTrigger className="h-8 text-xs">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="ping-pong">Ping-Pong</SelectItem>
+                            <SelectItem value="loop">Loop</SelectItem>
+                            <SelectItem value="once">Once</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <Label className="text-xs">Player Carry</Label>
+                          {isOverridden("playerCarry") && (
+                            <Button size="sm" variant="ghost" className="h-5 text-xs" onClick={() => resetPropertyOverride("playerCarry")}>
+                              Reset
+                            </Button>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={getEffectiveValue("playerCarry") ?? true}
+                            onChange={(e) => updatePropertyOverride("playerCarry", e.target.checked)}
+                            className="w-4 h-4"
+                          />
+                          <span className="text-xs text-muted-foreground">Platform carries player</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   <div className="flex gap-2 border-t pt-3">
                     <Button 
                       size="sm" 
