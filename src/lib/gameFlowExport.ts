@@ -884,8 +884,8 @@ function createBinaryGameEngine(
   engine.push(0x10, 0xfe);        // DJNZ -2
   
   // Loop back to game loop
-  loopOffset = gameLoopAddr - (32768 + engine.length + 2);
-  engine.push(0x18, loopOffset & 0xff);  // JR game_loop
+  const gameLoopOffset = gameLoopAddr - (32768 + engine.length + 2);
+  engine.push(0x18, gameLoopOffset & 0xff);  // JR game_loop
   
   // ===== DATA AREA =====
   
