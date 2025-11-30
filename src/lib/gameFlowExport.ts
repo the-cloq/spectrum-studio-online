@@ -82,9 +82,10 @@ export function exportGameFlowToTAP(
   }
   const gameScreens = screens.filter(s => s.type === "game" && usedScreenIds.has(s.id));
   const screenBank = packScreenBank(gameScreens, blockIndexMap, objectIndexMap, objects);
-  // PHASE 2: Frame delay loop - cycle border colors with delays
-  // Tests that loops work without corrupting BASIC
+  // PHASE 3: Add LDIR background copy after border loop
+  // Tests screen data copy works with loops
   const engine = [
+    // Border color loop (Phase 2)
     0x06, 0x07,        // LD B, 7        ; Loop 7 times (colors 0-6)
     // loop_start:
     0x78,              // LD A, B        ; Use counter as border color
@@ -98,6 +99,13 @@ export function exportGameFlowToTAP(
     0x20, 0xFB,        // JR NZ, delay_loop ; Loop back if not zero
     // Continue main loop
     0x10, 0xF3,        // DJNZ loop_start ; Decrement B, loop if not zero
+    
+    // Copy background screen to video memory
+    0x21, 0x00, 0x00,  // LD HL, 0x0000  ; Placeholder for bgScreenAddr (will be patched)
+    0x11, 0x00, 0x40,  // LD DE, 0x4000  ; Video memory start
+    0x01, 0x00, 0x1B,  // LD BC, 0x1B00  ; 6912 bytes
+    0xED, 0xB0,        // LDIR           ; Copy screen data
+    
     0xC9               // RET            ; Return to BASIC
   ];
   const engineSize = engine.length;
@@ -109,6 +117,12 @@ export function exportGameFlowToTAP(
   const objectBankAddr = blockBankAddr + blockBank.length;
   const screenBankAddr = objectBankAddr + objectBank.length;
   const bgScreenAddr = screenBankAddr + screenBank.length;
+  
+  // Patch bgScreenAddr into the LD HL instruction at offset 19-20
+  const bgAddrLow = bgScreenAddr & 0xFF;
+  const bgAddrHigh = (bgScreenAddr >> 8) & 0xFF;
+  engine[19] = bgAddrLow;
+  engine[20] = bgAddrHigh;
 
   // Combine all data into one continuous block
   const combinedCode = [
@@ -136,10 +150,11 @@ export function exportGameFlowToTAP(
   tap.addDataBlock(combinedCode);
 
   console.log("[TAP DEBUG] Final TAP layout", {
-    blocksOrder: "PHASE 2 TEST: Border color loop with delays (7 colors, then return to BASIC)",
+    blocksOrder: "PHASE 3 TEST: Border loop, then LDIR screen copy, then return to BASIC",
     codeStart,
     engineSize: engine.length,
-    engineContents: "Loop counter, border OUT, delay loop, DJNZ, RET",
+    engineContents: "Border loop + LDIR from bgScreenAddr to 0x4000 (6912 bytes)",
+    bgScreenAddr: bgScreenAddr.toString(16),
     spriteBankSize: spriteBank.length,
     blockBankSize: blockBank.length,
     objectBankSize: objectBank.length,
