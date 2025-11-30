@@ -209,21 +209,21 @@ export function exportGameFlowToTAP(
   const playerXAddr = codeStart + engine.length - 2;
   const playerYAddr = codeStart + engine.length - 1;
   
-  // Patch all LD A, (player_x_addr) instructions
-  engine[18] = playerXAddr & 0xFF;
-  engine[19] = (playerXAddr >> 8) & 0xFF;
-  engine[49] = playerXAddr & 0xFF;
-  engine[50] = (playerXAddr >> 8) & 0xFF;
+  // Patch all LD A, (player_x_addr) instructions (CORRECTED INDICES)
+  engine[22] = playerXAddr & 0xFF;  // First LD A, (player_x_addr) at index 21-23
+  engine[23] = (playerXAddr >> 8) & 0xFF;
+  engine[57] = playerXAddr & 0xFF;  // Second LD A, (player_x_addr) at index 56-58
+  engine[58] = (playerXAddr >> 8) & 0xFF;
   
-  // Patch all LD (player_x_addr), A instructions
-  engine[31] = playerXAddr & 0xFF;
-  engine[32] = (playerXAddr >> 8) & 0xFF;
-  engine[45] = playerXAddr & 0xFF;
-  engine[46] = (playerXAddr >> 8) & 0xFF;
+  // Patch all LD (player_x_addr), A instructions (CORRECTED INDICES)
+  engine[37] = playerXAddr & 0xFF;  // First LD (player_x_addr), A at index 36-38
+  engine[38] = (playerXAddr >> 8) & 0xFF;
+  engine[54] = playerXAddr & 0xFF;  // Second LD (player_x_addr), A at index 53-55
+  engine[55] = (playerXAddr >> 8) & 0xFF;
   
-  // Patch all LD A, (player_y_addr) instructions
-  engine[58] = playerYAddr & 0xFF;
-  engine[59] = (playerYAddr >> 8) & 0xFF;
+  // Patch all LD A, (player_y_addr) instructions (CORRECTED INDICES)
+  engine[66] = playerYAddr & 0xFF;  // LD A, (player_y_addr) at index 65-67
+  engine[67] = (playerYAddr >> 8) & 0xFF;
   
   // Patch player starting position (last 2 bytes of engine)
   engine[engine.length - 2] = playerStartX & 0xFF;
