@@ -82,9 +82,15 @@ export function exportGameFlowToTAP(
   }
   const gameScreens = screens.filter(s => s.type === "game" && usedScreenIds.has(s.id));
   const screenBank = packScreenBank(gameScreens, blockIndexMap, objectIndexMap, objects);
-  // MINIMAL DIAGNOSTIC TEST: Replace entire Z80 engine with single RET instruction
-  // This tests if machine code at 32768 is corrupting BASIC
-  const engine = [0xC9]; // RET instruction only
+  // PHASE 1: Minimal engine with border color change to prove execution
+  // LD A, 2       → Load red color
+  // OUT (254), A  → Set border
+  // RET           → Return to BASIC
+  const engine = [
+    0x3E, 0x02,  // LD A, 2 (red)
+    0xD3, 0xFE,  // OUT (254), A
+    0xC9         // RET
+  ];
   const engineSize = engine.length;
 
   // Calculate memory layout - everything in one continuous block
@@ -121,10 +127,10 @@ export function exportGameFlowToTAP(
   tap.addDataBlock(combinedCode);
 
   console.log("[TAP DEBUG] Final TAP layout", {
-    blocksOrder: "MINIMAL TEST: BASIC header, BASIC data, CODE header, CODE data (CODE = single RET only)",
+    blocksOrder: "PHASE 1 TEST: BASIC header, BASIC data, CODE header, CODE data (CODE = LD A,2 / OUT(254),A / RET)",
     codeStart,
     engineSize: engine.length,
-    engineContents: "0xC9 (RET)",
+    engineContents: "0x3E 0x02 0xD3 0xFE 0xC9 (set red border, return)",
     spriteBankSize: spriteBank.length,
     blockBankSize: blockBank.length,
     objectBankSize: objectBank.length,
