@@ -118,11 +118,11 @@ export function exportGameFlowToTAP(
   const screenBankAddr = objectBankAddr + objectBank.length;
   const bgScreenAddr = screenBankAddr + screenBank.length;
   
-  // Patch bgScreenAddr into the LD HL instruction at offset 19-20
+  // Patch bgScreenAddr into the LD HL instruction at offset 16-17
   const bgAddrLow = bgScreenAddr & 0xFF;
   const bgAddrHigh = (bgScreenAddr >> 8) & 0xFF;
-  engine[19] = bgAddrLow;
-  engine[20] = bgAddrHigh;
+  engine[16] = bgAddrLow;
+  engine[17] = bgAddrHigh;
 
   // Combine all data into one continuous block
   const combinedCode = [
@@ -130,7 +130,8 @@ export function exportGameFlowToTAP(
     ...Array.from(spriteBank),
     ...Array.from(blockBank),
     ...Array.from(objectBank),
-    ...Array.from(screenBank)
+    ...Array.from(screenBank),
+    ...Array.from(loadingScr)
   ];
 
   // TAP debug logging is performed after building the BASIC program and TAP blocks below.
@@ -154,7 +155,8 @@ export function exportGameFlowToTAP(
     codeStart,
     engineSize: engine.length,
     engineContents: "Border loop + LDIR from bgScreenAddr to 0x4000 (6912 bytes)",
-    bgScreenAddr: bgScreenAddr.toString(16),
+    bgScreenAddr: `0x${bgScreenAddr.toString(16)} (patched at engine[16-17])`,
+    bgScreenDataSize: loadingScr.length,
     spriteBankSize: spriteBank.length,
     blockBankSize: blockBank.length,
     objectBankSize: objectBank.length,
