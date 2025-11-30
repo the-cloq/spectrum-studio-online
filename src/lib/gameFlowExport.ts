@@ -141,12 +141,11 @@ export function exportGameFlowToTAP(
   const screenBankAddr = objectBankAddr + objectBank.length;
   const bgScreenAddr = screenBankAddr + screenBank.length;
   
-  // Patch bgScreenAddr into LD HL instruction
-  // Manual count verification: LD HL is at indices 16-18 (opcode at 16, address at 17-18)
+  // Patch bgScreenAddr into LD HL instruction at indices 17-18
   const bgAddrLow = bgScreenAddr & 0xFF;
   const bgAddrHigh = (bgScreenAddr >> 8) & 0xFF;
-  engine[18] = bgAddrLow;  // Low byte of address
-  engine[19] = bgAddrHigh; // High byte of address
+  engine[17] = bgAddrLow;  // Low byte of LD HL address
+  engine[18] = bgAddrHigh; // High byte of LD HL address
 
   // Combine all data into one continuous block
   const combinedCode = [
