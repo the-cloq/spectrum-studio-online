@@ -89,28 +89,28 @@ export function exportGameFlowToTAP(
   // PHASE 4: Add keyboard reading to change border based on Q/W press
   // Tests keyboard input detection
   const engine = [
-    // Border flash loop (green 0-7)
+    // Border flash loop (green 0-7) - FIX 1: Use DE for delay to preserve B
     0x06, 0x08,           // LD B, 8
     // border_loop:
     0x78,                 // LD A, B
     0x3D,                 // DEC A
     0xD3, 0xFE,           // OUT (0xFE), A
-    0x01, 0xFF, 0x7F,     // LD BC, 0x7FFF
+    0x11, 0xFF, 0x7F,     // LD DE, 0x7FFF (use DE instead of BC)
     // delay:
-    0x0B,                 // DEC BC
-    0x78,                 // LD A, B
-    0xB1,                 // OR C
+    0x1B,                 // DEC DE
+    0x7A,                 // LD A, D
+    0xB3,                 // OR E
     0x20, 0xFC,           // JR NZ, -4 (delay)
     0x10, 0xF3,           // DJNZ -13 (border_loop)
     
     // Copy background screen to video memory
-    0x21, 0x00, 0x00,     // LD HL, 0x0000 (placeholder, will be patched)
+    0x21, 0x00, 0x00,     // LD HL, 0x0000 (placeholder, will be patched at offset 17-18)
     0x11, 0x00, 0x40,     // LD DE, 0x4000 (screen memory)
     0x01, 0x00, 0x1B,     // LD BC, 6912 (0x1B00)
     0xED, 0xB0,           // LDIR
     
-    // Keyboard test loop (50 frames)
-    0x06, 0x32,           // LD B, 50
+    // Keyboard test loop (50 frames) - FIX 3: Store count in E, use D for keyboard
+    0x1E, 0x32,           // LD E, 50 (use E for frame counter)
     // keyboard_loop:
     0x01, 0xFE, 0xFB,     // LD BC, 0xFBFE (port for Q/W/E/R/T row)
     0xED, 0x78,           // IN A, (C)
@@ -126,7 +126,8 @@ export function exportGameFlowToTAP(
     0xD3, 0xFE,           // OUT (0xFE), A
     // keyboard_continue:
     0x76,                 // HALT (wait for frame)
-    0x10, 0xE6,           // DJNZ -26 (keyboard_loop)
+    0x1D,                 // DEC E
+    0x20, 0xE4,           // JR NZ, -28 (keyboard_loop)
     
     0xC9                  // RET to BASIC
   ];
@@ -140,11 +141,11 @@ export function exportGameFlowToTAP(
   const screenBankAddr = objectBankAddr + objectBank.length;
   const bgScreenAddr = screenBankAddr + screenBank.length;
   
-  // Patch bgScreenAddr into the LD HL instruction at offset 16-17
+  // FIX 2: Patch bgScreenAddr into the LD HL instruction at offset 17-18
   const bgAddrLow = bgScreenAddr & 0xFF;
   const bgAddrHigh = (bgScreenAddr >> 8) & 0xFF;
-  engine[16] = bgAddrLow;
-  engine[17] = bgAddrHigh;
+  engine[17] = bgAddrLow;  // Low byte of address
+  engine[18] = bgAddrHigh; // High byte of address
 
   // Combine all data into one continuous block
   const combinedCode = [
@@ -177,7 +178,7 @@ export function exportGameFlowToTAP(
     codeStart,
     engineSize: engine.length,
     engineContents: "Border loop + LDIR screen copy + Keyboard test (Q=red, W=green border)",
-    bgScreenAddr: `0x${bgScreenAddr.toString(16)} (patched at engine[16-17])`,
+    bgScreenAddr: `0x${bgScreenAddr.toString(16)} (patched at engine[17-18])`,
     bgScreenDataSize: testBackgroundScr.length,
     backgroundScreenUsed: firstGameScreen ? `Level screen: ${firstGameScreen.name}` : "Loading screen (fallback)",
     spriteBankSize: spriteBank.length,
