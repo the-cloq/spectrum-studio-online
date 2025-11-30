@@ -82,36 +82,18 @@ export function exportGameFlowToTAP(
   }
   const gameScreens = screens.filter(s => s.type === "game" && usedScreenIds.has(s.id));
   const screenBank = packScreenBank(gameScreens, blockIndexMap, objectIndexMap, objects);
-  // First pass: Build engine with dummy addresses to calculate size
-  const dummyEngine = createBinaryGameEngine(
-    0, 0, 0, 0, 0,
-    validFlowScreens[1] || validFlowScreens[0],
-    blocks,
-    objects,
-    sprites
-  );
+  // MINIMAL DIAGNOSTIC TEST: Replace entire Z80 engine with single RET instruction
+  // This tests if machine code at 32768 is corrupting BASIC
+  const engine = [0xC9]; // RET instruction only
+  const engineSize = engine.length;
 
   // Calculate memory layout - everything in one continuous block
   const codeStart = 32768;
-  const engineSize = dummyEngine.length;
   const spriteBankAddr = codeStart + engineSize;
   const blockBankAddr = spriteBankAddr + spriteBank.length;
   const objectBankAddr = blockBankAddr + blockBank.length;
   const screenBankAddr = objectBankAddr + objectBank.length;
   const bgScreenAddr = screenBankAddr + screenBank.length;
-
-  // Second pass: Build engine with correct addresses
-  const engine = createBinaryGameEngine(
-    spriteBankAddr,
-    blockBankAddr,
-    objectBankAddr,
-    screenBankAddr,
-    bgScreenAddr,
-    validFlowScreens[1] || validFlowScreens[0],
-    blocks,
-    objects,
-    sprites
-  );
 
   // Combine all data into one continuous block
   const combinedCode = [
@@ -139,10 +121,10 @@ export function exportGameFlowToTAP(
   tap.addDataBlock(combinedCode);
 
   console.log("[TAP DEBUG] Final TAP layout", {
-    blocksOrder: "DIAGNOSTIC TEST: BASIC header, BASIC data, CODE header, CODE data (NO SCREEN$)",
+    blocksOrder: "MINIMAL TEST: BASIC header, BASIC data, CODE header, CODE data (CODE = single RET only)",
     codeStart,
-    engineSizeDummy: engineSize,
-    engineSizeFinal: engine.length,
+    engineSize: engine.length,
+    engineContents: "0xC9 (RET)",
     spriteBankSize: spriteBank.length,
     blockBankSize: blockBank.length,
     objectBankSize: objectBank.length,
