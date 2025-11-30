@@ -83,10 +83,18 @@ export function exportGameFlowToTAP(
   const gameScreens = screens.filter(s => s.type === "game" && usedScreenIds.has(s.id));
   const screenBank = packScreenBank(gameScreens, blockIndexMap, objectIndexMap, objects);
   
-  // For Phase 3 testing: use the first game/level screen as background instead of loading screen
+  // For Phase 5a: use the first game/level screen as background and extract player starting position
   const firstGameScreen = gameScreens[0];
   const testBackgroundScr = firstGameScreen ? encodeScreenToSCR(firstGameScreen, blocks, objects, sprites) : loadingScr;
-  // PHASE 4: Keyboard-controlled border with explicit delay loop
+  
+  // Find player starting position from placedObjects
+  const playerPlacement = firstGameScreen?.placedObjects?.find(po => {
+    const obj = objects.find(o => o.id === po.objectId);
+    return obj?.type === "player";
+  });
+  const playerStartX = playerPlacement ? playerPlacement.x * 8 : 128; // Convert tile to pixel coords
+  const playerStartY = playerPlacement ? playerPlacement.y * 8 : 96;
+  // PHASE 5a: Position tracking with attribute visual feedback
   const engine = [
     // Copy background screen to video memory
     0x21, 0x00, 0x00,     // LD HL, bgScreenAddr (patched at indices 1-2)
@@ -94,43 +102,89 @@ export function exportGameFlowToTAP(
     0x01, 0x00, 0x1B,     // LD BC, 6912
     0xED, 0xB0,           // LDIR
     
-    // Set initial border to black
-    0xAF,                 // XOR A
-    0xD3, 0xFE,           // OUT (0xFE), A
+    // Initialize player position from embedded data
+    0x21, 0x00, 0x00,     // LD HL, player_data (patched at indices 10-11)
+    0x46,                 // LD B, (HL) - load player_x
+    0x23,                 // INC HL
+    0x4E,                 // LD C, (HL) - load player_y
     
-    // Main loop (255 iterations for ~10-15 seconds of testing time)
-    0x3E, 0xFF,           // LD A, 255 (outer loop counter)
+    // Main loop (infinite)
     // main_loop: (index 16)
-    0xF5,                 // PUSH AF (save outer counter)
     
     // Read keyboard
     0x01, 0xFE, 0xFB,     // LD BC, 0xFBFE (port for Q/W/E/R/T row)
     0xED, 0x78,           // IN A, (C)
+    0xF5,                 // PUSH AF (save key state)
+    0x41,                 // LD B, C (restore player_x to B)
+    0xF1,                 // POP AF (restore key state)
+    
     0xCB, 0x47,           // BIT 0, A (Q key - 0 = pressed)
-    0x20, 0x06,           // JR NZ, +6 (check_w)
-    0x3E, 0x02,           // LD A, 2 (red)
-    0xD3, 0xFE,           // OUT (0xFE), A
-    0x18, 0x08,           // JR +8 (delay)
+    0x20, 0x0E,           // JR NZ, +14 (check_w)
+    // Move left: player_x -= 3
+    0x78,                 // LD A, B (player_x)
+    0xD6, 0x03,           // SUB 3
+    0xFE, 0x00,           // CP 0 (check if < 0)
+    0x30, 0x02,           // JR NC, +2 (skip wrap)
+    0x3E, 0xF8,           // LD A, 248 (wrap to right edge)
+    0x47,                 // LD B, A (update player_x)
+    0x18, 0x0C,           // JR +12 (update_done)
+    
     // check_w:
     0xCB, 0x4F,           // BIT 1, A (W key - 0 = pressed)
-    0x20, 0x04,           // JR NZ, +4 (delay)
-    0x3E, 0x04,           // LD A, 4 (green)
-    0xD3, 0xFE,           // OUT (0xFE), A
+    0x20, 0x08,           // JR NZ, +8 (update_done)
+    // Move right: player_x += 3
+    0x78,                 // LD A, B (player_x)
+    0xC6, 0x03,           // ADD 3
+    0xFE, 0xF8,           // CP 248 (check if > 248)
+    0x38, 0x02,           // JR C, +2 (skip wrap)
+    0x3E, 0x00,           // LD A, 0 (wrap to left edge)
+    0x47,                 // LD B, A (update player_x)
     
-    // delay: Explicit delay loop (16384 iterations)
-    0x11, 0x00, 0x40,     // LD DE, 0x4000
-    // delay_inner:
+    // update_done:
+    // Calculate attribute address: 0x5800 + (tile_y * 32) + tile_x
+    // tile_x = player_x / 8
+    0x78,                 // LD A, B (player_x)
+    0x0F,                 // RRCA (divide by 2)
+    0x0F,                 // RRCA (divide by 2)
+    0x0F,                 // RRCA (divide by 2)
+    0xE6, 0x1F,           // AND 0x1F (mask to 0-31)
+    0x5F,                 // LD E, A (tile_x in E)
+    
+    // tile_y = player_y / 8
+    0x79,                 // LD A, C (player_y)
+    0x0F,                 // RRCA
+    0x0F,                 // RRCA
+    0x0F,                 // RRCA
+    0xE6, 0x1F,           // AND 0x1F (mask to 0-31)
+    
+    // tile_y * 32 (shift left 5 times)
+    0x07,                 // RLCA
+    0x07,                 // RLCA
+    0x07,                 // RLCA
+    0x07,                 // RLCA
+    0x07,                 // RLCA
+    0x83,                 // ADD A, E (add tile_x)
+    0x5F,                 // LD E, A (offset in E)
+    0x16, 0x58,           // LD D, 0x58 (attribute memory base = 0x5800)
+    
+    // Write bright white attribute (INK 7, PAPER 0, BRIGHT)
+    0x3E, 0x47,           // LD A, 0x47 (bright white on black)
+    0x12,                 // LD (DE), A
+    
+    // Delay loop
+    0x11, 0x00, 0x20,     // LD DE, 0x2000
+    // delay_loop:
     0x1B,                 // DEC DE
     0x7A,                 // LD A, D
     0xB3,                 // OR E
-    0x20, 0xFB,           // JR NZ, delay_inner (-5)
+    0x20, 0xFB,           // JR NZ, delay_loop (-5)
     
     // Loop back
-    0xF1,                 // POP AF (restore outer counter)
-    0x3D,                 // DEC A
-    0x20, 0xDC,           // JR NZ, main_loop (-36)
+    0x18, 0xA3,           // JR main_loop (-93)
     
-    0xC9                  // RET to BASIC
+    // Player data section (patched with starting position)
+    0x00,                 // player_x (patched)
+    0x00                  // player_y (patched)
   ];
   const engineSize = engine.length;
 
@@ -147,6 +201,15 @@ export function exportGameFlowToTAP(
   const bgAddrHigh = (bgScreenAddr >> 8) & 0xFF;
   engine[1] = bgAddrLow;  // Low byte of LD HL address
   engine[2] = bgAddrHigh; // High byte of LD HL address
+  
+  // Patch player data address into LD HL instruction at indices 10-11
+  const playerDataAddr = codeStart + engine.length - 2; // Last 2 bytes
+  engine[10] = playerDataAddr & 0xFF;
+  engine[11] = (playerDataAddr >> 8) & 0xFF;
+  
+  // Patch player starting position (last 2 bytes of engine)
+  engine[engine.length - 2] = playerStartX & 0xFF;
+  engine[engine.length - 1] = playerStartY & 0xFF;
 
   // Combine all data into one continuous block
   const combinedCode = [
