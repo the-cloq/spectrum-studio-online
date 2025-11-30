@@ -86,30 +86,19 @@ export function exportGameFlowToTAP(
   // For Phase 3 testing: use the first game/level screen as background instead of loading screen
   const firstGameScreen = gameScreens[0];
   const testBackgroundScr = firstGameScreen ? encodeScreenToSCR(firstGameScreen, blocks, objects, sprites) : loadingScr;
-  // PHASE 4: Add keyboard reading to change border based on Q/W press
-  // Tests keyboard input detection
+  // PHASE 4: Keyboard-controlled border only (no auto-flashing)
   const engine = [
-    // Border flash loop (green 0-7) - FIX 1: Use DE for delay to preserve B
-    0x06, 0x08,           // LD B, 8
-    // border_loop:
-    0x78,                 // LD A, B
-    0x3D,                 // DEC A
-    0xD3, 0xFE,           // OUT (0xFE), A
-    0x11, 0xFF, 0x7F,     // LD DE, 0x7FFF (use DE instead of BC)
-    // delay:
-    0x1B,                 // DEC DE
-    0x7A,                 // LD A, D
-    0xB3,                 // OR E
-    0x20, 0xFB,           // JR NZ, -5 (delay)
-    0x10, 0xF2,           // DJNZ -14 (border_loop)
-    
-  // Copy background screen to video memory
-  0x21, 0x00, 0x00,     // LD HL, 0x0000 (placeholder, address bytes at indices 17-18)
+    // Copy background screen to video memory
+    0x21, 0x00, 0x00,     // LD HL, bgScreenAddr (patched at indices 1-2)
     0x11, 0x00, 0x40,     // LD DE, 0x4000 (screen memory)
     0x01, 0x00, 0x1B,     // LD BC, 6912 (0x1B00)
     0xED, 0xB0,           // LDIR
     
-    // Keyboard test loop (50 frames) - FIX 3: Store count in E, use D for keyboard
+    // Set initial border to black
+    0xAF,                 // XOR A
+    0xD3, 0xFE,           // OUT (0xFE), A
+    
+    // Keyboard test loop (50 frames)
     0x1E, 0x32,           // LD E, 50 (use E for frame counter)
     // keyboard_loop:
     0x01, 0xFE, 0xFB,     // LD BC, 0xFBFE (port for Q/W/E/R/T row)
@@ -141,11 +130,11 @@ export function exportGameFlowToTAP(
   const screenBankAddr = objectBankAddr + objectBank.length;
   const bgScreenAddr = screenBankAddr + screenBank.length;
   
-  // Patch bgScreenAddr into LD HL instruction at indices 17-18
+  // Patch bgScreenAddr into LD HL instruction at indices 1-2
   const bgAddrLow = bgScreenAddr & 0xFF;
   const bgAddrHigh = (bgScreenAddr >> 8) & 0xFF;
-  engine[17] = bgAddrLow;  // Low byte of LD HL address
-  engine[18] = bgAddrHigh; // High byte of LD HL address
+  engine[1] = bgAddrLow;  // Low byte of LD HL address
+  engine[2] = bgAddrHigh; // High byte of LD HL address
 
   // Combine all data into one continuous block
   const combinedCode = [
