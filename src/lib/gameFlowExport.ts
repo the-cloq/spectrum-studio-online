@@ -94,7 +94,7 @@ export function exportGameFlowToTAP(
   });
   const playerStartX = playerPlacement ? playerPlacement.x * 8 : 128; // Convert tile to pixel coords
   const playerStartY = playerPlacement ? playerPlacement.y * 8 : 96;
-  // PHASE 5a: Position tracking with attribute visual feedback
+  // PHASE 5a: Position tracking with attribute visual feedback (FIXED - uses memory variables)
   const engine = [
     // Copy background screen to video memory
     0x21, 0x00, 0x00,     // LD HL, bgScreenAddr (patched at indices 1-2)
@@ -102,87 +102,89 @@ export function exportGameFlowToTAP(
     0x01, 0x00, 0x1B,     // LD BC, 6912
     0xED, 0xB0,           // LDIR
     
-    // Initialize player position from embedded data
-    0x21, 0x00, 0x00,     // LD HL, player_data (patched at indices 10-11)
-    0x46,                 // LD B, (HL) - load player_x
-    0x23,                 // INC HL
-    0x4E,                 // LD C, (HL) - load player_y
+    // Set border to black
+    0x3E, 0x00,           // LD A, 0
+    0xD3, 0xFE,           // OUT (254), A
     
-    // Main loop (infinite)
-    // main_loop: (index 16)
-    
-    // Read keyboard
+    // Main loop (infinite) - main_loop starts at index 11
+    // Read keyboard (Q/W keys)
     0x01, 0xFE, 0xFB,     // LD BC, 0xFBFE (port for Q/W/E/R/T row)
-    0xED, 0x78,           // IN A, (C)
-    0xF5,                 // PUSH AF (save key state)
-    0x41,                 // LD B, C (restore player_x to B)
-    0xF1,                 // POP AF (restore key state)
+    0xED, 0x78,           // IN A, (C) - read keyboard
+    0x47,                 // LD B, A - save key state in B
     
-    0xCB, 0x47,           // BIT 0, A (Q key - 0 = pressed)
-    0x20, 0x0E,           // JR NZ, +14 (check_w)
+    // Load current player_x from memory
+    0x3A, 0x00, 0x00,     // LD A, (player_x_addr) - patched at indices 18-19
+    
+    // Check Q key (bit 0, inverted logic - 0 = pressed)
+    0xCB, 0x40,           // BIT 0, B (Q key)
+    0x20, 0x0D,           // JR NZ, +13 (skip move left, check W)
     // Move left: player_x -= 3
-    0x78,                 // LD A, B (player_x)
     0xD6, 0x03,           // SUB 3
-    0xFE, 0x00,           // CP 0 (check if < 0)
+    0xFE, 0x00,           // CP 0 (check if wrapped negative)
     0x30, 0x02,           // JR NC, +2 (skip wrap)
     0x3E, 0xF8,           // LD A, 248 (wrap to right edge)
-    0x47,                 // LD B, A (update player_x)
-    0x18, 0x0C,           // JR +12 (update_done)
+    // Store updated player_x back to memory
+    0x32, 0x00, 0x00,     // LD (player_x_addr), A - patched at indices 31-32
+    0x18, 0x15,           // JR +21 (skip to visual feedback)
     
-    // check_w:
-    0xCB, 0x4F,           // BIT 1, A (W key - 0 = pressed)
-    0x20, 0x08,           // JR NZ, +8 (update_done)
+    // check_w: Check W key (bit 1)
+    0xCB, 0x48,           // BIT 1, B (W key)
+    0x20, 0x0B,           // JR NZ, +11 (skip move right, use current value)
     // Move right: player_x += 3
-    0x78,                 // LD A, B (player_x)
     0xC6, 0x03,           // ADD 3
-    0xFE, 0xF8,           // CP 248 (check if > 248)
+    0xFE, 0xF9,           // CP 249 (check if >= 249)
     0x38, 0x02,           // JR C, +2 (skip wrap)
     0x3E, 0x00,           // LD A, 0 (wrap to left edge)
-    0x47,                 // LD B, A (update player_x)
+    // Store updated player_x back to memory
+    0x32, 0x00, 0x00,     // LD (player_x_addr), A - patched at indices 45-46
     
-    // update_done:
-    // Calculate attribute address: 0x5800 + (tile_y * 32) + tile_x
-    // tile_x = player_x / 8
-    0x78,                 // LD A, B (player_x)
+    // Visual feedback: calculate attribute address and draw bright white square
+    // Load player_x and player_y from memory
+    0x3A, 0x00, 0x00,     // LD A, (player_x_addr) - patched at indices 49-50
+    // Calculate tile_x = player_x / 8
     0x0F,                 // RRCA (divide by 2)
-    0x0F,                 // RRCA (divide by 2)
-    0x0F,                 // RRCA (divide by 2)
+    0x0F,                 // RRCA
+    0x0F,                 // RRCA
     0xE6, 0x1F,           // AND 0x1F (mask to 0-31)
     0x5F,                 // LD E, A (tile_x in E)
     
-    // tile_y = player_y / 8
-    0x79,                 // LD A, C (player_y)
+    // Load player_y from memory
+    0x3A, 0x00, 0x00,     // LD A, (player_y_addr) - patched at indices 58-59
+    // Calculate tile_y = player_y / 8
     0x0F,                 // RRCA
     0x0F,                 // RRCA
     0x0F,                 // RRCA
     0xE6, 0x1F,           // AND 0x1F (mask to 0-31)
     
-    // tile_y * 32 (shift left 5 times)
+    // Calculate attribute offset: tile_y * 32 + tile_x
+    0x07,                 // RLCA (shift left)
     0x07,                 // RLCA
     0x07,                 // RLCA
     0x07,                 // RLCA
-    0x07,                 // RLCA
-    0x07,                 // RLCA
+    0x07,                 // RLCA (tile_y * 32)
     0x83,                 // ADD A, E (add tile_x)
     0x5F,                 // LD E, A (offset in E)
-    0x16, 0x58,           // LD D, 0x58 (attribute memory base = 0x5800)
+    0x16, 0x58,           // LD D, 0x58 (attribute base = 0x5800)
     
-    // Write bright white attribute (INK 7, PAPER 0, BRIGHT)
-    0x3E, 0x47,           // LD A, 0x47 (bright white on black)
+    // Write bright white attribute
+    0x3E, 0x47,           // LD A, 0x47 (BRIGHT 1, PAPER 0, INK 7)
     0x12,                 // LD (DE), A
     
-    // Delay loop
-    0x11, 0x00, 0x20,     // LD DE, 0x2000
-    // delay_loop:
+    // Delay loop (frame rate control)
+    0x06, 0x10,           // LD B, 16 (outer loop counter)
+    // outer_delay:
+    0x11, 0x00, 0x10,     // LD DE, 0x1000 (inner loop counter)
+    // inner_delay:
     0x1B,                 // DEC DE
     0x7A,                 // LD A, D
     0xB3,                 // OR E
-    0x20, 0xFB,           // JR NZ, delay_loop (-5)
+    0x20, 0xFB,           // JR NZ, inner_delay (-5)
+    0x10, 0xF7,           // DJNZ outer_delay (-9)
     
-    // Loop back
-    0x18, 0xA3,           // JR main_loop (-93)
+    // Loop back to main loop
+    0x18, 0xB2,           // JR main_loop (back to index 11)
     
-    // Player data section (patched with starting position)
+    // Memory variables (patched with starting position)
     0x00,                 // player_x (patched)
     0x00                  // player_y (patched)
   ];
@@ -202,10 +204,26 @@ export function exportGameFlowToTAP(
   engine[1] = bgAddrLow;  // Low byte of LD HL address
   engine[2] = bgAddrHigh; // High byte of LD HL address
   
-  // Patch player data address into LD HL instruction at indices 10-11
-  const playerDataAddr = codeStart + engine.length - 2; // Last 2 bytes
-  engine[10] = playerDataAddr & 0xFF;
-  engine[11] = (playerDataAddr >> 8) & 0xFF;
+  // Patch memory variable addresses
+  // player_x and player_y are the last 2 bytes of the engine
+  const playerXAddr = codeStart + engine.length - 2;
+  const playerYAddr = codeStart + engine.length - 1;
+  
+  // Patch all LD A, (player_x_addr) instructions
+  engine[18] = playerXAddr & 0xFF;
+  engine[19] = (playerXAddr >> 8) & 0xFF;
+  engine[49] = playerXAddr & 0xFF;
+  engine[50] = (playerXAddr >> 8) & 0xFF;
+  
+  // Patch all LD (player_x_addr), A instructions
+  engine[31] = playerXAddr & 0xFF;
+  engine[32] = (playerXAddr >> 8) & 0xFF;
+  engine[45] = playerXAddr & 0xFF;
+  engine[46] = (playerXAddr >> 8) & 0xFF;
+  
+  // Patch all LD A, (player_y_addr) instructions
+  engine[58] = playerYAddr & 0xFF;
+  engine[59] = (playerYAddr >> 8) & 0xFF;
   
   // Patch player starting position (last 2 bytes of engine)
   engine[engine.length - 2] = playerStartX & 0xFF;
