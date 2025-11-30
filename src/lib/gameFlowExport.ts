@@ -103,8 +103,8 @@ export function exportGameFlowToTAP(
     0x20, 0xFB,           // JR NZ, -5 (delay)
     0x10, 0xF2,           // DJNZ -14 (border_loop)
     
-    // Copy background screen to video memory
-    0x21, 0x00, 0x00,     // LD HL, 0x0000 (placeholder, will be patched at offset 17-18)
+  // Copy background screen to video memory
+  0x21, 0x00, 0x00,     // LD HL, 0x0000 (placeholder, address bytes at indices 17-18)
     0x11, 0x00, 0x40,     // LD DE, 0x4000 (screen memory)
     0x01, 0x00, 0x1B,     // LD BC, 6912 (0x1B00)
     0xED, 0xB0,           // LDIR
@@ -141,11 +141,12 @@ export function exportGameFlowToTAP(
   const screenBankAddr = objectBankAddr + objectBank.length;
   const bgScreenAddr = screenBankAddr + screenBank.length;
   
-  // FIX 2: Patch bgScreenAddr into the LD HL instruction at offset 17-18
+  // Patch bgScreenAddr into LD HL instruction
+  // Manual count verification: LD HL is at indices 16-18 (opcode at 16, address at 17-18)
   const bgAddrLow = bgScreenAddr & 0xFF;
   const bgAddrHigh = (bgScreenAddr >> 8) & 0xFF;
-  engine[17] = bgAddrLow;  // Low byte of address
-  engine[18] = bgAddrHigh; // High byte of address
+  engine[18] = bgAddrLow;  // Low byte of address
+  engine[19] = bgAddrHigh; // High byte of address
 
   // Combine all data into one continuous block
   const combinedCode = [
