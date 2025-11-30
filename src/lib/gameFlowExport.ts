@@ -86,37 +86,49 @@ export function exportGameFlowToTAP(
   // For Phase 3 testing: use the first game/level screen as background instead of loading screen
   const firstGameScreen = gameScreens[0];
   const testBackgroundScr = firstGameScreen ? encodeScreenToSCR(firstGameScreen, blocks, objects, sprites) : loadingScr;
-  // PHASE 4: Keyboard-controlled border only (no auto-flashing)
+  // PHASE 4: Keyboard-controlled border with explicit delay loop
   const engine = [
     // Copy background screen to video memory
     0x21, 0x00, 0x00,     // LD HL, bgScreenAddr (patched at indices 1-2)
-    0x11, 0x00, 0x40,     // LD DE, 0x4000 (screen memory)
-    0x01, 0x00, 0x1B,     // LD BC, 6912 (0x1B00)
+    0x11, 0x00, 0x40,     // LD DE, 0x4000
+    0x01, 0x00, 0x1B,     // LD BC, 6912
     0xED, 0xB0,           // LDIR
     
     // Set initial border to black
     0xAF,                 // XOR A
     0xD3, 0xFE,           // OUT (0xFE), A
     
-    // Keyboard test loop (50 frames)
-    0x1E, 0x32,           // LD E, 50 (use E for frame counter)
-    // keyboard_loop:
+    // Main loop (255 iterations for ~10-15 seconds of testing time)
+    0x3E, 0xFF,           // LD A, 255 (outer loop counter)
+    // main_loop: (index 16)
+    0xF5,                 // PUSH AF (save outer counter)
+    
+    // Read keyboard
     0x01, 0xFE, 0xFB,     // LD BC, 0xFBFE (port for Q/W/E/R/T row)
     0xED, 0x78,           // IN A, (C)
-    0xCB, 0x47,           // BIT 0, A (test Q key - 0 = pressed)
-    0x20, 0x06,           // JR NZ, +6 (skip if not pressed)
-    0x3E, 0x02,           // LD A, 2 (red border)
+    0xCB, 0x47,           // BIT 0, A (Q key - 0 = pressed)
+    0x20, 0x06,           // JR NZ, +6 (check_w)
+    0x3E, 0x02,           // LD A, 2 (red)
     0xD3, 0xFE,           // OUT (0xFE), A
-    0x18, 0x08,           // JR +8 (keyboard_continue)
+    0x18, 0x08,           // JR +8 (delay)
     // check_w:
-    0xCB, 0x4F,           // BIT 1, A (test W key - 0 = pressed)
-    0x20, 0x04,           // JR NZ, +4 (skip if not pressed)
-    0x3E, 0x04,           // LD A, 4 (green border)
+    0xCB, 0x4F,           // BIT 1, A (W key - 0 = pressed)
+    0x20, 0x04,           // JR NZ, +4 (delay)
+    0x3E, 0x04,           // LD A, 4 (green)
     0xD3, 0xFE,           // OUT (0xFE), A
-    // keyboard_continue:
-    0x76,                 // HALT (wait for frame)
-    0x1D,                 // DEC E
-    0x20, 0xE5,           // JR NZ, -27 (keyboard_loop)
+    
+    // delay: Explicit delay loop (16384 iterations)
+    0x11, 0x00, 0x40,     // LD DE, 0x4000
+    // delay_inner:
+    0x1B,                 // DEC DE
+    0x7A,                 // LD A, D
+    0xB3,                 // OR E
+    0x20, 0xFB,           // JR NZ, delay_inner (-5)
+    
+    // Loop back
+    0xF1,                 // POP AF (restore outer counter)
+    0x3D,                 // DEC A
+    0x20, 0xDC,           // JR NZ, main_loop (-36)
     
     0xC9                  // RET to BASIC
   ];
