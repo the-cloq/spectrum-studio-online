@@ -82,14 +82,23 @@ export function exportGameFlowToTAP(
   }
   const gameScreens = screens.filter(s => s.type === "game" && usedScreenIds.has(s.id));
   const screenBank = packScreenBank(gameScreens, blockIndexMap, objectIndexMap, objects);
-  // PHASE 1: Minimal engine with border color change to prove execution
-  // LD A, 2       → Load red color
-  // OUT (254), A  → Set border
-  // RET           → Return to BASIC
+  // PHASE 2: Frame delay loop - cycle border colors with delays
+  // Tests that loops work without corrupting BASIC
   const engine = [
-    0x3E, 0x02,  // LD A, 2 (red)
-    0xD3, 0xFE,  // OUT (254), A
-    0xC9         // RET
+    0x06, 0x07,        // LD B, 7        ; Loop 7 times (colors 0-6)
+    // loop_start:
+    0x78,              // LD A, B        ; Use counter as border color
+    0xD3, 0xFE,        // OUT (254), A   ; Set border
+    // Delay loop
+    0x11, 0x00, 0x50,  // LD DE, 20480   ; Delay counter (~0.5 sec)
+    // delay_loop:
+    0x1B,              // DEC DE
+    0x7A,              // LD A, D
+    0xB3,              // OR E           ; Check if DE = 0
+    0x20, 0xFB,        // JR NZ, delay_loop ; Loop back if not zero
+    // Continue main loop
+    0x10, 0xF3,        // DJNZ loop_start ; Decrement B, loop if not zero
+    0xC9               // RET            ; Return to BASIC
   ];
   const engineSize = engine.length;
 
@@ -127,10 +136,10 @@ export function exportGameFlowToTAP(
   tap.addDataBlock(combinedCode);
 
   console.log("[TAP DEBUG] Final TAP layout", {
-    blocksOrder: "PHASE 1 TEST: BASIC header, BASIC data, CODE header, CODE data (CODE = LD A,2 / OUT(254),A / RET)",
+    blocksOrder: "PHASE 2 TEST: Border color loop with delays (7 colors, then return to BASIC)",
     codeStart,
     engineSize: engine.length,
-    engineContents: "0x3E 0x02 0xD3 0xFE 0xC9 (set red border, return)",
+    engineContents: "Loop counter, border OUT, delay loop, DJNZ, RET",
     spriteBankSize: spriteBank.length,
     blockBankSize: blockBank.length,
     objectBankSize: objectBank.length,
