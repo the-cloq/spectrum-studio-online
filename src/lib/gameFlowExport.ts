@@ -82,6 +82,10 @@ export function exportGameFlowToTAP(
   }
   const gameScreens = screens.filter(s => s.type === "game" && usedScreenIds.has(s.id));
   const screenBank = packScreenBank(gameScreens, blockIndexMap, objectIndexMap, objects);
+  
+  // For Phase 3 testing: use the first game/level screen as background instead of loading screen
+  const firstGameScreen = gameScreens[0];
+  const testBackgroundScr = firstGameScreen ? encodeScreenToSCR(firstGameScreen, blocks, objects, sprites) : loadingScr;
   // PHASE 3: Add LDIR background copy after border loop
   // Tests screen data copy works with loops
   const engine = [
@@ -131,7 +135,7 @@ export function exportGameFlowToTAP(
     ...Array.from(blockBank),
     ...Array.from(objectBank),
     ...Array.from(screenBank),
-    ...Array.from(loadingScr)
+    ...Array.from(testBackgroundScr)  // Use first game screen for Phase 3 testing
   ];
 
   // TAP debug logging is performed after building the BASIC program and TAP blocks below.
@@ -156,7 +160,8 @@ export function exportGameFlowToTAP(
     engineSize: engine.length,
     engineContents: "Border loop + LDIR from bgScreenAddr to 0x4000 (6912 bytes)",
     bgScreenAddr: `0x${bgScreenAddr.toString(16)} (patched at engine[16-17])`,
-    bgScreenDataSize: loadingScr.length,
+    bgScreenDataSize: testBackgroundScr.length,
+    backgroundScreenUsed: firstGameScreen ? `Level screen: ${firstGameScreen.name}` : "Loading screen (fallback)",
     spriteBankSize: spriteBank.length,
     blockBankSize: blockBank.length,
     objectBankSize: objectBank.length,
