@@ -86,31 +86,49 @@ export function exportGameFlowToTAP(
   // For Phase 3 testing: use the first game/level screen as background instead of loading screen
   const firstGameScreen = gameScreens[0];
   const testBackgroundScr = firstGameScreen ? encodeScreenToSCR(firstGameScreen, blocks, objects, sprites) : loadingScr;
-  // PHASE 3: Add LDIR background copy after border loop
-  // Tests screen data copy works with loops
+  // PHASE 4: Add keyboard reading to change border based on Q/W press
+  // Tests keyboard input detection
   const engine = [
-    // Border color loop (Phase 2)
-    0x06, 0x07,        // LD B, 7        ; Loop 7 times (colors 0-6)
-    // loop_start:
-    0x78,              // LD A, B        ; Use counter as border color
-    0xD3, 0xFE,        // OUT (254), A   ; Set border
-    // Delay loop
-    0x11, 0x00, 0x50,  // LD DE, 20480   ; Delay counter (~0.5 sec)
-    // delay_loop:
-    0x1B,              // DEC DE
-    0x7A,              // LD A, D
-    0xB3,              // OR E           ; Check if DE = 0
-    0x20, 0xFB,        // JR NZ, delay_loop ; Loop back if not zero
-    // Continue main loop
-    0x10, 0xF3,        // DJNZ loop_start ; Decrement B, loop if not zero
+    // Border flash loop (green 0-7)
+    0x06, 0x08,           // LD B, 8
+    // border_loop:
+    0x78,                 // LD A, B
+    0x3D,                 // DEC A
+    0xD3, 0xFE,           // OUT (0xFE), A
+    0x01, 0xFF, 0x7F,     // LD BC, 0x7FFF
+    // delay:
+    0x0B,                 // DEC BC
+    0x78,                 // LD A, B
+    0xB1,                 // OR C
+    0x20, 0xFC,           // JR NZ, -4 (delay)
+    0x10, 0xF3,           // DJNZ -13 (border_loop)
     
     // Copy background screen to video memory
-    0x21, 0x00, 0x00,  // LD HL, 0x0000  ; Placeholder for bgScreenAddr (will be patched)
-    0x11, 0x00, 0x40,  // LD DE, 0x4000  ; Video memory start
-    0x01, 0x00, 0x1B,  // LD BC, 0x1B00  ; 6912 bytes
-    0xED, 0xB0,        // LDIR           ; Copy screen data
+    0x21, 0x00, 0x00,     // LD HL, 0x0000 (placeholder, will be patched)
+    0x11, 0x00, 0x40,     // LD DE, 0x4000 (screen memory)
+    0x01, 0x00, 0x1B,     // LD BC, 6912 (0x1B00)
+    0xED, 0xB0,           // LDIR
     
-    0xC9               // RET            ; Return to BASIC
+    // Keyboard test loop (50 frames)
+    0x06, 0x32,           // LD B, 50
+    // keyboard_loop:
+    0x01, 0xFE, 0xFB,     // LD BC, 0xFBFE (port for Q/W/E/R/T row)
+    0xED, 0x78,           // IN A, (C)
+    0xCB, 0x47,           // BIT 0, A (test Q key - 0 = pressed)
+    0x20, 0x06,           // JR NZ, +6 (skip if not pressed)
+    0x3E, 0x02,           // LD A, 2 (red border)
+    0xD3, 0xFE,           // OUT (0xFE), A
+    0x18, 0x08,           // JR +8 (keyboard_continue)
+    // check_w:
+    0xCB, 0x4F,           // BIT 1, A (test W key - 0 = pressed)
+    0x20, 0x04,           // JR NZ, +4 (skip if not pressed)
+    0x3E, 0x04,           // LD A, 4 (green border)
+    0xD3, 0xFE,           // OUT (0xFE), A
+    // keyboard_continue:
+    0x76,                 // HALT (wait for frame)
+    0x10, 0xE6,           // DJNZ -26 (keyboard_loop)
+    
+    0xC9                  // RET to BASIC
   ];
   const engineSize = engine.length;
 
@@ -158,7 +176,7 @@ export function exportGameFlowToTAP(
     blocksOrder: "PHASE 3 TEST: Border loop, then LDIR screen copy, then return to BASIC",
     codeStart,
     engineSize: engine.length,
-    engineContents: "Border loop + LDIR from bgScreenAddr to 0x4000 (6912 bytes)",
+    engineContents: "Border loop + LDIR screen copy + Keyboard test (Q=red, W=green border)",
     bgScreenAddr: `0x${bgScreenAddr.toString(16)} (patched at engine[16-17])`,
     bgScreenDataSize: testBackgroundScr.length,
     backgroundScreenUsed: firstGameScreen ? `Level screen: ${firstGameScreen.name}` : "Loading screen (fallback)",
