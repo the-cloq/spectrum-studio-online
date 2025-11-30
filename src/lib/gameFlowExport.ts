@@ -100,8 +100,8 @@ export function exportGameFlowToTAP(
     0x1B,                 // DEC DE
     0x7A,                 // LD A, D
     0xB3,                 // OR E
-    0x20, 0xFC,           // JR NZ, -4 (delay)
-    0x10, 0xF3,           // DJNZ -13 (border_loop)
+    0x20, 0xFB,           // JR NZ, -5 (delay)
+    0x10, 0xF2,           // DJNZ -14 (border_loop)
     
     // Copy background screen to video memory
     0x21, 0x00, 0x00,     // LD HL, 0x0000 (placeholder, will be patched at offset 17-18)
@@ -127,7 +127,7 @@ export function exportGameFlowToTAP(
     // keyboard_continue:
     0x76,                 // HALT (wait for frame)
     0x1D,                 // DEC E
-    0x20, 0xE4,           // JR NZ, -28 (keyboard_loop)
+    0x20, 0xE5,           // JR NZ, -27 (keyboard_loop)
     
     0xC9                  // RET to BASIC
   ];
